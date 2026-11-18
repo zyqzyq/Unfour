@@ -321,17 +321,21 @@ pub async fn api_send_request_v2(
     input: ApiRequestInput,
     routing: Option<ApiRoutingInput>,
     temporary_handle: Option<String>,
+    temporary_execution_mode: Option<String>,
+    terminal_confirmed: Option<bool>,
     state: State<'_, AppState>,
 ) -> AppResult<RequestExecutionResult> {
     trace_command(
         "api_send_request_v2",
-        state.command_bus.send_api_request_via(
+        state.command_bus.send_api_request_via_with_mode(
             &execution_id,
             input,
             None,
             None,
             routing.as_ref(),
             temporary_handle.as_deref(),
+            temporary_execution_mode.as_deref().unwrap_or("tcp"),
+            terminal_confirmed.unwrap_or(false),
         ),
     )
     .await

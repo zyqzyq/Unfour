@@ -29,6 +29,13 @@ function baseTab(overrides: Partial<ApiRequestTab> = {}): ApiRequestTab {
 }
 
 describe("ResponseTabs", () => {
+  it("keeps a failed cancellation visible without claiming the pending request has ended", () => {
+    render(withI18n(<ResponseTabs onOpenAuthSettings={vi.fn()} onResponseTabChange={vi.fn()} onRetry={vi.fn()}
+      tab={baseTab({ sending: true, cancelling: false, cancelError: "Cancellation was not confirmed. Try Stop again." })} />));
+    expect(screen.getByRole("alert")).toHaveTextContent("Cancellation was not confirmed");
+    expect(screen.queryByText("Request cancelled")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+  });
   it("renders cancellation as its own state instead of a generic failure", () => {
     render(
       withI18n(
@@ -66,6 +73,68 @@ describe("ResponseTabs", () => {
   "error"`);
     expect(details).toHaveClass("whitespace-pre-wrap");
     expect(details).toHaveClass("break-words");
+  });
+
+  describe.each(["en", "zh-CN"] as const)("HTTP errors in %s", (locale) => {
+    it.each([
+      [400, '{"error":"JSON EOF while parsing a value"}'],
+      [404, ""],
+      [429, "Rate limit exceeded"],
+      [500, "Internal server error"],
+    ])("keeps HTTP %i details without suggesting Auth settings", (status, body) => {
+      const t = createTranslator(locale);
+      const openAuth = vi.fn();
+      const retry = vi.fn();
+      const { container } = render(
+        <I18nProvider initialLocale={locale}>
+          <ResponseTabs onOpenAuthSettings={openAuth} onResponseTabChange={vi.fn()} onRetry={retry}
+            tab={baseTab({ response: response({ status, body }) })} />
+        </I18nProvider>,
+      );
+
+      expect(screen.getByRole("heading", { name: t("api.response.httpErrorTitle", { status }) })).toBeInTheDocument();
+      expect(screen.getByText(t("api.response.httpErrorDescription"))).toBeInTheDocument();
+      expect(screen.queryByText(t("api.response.rejectedDescription"))).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: t("api.response.openAuthSettings") })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: t("api.response.retry") })).not.toBeInTheDocument();
+      if (status === 400) {
+        expect(JSON.parse(container.querySelector("pre")!.textContent!)).toEqual(JSON.parse(body));
+      } else if (body) {
+        expect(container.querySelector("pre")?.textContent).toBe(body);
+      } else {
+        expect(container.querySelector("pre")).toBeNull();
+      }
+      expect(openAuth).not.toHaveBeenCalled();
+      expect(retry).not.toHaveBeenCalled();
+    });
+
+    it.each([401, 403])("offers Auth settings only for explicit HTTP %i", (status) => {
+      const t = createTranslator(locale);
+      const openAuth = vi.fn();
+      render(
+        <I18nProvider initialLocale={locale}>
+          <ResponseTabs onOpenAuthSettings={openAuth} onResponseTabChange={vi.fn()} onRetry={vi.fn()}
+            tab={baseTab({ response: response({ status, body: "Access denied" }) })} />
+        </I18nProvider>,
+      );
+
+      expect(screen.getByText("Access denied")).toBeInTheDocument();
+      expect(screen.getByText(t("api.response.rejectedDescription"))).toBeInTheDocument();
+      expect(openAuth).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button", { name: t("api.response.openAuthSettings") }));
+      expect(openAuth).toHaveBeenCalledOnce();
+    });
+  });
+
+  it("shows terminal phases alongside the remote curl measurements in Timing", () => {
+    const terminalTiming = { prepareMs: 11, inputMs: 502, inputAckCount: 7, inputAckWaitMs: 499,
+      executionAndOutputMs: 244, curlTotalMs: 201, curlStartTransferMs: 198, restoreMs: 13 };
+    render(withI18n(<ResponseTabs onOpenAuthSettings={vi.fn()} onResponseTabChange={vi.fn()} onRetry={vi.fn()}
+      tab={baseTab({ response: response({ terminalTiming }), responseTab: "timing" })} />));
+    expect(screen.getByText("Input ACK count").nextElementSibling).toHaveTextContent("7");
+    expect(screen.getByText("Time waiting for input ACKs").nextElementSibling).toHaveTextContent("499 ms");
+    expect(screen.getByText("curl HTTP transfer").nextElementSibling).toHaveTextContent("201 ms");
+    expect(screen.getByText("curl time to first byte").nextElementSibling).toHaveTextContent("198 ms");
   });
 
   it("shows the latest request snapshot next to the response", () => {

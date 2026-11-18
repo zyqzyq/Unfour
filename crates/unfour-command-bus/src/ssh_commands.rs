@@ -562,6 +562,13 @@ impl CommandBus {
     pub async fn cancel_ssh_task_run(&self, input: SshTaskCancelInput) -> AppResult<SshTaskRun> {
         let workspace_id = input.workspace_id.clone();
         let mut run = self.ssh.cancel_task_run(input).await?;
+        if run
+            .warnings
+            .iter()
+            .any(|warning| warning == "SSH_TASK_TEMPORARY_RUN")
+        {
+            return Ok(run);
+        }
         run.warnings.extend(
             self.record_completion_activity(
                 CommandActivity {
@@ -610,7 +617,13 @@ impl CommandBus {
     ) -> AppResult<SshTaskCleanupResult> {
         let workspace_id = input.workspace_id.clone();
         let task_id = input.task_id.clone();
-        let mut result = self.ssh.clear_task_runs(input).await?;
+        let (mut result, persistent_count) = self
+            .ssh
+            .clear_task_runs_with_persistent_count(input)
+            .await?;
+        if persistent_count == 0 && result.deleted_runs > 0 {
+            return Ok(result);
+        }
         result.warnings.extend(
             self.record_completion_activity(
                 CommandActivity {
@@ -618,7 +631,7 @@ impl CommandBus {
                     action: "ssh.task.history.clear",
                     target: task_id,
                     details: serde_json::json!({
-                        "deletedRuns": result.deleted_runs,
+                        "deletedRuns": persistent_count,
                         "deletedLogs": result.deleted_logs,
                     }),
                 },

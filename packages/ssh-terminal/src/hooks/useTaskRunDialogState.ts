@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { getSshTask, listSshTaskRuns, listWorkspaceEnvironments, listWorkspaceVariables, runSshTask,
-  type SshTaskDetail, type SshTaskRun, type WorkspaceEnvironment, type WorkspaceVariable } from "@unfour/command-client";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { getSshTask, listSshTaskRuns, listTemporaryRoutes, listWorkspaceEnvironments, listWorkspaceVariables, runSshTask, runTemporarySshTask, isTemporarySshTaskRun,
+  type SshTaskDetail, type SshTaskRun, type TemporaryTaskExecutionMode, type WorkspaceEnvironment, type WorkspaceVariable } from "@unfour/command-client";
 import { useI18n, type useFeedbackErrorHandler } from "@unfour/ui";
 import { detectTaskInputs } from "../model/task-template";
 import { workspaceEnvironmentById } from "../model/task-run-inputs";
@@ -11,6 +11,9 @@ type DialogState = {
   generation: number;
   detail: SshTaskDetail;
   connectionId: string;
+  temporaryHandle: string | null;
+  temporaryExecutionMode: TemporaryTaskExecutionMode;
+  terminalReady: boolean;
   environmentId: string;
   environments: WorkspaceEnvironment[];
   variables: WorkspaceVariable[];
@@ -19,10 +22,11 @@ type DialogState = {
   notice: string | null;
 };
 
-export function useTaskRunDialogState({ workspaceId, handleError, onStarted }: {
+export function useTaskRunDialogState({ workspaceId, handleError, onStarted, onAccepted }: {
   workspaceId: string;
   handleError: ReturnType<typeof useFeedbackErrorHandler>;
   onStarted: (run: SshTaskRun, detail: SshTaskDetail) => void;
+  onAccepted?: (run: SshTaskRun) => void;
 }) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
@@ -34,6 +38,20 @@ export function useTaskRunDialogState({ workspaceId, handleError, onStarted }: {
   const starting = useRef<Promise<SshTaskRun> | null>(null);
   const editRevision = useRef(0);
   const restoring = useRef<number | null>(null);
+  const temporary = useQuery({
+    queryKey: ["ssh-task-temporary-targets", workspaceId],
+    queryFn: () => listTemporaryRoutes(workspaceId),
+    enabled: !!state && state.detail.task.workspaceId === workspaceId,
+    refetchInterval: state ? 1_000 : false,
+  });
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- A terminal owner/recovery transition invalidates idle-shell confirmation.
+    setState((current) => {
+      if (!current?.terminalReady || !current.temporaryHandle) return current;
+      const target = temporary.data?.find((entry) => entry.handle === current.temporaryHandle);
+      return !target || target.terminalTaskBusy || target.terminalRecoveryRequired ? { ...current, terminalReady: false } : current;
+    });
+  }, [temporary.data]);
   useEffect(() => {
     mounted.current = scope;
     generation.current += 1;
@@ -58,18 +76,38 @@ export function useTaskRunDialogState({ workspaceId, handleError, onStarted }: {
       if (starting.current) return starting.current;
       if (!state || state.generation !== generation.current || mounted.current !== scope || loading) return Promise.reject(new Error(t("ssh.tasks.run.prepareAgain")));
       const selected = state;
+      if (selected.temporaryHandle && selected.temporaryExecutionMode === "terminal") {
+        if (!selected.terminalReady) return Promise.reject(new Error(t("ssh.tasks.run.terminalReadyRequired")));
+        if (selected.detail.steps.some((step) => step.enabled && step.stepType !== "command")) return Promise.reject(new Error(t("ssh.tasks.run.errors.SSH_TASK_TERMINAL_COMMAND_ONLY")));
+      }
       const version = generation.current;
       const current = () => mounted.current === scope && generation.current === version;
       const environment = workspaceEnvironmentById(selected.environments, selected.environmentId);
       if (selected.environmentLoadFailed || (selected.environmentId && !environment)) return Promise.reject(new Error(t("ssh.tasks.run.environmentMissing")));
-      const operation = runSshTask({
-        workspaceId, taskId: selected.detail.task.id, connectionId: selected.connectionId || null,
+      const input = {
+        workspaceId, taskId: selected.detail.task.id, connectionId: selected.temporaryHandle ? null : selected.connectionId || null,
         inputs: Object.fromEntries(Object.entries(selected.values.inputs).map(([name, value]) => [name, selected.values.sources[name] === "manual" ? value : ""])), secretInputNames: selected.values.secretNames,
         context: { environmentId: selected.environmentId || null, taskVersion: taskVersion(selected.detail),
           environmentUpdatedAt: environment?.updatedAt ?? null, inputSources: selected.values.sources,
           inputVersions: taskInputVersions(selected.values.sources, selected.variables, environment) },
-      }).then((run) => {
+      };
+      const execute = async () => {
+        if (!selected.temporaryHandle) return runSshTask(input);
+        // Re-read at dispatch: a cached option cannot authorize a closed or
+        // switched-workspace target, and it must never fall back to a default.
+        const live = await listTemporaryRoutes(workspaceId);
+        if (!current()) throw new Error(t("ssh.tasks.run.prepareAgain"));
+        const target = live.find((target) => target.handle === selected.temporaryHandle);
+        if (!target) throw new Error(t("network.errors.SSH_TUNNEL_TEMPORARY_UNAVAILABLE"));
+        if (target.terminalTaskBusy) throw new Error(t("ssh.tasks.run.errors.SSH_TASK_TERMINAL_BUSY"));
+        if (selected.temporaryExecutionMode === "terminal" && target.terminalRecoveryRequired) throw new Error(t("ssh.tasks.run.errors.SSH_TASK_TERMINAL_RECOVERY_REQUIRED"));
+        return runTemporarySshTask(input, selected.temporaryHandle, selected.temporaryExecutionMode);
+      };
+      const operation = execute().then((run) => {
         void queryClient.invalidateQueries({ queryKey: ["ssh-task-runs", workspaceId, run.taskId] });
+        // Closing the dialog changes selection, not the lifetime of a start
+        // already accepted by the service. Its output still needs cleanup.
+        if (mounted.current === scope && run.workspaceId === workspaceId) onAccepted?.(run);
         if (current()) { closeRunDialog(); onStarted(run, selected.detail); }
         return run;
       }).finally(() => { if (starting.current === operation) starting.current = null; });
@@ -118,7 +156,9 @@ export function useTaskRunDialogState({ workspaceId, handleError, onStarted }: {
       }
       environments = environments.filter((environment) => !environment.deletedAt);
       setState({ generation: version, detail, environments, variables, environmentLoadFailed,
-        ...taskRunSelection(detail, variables, environments, run) });
+        ...taskRunSelection(detail, variables, environments, run && isTemporarySshTaskRun(run) ? undefined : run), temporaryHandle: null,
+        temporaryExecutionMode: "terminal", terminalReady: false,
+        ...(run && isTemporarySshTaskRun(run) ? { connectionId: "", notice: "ssh.tasks.run.temporaryReselect" } : {}) });
     } catch (error) {
       if (current()) {
         setState((value) => previous === "latest" && value ? { ...value, generation: version } : null);
@@ -133,10 +173,13 @@ export function useTaskRunDialogState({ workspaceId, handleError, onStarted }: {
   const changeRunEnvironment = useCallback(async (environmentId: string) => {
     if (!state || starting.current) return;
     editRevision.current += 1;
-    const selected = state;
+    // The pending refresh must not restore a readiness confirmation invalidated
+    // by a terminal owner/recovery transition while it was in flight.
+    const selected = { ...state, terminalReady: false };
     const version = ++generation.current;
     const current = () => mounted.current === scope && generation.current === version;
     setLoading(true);
+    setState(selected);
     try {
       const [variables, environments] = await Promise.all([listWorkspaceVariables(workspaceId), listWorkspaceEnvironments(workspaceId)]);
       if (!current()) return;
@@ -149,6 +192,7 @@ export function useTaskRunDialogState({ workspaceId, handleError, onStarted }: {
   }, [handleError, scope, state, workspaceId]);
 
   const setRunInputs = (update: Record<string, string> | ((values: Record<string, string>) => Record<string, string>)) => {
+    if (starting.current || (state?.generation !== generation.current && restoring.current === null)) return;
     editRevision.current += 1;
     setState((current) => {
       if (!current) return current;
@@ -160,6 +204,7 @@ export function useTaskRunDialogState({ workspaceId, handleError, onStarted }: {
   };
 
   const toggleSecretInput = (name: string) => {
+    if (starting.current || (state?.generation !== generation.current && restoring.current === null)) return;
     editRevision.current += 1;
     setState((current) => {
       if (!current || current.values.automaticSecretNames.includes(name)) return current;
@@ -169,7 +214,7 @@ export function useTaskRunDialogState({ workspaceId, handleError, onStarted }: {
   };
 
   const {
-    detail = null, connectionId = "", environmentId = "", environments = [],
+    detail = null, connectionId = "", temporaryHandle = null, temporaryExecutionMode = "terminal", terminalReady = false, environmentId = "", environments = [],
     environmentLoadFailed = false, notice = null,
     values = { inputs: {}, secretNames: [], automaticSecretNames: [], filledFromWorkspace: [] },
   } = state ?? {};
@@ -181,9 +226,30 @@ export function useTaskRunDialogState({ workspaceId, handleError, onStarted }: {
     runNotice: notice ? t(notice) : null,
     runDialogTask: detail,
     runConnectionId: connectionId,
-    setRunConnectionId: (connectionId: string) => {
+    runTemporaryHandle: temporaryHandle,
+    runTemporaryExecutionMode: temporaryExecutionMode,
+    runTerminalReady: terminalReady,
+    setRunTemporaryExecutionMode: (mode: TemporaryTaskExecutionMode) => {
+      if (starting.current || (state?.generation !== generation.current && restoring.current === null)) return;
       editRevision.current += 1;
-      setState((current) => current ? { ...current, connectionId } : current);
+      setState((current) => current ? { ...current, temporaryExecutionMode: mode, terminalReady: false } : current);
+    },
+    setRunTerminalReady: (ready: boolean) => {
+      if (starting.current || (state?.generation !== generation.current && restoring.current === null)) return;
+      editRevision.current += 1;
+      setState((current) => current ? { ...current, terminalReady: ready } : current);
+    },
+    runTemporarySessions: temporary.isSuccess ? temporary.data : [],
+    runTemporaryLoading: temporary.isFetching,
+    setRunTemporaryHandle: (handle: string) => {
+      if (starting.current || (state?.generation !== generation.current && restoring.current === null)) return;
+      editRevision.current += 1;
+      setState((current) => current ? { ...current, temporaryHandle: handle || null, connectionId: "", temporaryExecutionMode: "terminal", terminalReady: false } : current);
+    },
+    setRunConnectionId: (connectionId: string) => {
+      if (starting.current || (state?.generation !== generation.current && restoring.current === null)) return;
+      editRevision.current += 1;
+      setState((current) => current ? { ...current, connectionId, temporaryHandle: null, temporaryExecutionMode: "terminal", terminalReady: false } : current);
     },
     runEnvironmentId: environmentId,
     runEnvironments: environments,

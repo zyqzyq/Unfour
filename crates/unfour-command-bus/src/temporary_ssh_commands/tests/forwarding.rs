@@ -61,7 +61,7 @@ async fn temporary_forwarding_uses_one_parent_login_and_authenticates_the_ssh_ta
             .err()
             .unwrap()
             .code(),
-        "SSH_TUNNEL_TARGET_UNREACHABLE"
+        "SSH_TUNNEL_FORWARD_PROHIBITED"
     );
     let definition = SshConnectionInput {
         id: None,
@@ -243,7 +243,7 @@ async fn temporary_forwarding_uses_one_parent_login_and_authenticates_the_ssh_ta
             )
             .await
             {
-                if error.code() == "SSH_TUNNEL_TARGET_UNREACHABLE" {
+                if error.code() == "SSH_TUNNEL_FORWARD_PROHIBITED" {
                     break;
                 }
             }

@@ -8,4 +8,4 @@ mod openapi_history;
 mod openapi_safety;
 mod requests;
 mod ssh_proxy;
-mod support;
+pub(super) mod support;

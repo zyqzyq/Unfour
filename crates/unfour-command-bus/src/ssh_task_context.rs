@@ -9,14 +9,25 @@ impl CommandBus {
         &self,
         input: &mut SshTaskRunInput,
     ) -> AppResult<()> {
+        self.prepare_ssh_task_context_for_target(input, true).await
+    }
+
+    /// Temporary targets still validate variable revisions and hydrate secrets,
+    /// but have no saved connection ID and never retain a recall context.
+    pub(super) async fn prepare_ssh_task_context_for_target(
+        &self,
+        input: &mut SshTaskRunInput,
+        require_saved_connection: bool,
+    ) -> AppResult<()> {
         let Some(context) = &mut input.context else {
             return Ok(());
         };
         let invalid = |code: &str| unfour_core::AppError::Validation(code.into());
-        if input
-            .connection_id
-            .as_ref()
-            .is_none_or(|id| id.trim().is_empty())
+        if require_saved_connection
+            && input
+                .connection_id
+                .as_ref()
+                .is_none_or(|id| id.trim().is_empty())
         {
             return Err(invalid("SSH_TASK_CONNECTION_REQUIRED"));
         }

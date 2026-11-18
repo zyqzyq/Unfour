@@ -267,7 +267,14 @@ impl SshService {
         .bind(&task_id)
         .fetch_one(&mut *connection)
         .await?;
-        if running > 0 {
+        #[cfg(feature = "ssh-native")]
+        let temporary_running = self
+            .temporary_task_runs(&workspace_id, &task_id)?
+            .iter()
+            .any(|run| run.status == "running");
+        #[cfg(not(feature = "ssh-native"))]
+        let temporary_running = false;
+        if running > 0 || temporary_running {
             return Err(AppError::Validation(
                 "cannot delete an SSH task while it is running".to_string(),
             ));

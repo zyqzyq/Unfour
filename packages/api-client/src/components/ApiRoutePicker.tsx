@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Route } from "lucide-react";
-import { listTemporaryRoutes, temporaryRouteOptions, temporarySshLabel, type ApiRoute, type ApiRouteEdit } from "@unfour/command-client";
+import { listTemporaryRoutes, temporaryRouteOptions, temporarySshLabel, type ApiRoute, type ApiRouteEdit, type TemporaryApiExecutionMode } from "@unfour/command-client";
 import { Button, Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Select, useI18n, useLiveOptions } from "@unfour/ui";
 import type { ApiRouteControls } from "../hooks/useApiRoutes";
 import { errorCode } from "../model/api-request-state";
@@ -15,7 +15,8 @@ type Props = {
   routing: ApiRouteControls;
   environmentName?: string;
   draft?: ApiRouteEdit;
-  onChange: (route: ApiRouteEdit | undefined, temporaryHandle?: string) => void;
+  temporaryExecutionMode?: TemporaryApiExecutionMode;
+  onChange: (route: ApiRouteEdit | undefined, temporaryHandle?: string, temporaryExecutionMode?: TemporaryApiExecutionMode) => void;
   disabled: boolean;
 };
 
@@ -27,11 +28,13 @@ export function ApiRoutePicker(props: Props) {
   const name = routing.selectedHost?.name;
   const temporary = routing.temporary.data?.find((entry) => entry.handle === routing.temporaryHandle);
   const temporaryFallback = t("network.temporarySession", { id: routing.temporaryHandle?.slice(-8) ?? "" });
-  const label = routing.temporaryHandle ? (routing.ready ? (temporary ? temporarySshLabel(temporary, temporaryFallback) : temporaryFallback) : t("network.temporaryUnavailable")) : effective?.mode === "ssh"
+  const label = routing.temporaryHandle ? (temporary ? temporarySshLabel(temporary, temporaryFallback) : t("network.temporaryUnavailable")) : effective?.mode === "ssh"
     ? t("api.route.via", { name: name || t("api.route.missing") })
     : routing.ready ? t("api.route.direct") : t("api.route.unavailableShort");
   const inherited = (draft?.route ?? routing.routes?.request)?.mode === "inherit";
-  const source = !routing.temporaryHandle && routing.routes?.environmentId && inherited ? t("api.route.fromEnvironment", { route: label }) : label;
+  const source = routing.temporaryHandle && props.temporaryExecutionMode === "terminalCurl"
+    ? t("api.route.terminalCurlVia", { name: label })
+    : !routing.temporaryHandle && routing.routes?.environmentId && inherited ? t("api.route.fromEnvironment", { route: label }) : label;
   return <>
     <Button type="button" size="sm" variant="ghost" disabled={disabled} onClick={() => setOpen(true)}
       aria-label={t("api.route.edit", { route: source })} title={t("api.route.edit", { route: source })}
@@ -40,7 +43,7 @@ export function ApiRoutePicker(props: Props) {
   </>;
 }
 
-function RouteDialog({ routing, draft, environmentName, onChange, onClose }: Props & { onClose: () => void }) {
+function RouteDialog({ routing, draft, environmentName, temporaryExecutionMode, onChange, onClose }: Props & { onClose: () => void }) {
   const { t } = useI18n();
   const { routes, ssh, query, environmentMutation } = routing;
   const [request, setRequest] = useState<ApiRouteEdit | null>(null);
@@ -48,6 +51,7 @@ function RouteDialog({ routing, draft, environmentName, onChange, onClose }: Pro
   const [error, setError] = useState("");
   const sessions = useLiveOptions(routing.workspaceId, listTemporaryRoutes, true);
   const [temporaryHandle, setTemporaryHandle] = useState(routing.temporaryHandle);
+  const [executionMode, setExecutionMode] = useState<TemporaryApiExecutionMode>(temporaryExecutionMode ?? "tcp");
   const live = temporaryRouteOptions(sessions?.items ?? [], temporaryHandle, (id) => t("network.temporarySession", { id }), t("network.temporaryUnavailable"));
   const stored = routes?.request ?? { mode: "inherit" };
   const selected = temporaryHandle ? "live:" + temporaryHandle : choice(request?.route ?? draft?.route ?? stored);
@@ -66,7 +70,7 @@ function RouteDialog({ routing, draft, environmentName, onChange, onClose }: Pro
       if (environment && routes.environmentId && choice(environment.route) !== choice(routes.environment)) {
         await environmentMutation.mutateAsync({ id: routes.environmentId, edit: environment });
       }
-      if (temporaryHandle) onChange(draft, temporaryHandle);
+      if (temporaryHandle) onChange(draft, temporaryHandle, executionMode);
       else if (request) onChange(choice(request.route) === choice(stored) ? undefined : request, temporaryHandle);
       else if (requestChanged) onChange(choice(draft.route) === choice(stored) ? undefined : { expected: stored, route: draft.route }, temporaryHandle);
       else if (temporaryHandle !== routing.temporaryHandle) onChange(draft, temporaryHandle);
@@ -78,9 +82,9 @@ function RouteDialog({ routing, draft, environmentName, onChange, onClose }: Pro
   }
   return <Dialog open onOpenChange={(next) => { if (!next && !environmentMutation.isPending) onClose(); }}>
     <DialogContent title={t("api.route.title")}>
-      <DialogHeader><DialogTitle>{t("api.route.title")}</DialogTitle>
-        <DialogDescription>{t("api.route.localHelp")}</DialogDescription></DialogHeader>
+      <DialogHeader><DialogTitle>{t("api.route.title")}</DialogTitle></DialogHeader>
       <DialogBody className="space-y-3">
+        <DialogDescription>{t("api.route.localHelp")}</DialogDescription>
         <label className="grid gap-1 text-xs">{t("api.route.request")}
           <Select value={selected} disabled={!ready || environmentMutation.isPending}
             onChange={(e) => {
@@ -92,7 +96,15 @@ function RouteDialog({ routing, draft, environmentName, onChange, onClose }: Pro
               else { setTemporaryHandle(undefined); setRequest({ expected: stored, route: fromChoice(value) }); }
             }} options={[{ value: "inherit", label: t("api.route.inherit") }, ...withMissing(selected), ...live.map((item) => ({ ...item, value: "live:" + item.value }))]} />
         </label>
-        {temporaryHandle && <p className="text-xs">{t("network.temporaryHelp")}</p>}
+        {temporaryHandle && <>
+          <p className="text-xs">{t("network.temporaryHelp")}</p>
+          <label className="grid gap-1 text-xs">{t("api.route.executionMode")}
+            <Select value={executionMode} disabled={!ready || environmentMutation.isPending}
+              onChange={(event) => setExecutionMode(event.target.value as TemporaryApiExecutionMode)}
+              options={[{ value: "tcp", label: t("api.route.tcp") }, { value: "terminalCurl", label: t("api.route.terminalCurl") }]} />
+          </label>
+          {executionMode === "terminalCurl" && <p className="text-xs">{t("api.route.terminalCurlHelp")}</p>}
+        </>}
         {routes?.environmentId && <label className="grid gap-1 text-xs">{t("api.route.environment", { name: environmentName ?? routes.environmentId })}
           <Select value={defaultValue} disabled={!ready || environmentMutation.isPending}
             onChange={(e) => setEnvironment({ expected: routes.environment, route: fromChoice(e.target.value) })} options={withMissing(defaultValue)} />
@@ -102,7 +114,8 @@ function RouteDialog({ routing, draft, environmentName, onChange, onClose }: Pro
           {t("api.route.loadFailed")}
           <Button type="button" variant="ghost" size="sm" onClick={() => { void query.refetch(); void ssh.refetch(); }}>{t("api.route.retry")}</Button>
         </div>}
-        {ssh.isSuccess && !ssh.data.length && <p className="text-xs text-[var(--u-color-text-muted)]">{t("api.route.noHosts")}</p>}
+        {ssh.isSuccess && !ssh.data.length && sessions && !sessions.failed && !sessions.items.length
+          && <p className="text-xs text-[var(--u-color-text-muted)]">{t("api.route.noHosts")}</p>}
         {error && <p role="alert" className="text-xs text-[var(--u-color-danger)]">{error}</p>}
       </DialogBody>
       <DialogFooter>

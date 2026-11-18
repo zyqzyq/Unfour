@@ -28,43 +28,7 @@ impl TaskLogWriter {
         if self.truncated {
             return;
         }
-        let line = match event.kind.as_str() {
-            "run" => format!(
-                "[{}] run {}\n",
-                event.created_at,
-                event.status.as_deref().unwrap_or("updated")
-            ),
-            "step" => format!(
-                "[{}] step '{}' {}{}\n",
-                event.created_at,
-                event.step_name.as_deref().unwrap_or("Unnamed step"),
-                event.status.as_deref().unwrap_or("updated"),
-                event
-                    .error
-                    .as_deref()
-                    .map(|error| format!(": {error}"))
-                    .unwrap_or_default()
-            ),
-            "output" => {
-                let (data, _) = unfour_core::redaction::redact_sensitive_lines(
-                    event.data.as_deref().unwrap_or_default(),
-                );
-                format!(
-                    "[{}] {} {}",
-                    event.created_at,
-                    event.stream.as_deref().unwrap_or("stdout"),
-                    data
-                )
-            }
-            "transfer" => format!(
-                "[{}] transfer {} {}/{} bytes\n",
-                event.created_at,
-                event.direction.as_deref().unwrap_or("unknown"),
-                event.transferred_bytes.unwrap_or(0),
-                event.total_bytes.unwrap_or(0)
-            ),
-            _ => return,
-        };
+        let line = format_task_log_event(event);
         self.write_bounded(line.as_bytes());
     }
 
@@ -211,12 +175,52 @@ pub(super) fn transfer_event(
 
 #[cfg(feature = "ssh-native")]
 impl SshService {
-    pub(super) fn emit_task_run_event(&self, event: &SshTaskRunEvent) {
+    pub(in crate::ssh) fn emit_task_run_event(&self, event: &SshTaskRunEvent) {
         let callback = self.on_task_run.lock().ok().and_then(|slot| slot.clone());
         if let Some(callback) = callback {
             if let Ok(payload) = serde_json::to_string(event) {
                 callback(payload);
             }
         }
+    }
+}
+
+pub(super) fn format_task_log_event(event: &SshTaskRunEvent) -> String {
+    match event.kind.as_str() {
+        "run" => format!(
+            "[{}] run {}\n",
+            event.created_at,
+            event.status.as_deref().unwrap_or("updated")
+        ),
+        "step" => format!(
+            "[{}] step '{}' {}{}\n",
+            event.created_at,
+            event.step_name.as_deref().unwrap_or("Unnamed step"),
+            event.status.as_deref().unwrap_or("updated"),
+            event
+                .error
+                .as_deref()
+                .map(|error| format!(": {error}"))
+                .unwrap_or_default()
+        ),
+        "output" => {
+            let (data, _) = unfour_core::redaction::redact_sensitive_lines(
+                event.data.as_deref().unwrap_or_default(),
+            );
+            format!(
+                "[{}] {} {}",
+                event.created_at,
+                event.stream.as_deref().unwrap_or("stdout"),
+                data
+            )
+        }
+        "transfer" => format!(
+            "[{}] transfer {} {}/{} bytes\n",
+            event.created_at,
+            event.direction.as_deref().unwrap_or("unknown"),
+            event.transferred_bytes.unwrap_or(0),
+            event.total_bytes.unwrap_or(0)
+        ),
+        _ => String::new(),
     }
 }

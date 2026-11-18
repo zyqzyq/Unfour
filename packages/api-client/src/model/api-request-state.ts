@@ -22,10 +22,12 @@ export function classifyRequestError(
   error: unknown,
 ): "cancelled" | "failed" | "network" | "timeout" {
   const code = errorCode(error);
-  if (code === "API_CANCELLED") return "cancelled";
-  if (code === "API_TIMEOUT" || code === "SSH_TUNNEL_TIMEOUT") return "timeout";
-  if (code === "NETWORK_ERROR" || code === "SSH_TUNNEL_CONNECT_FAILED" || code === "SSH_TUNNEL_TARGET_UNREACHABLE") return "network";
-  if (code?.startsWith("SSH_TUNNEL_")) return "failed";
+  if (code === "API_CANCELLED" || code === "SSH_TERMINAL_CANCELLED") return "cancelled";
+  if (code === "API_TIMEOUT" || code === "SSH_TUNNEL_TIMEOUT" || code === "SSH_TERMINAL_TIMEOUT" || code === "SSH_TERMINAL_HTTP_TIMEOUT") return "timeout";
+  if (["SSH_TERMINAL_STARTUP_TIMEOUT", "SSH_TERMINAL_READY_TIMEOUT", "SSH_TERMINAL_ACCEPT_TIMEOUT", "SSH_TERMINAL_INPUT_ACK_TIMEOUT", "SSH_TERMINAL_BEGIN_TIMEOUT", "SSH_TERMINAL_END_TIMEOUT", "SSH_TERMINAL_RESTORE_TIMEOUT"].includes(code ?? "")) return "timeout";
+  if (["NETWORK_ERROR", "SSH_TUNNEL_CONNECT_FAILED", "SSH_TUNNEL_TARGET_UNREACHABLE", "SSH_TUNNEL_TARGET_CONNECT_FAILED", "SSH_TUNNEL_TRANSPORT_CLOSED"].includes(code ?? "")) return "network";
+  if (["SSH_TERMINAL_HTTP_DNS_FAILED", "SSH_TERMINAL_HTTP_CONNECT_FAILED", "SSH_TERMINAL_TRANSPORT_CLOSED"].includes(code ?? "")) return "network";
+  if (code?.startsWith("SSH_TUNNEL_") || code?.startsWith("SSH_TERMINAL_")) return "failed";
   const message = formatError(error).toLowerCase();
   if (message.includes("timeout") || message.includes("timed out")) {
     return "timeout";

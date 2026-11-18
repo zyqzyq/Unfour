@@ -130,6 +130,7 @@ function refreshSavedTab(tab: ApiRequestTab, saved: ApiSavedRequest | undefined,
   if (!saved) return tab.externalChange === "deleted" ? tab : { ...tab, externalChange: "deleted" };
   const draft = inputToDraft(savedRequestToInput(saved, workspaceId));
   draft.temporaryHandle = tab.draft.temporaryHandle;
+  draft.temporaryExecutionMode = tab.draft.temporaryExecutionMode;
   const baseline = normalizeRequestDraft(draft);
   if (saved.revision === tab.savedRevision && baseline === tab.baseline && !tab.externalChange) return tab;
   if (tab.nameEditing || normalizeRequestDraft(tab.draft) !== tab.baseline) {
@@ -153,6 +154,7 @@ export function reloadSavedRequest(state: ApiTabsState, tabId: string, saved: Ap
     if (tab.saving || tab.savedRequestId !== saved.id) return tab;
     const draft = inputToDraft(savedRequestToInput(saved, state.workspaceId));
     draft.temporaryHandle = tab.draft.temporaryHandle;
+    draft.temporaryExecutionMode = tab.draft.temporaryExecutionMode;
     return { ...tab, draft, baseline: normalizeRequestDraft(draft), savedRevision: saved.revision, externalChange: undefined, saveError: null };
   });
 }
@@ -203,7 +205,11 @@ export function updateTabDraft(
 ): ApiTabsState {
   return updateTab(state, tabId, (tab) => ({
     ...tab,
-    draft: reconcileDraftPatch(tab.draft, patch),
+    draft: reconcileDraftPatch(tab.draft, {
+      ...patch,
+      // Confirm only the exact request/target currently displayed, once.
+      terminalConfirmed: Object.keys(patch).every((key) => key === "terminalConfirmed") ? patch.terminalConfirmed : false,
+    }),
     saveError: null,
   }));
 }
@@ -213,7 +219,7 @@ export function setActiveApiTab(
   tabId: string,
 ): ApiTabsState {
   return state.tabs.some((tab) => tab.id === tabId)
-    ? { ...state, activeTabId: tabId }
+    ? { ...state, activeTabId: tabId, tabs: state.activeTabId === tabId ? state.tabs : state.tabs.map((tab) => tab.draft.terminalConfirmed ? { ...tab, draft: { ...tab.draft, terminalConfirmed: false } } : tab) }
     : state;
 }
 
@@ -242,8 +248,10 @@ export function startTabSend(
   return updateTab(state, tabId, (tab) => ({
     ...tab,
     // Only a backend-sanitized executed request may populate this panel.
+    draft: { ...tab.draft, terminalConfirmed: false },
     lastRequest: null,
     cancelling: false,
+    cancelError: null,
     execution: null,
     executionId,
     response: null,
@@ -262,6 +270,7 @@ export function completeTabSend(
     ...tab,
     execution,
     cancelling: false,
+    cancelError: null,
     executionId: null,
     response: execution.response,
     lastRequest: execution.response?.requestSnapshot ?? null,
@@ -281,6 +290,7 @@ export function failTabSend(
     ...tab,
     response: null,
     cancelling: false,
+    cancelError: null,
     executionId: null,
     sendError: error,
     sendErrorCode: errorCode,
@@ -292,7 +302,14 @@ export function startTabCancel(state: ApiTabsState, tabId: string): ApiTabsState
   return updateTab(state, tabId, (tab) => ({
     ...tab,
     cancelling: tab.sending,
+    cancelError: null,
   }));
+}
+
+export function failTabCancel(state: ApiTabsState, tabId: string, executionId: string, error: string): ApiTabsState {
+  return updateTab(state, tabId, (tab) => tab.sending && tab.executionId === executionId
+    ? { ...tab, cancelling: false, cancelError: error }
+    : tab);
 }
 
 export function startTabSave(
@@ -335,6 +352,7 @@ export function completeTabSave(
   const nextId = `saved:${saved.id}`;
   const savedDraft = inputToDraft(savedRequestToInput(saved, state.workspaceId));
   savedDraft.temporaryHandle = state.tabs.find((tab) => tab.id === tabId)?.draft.temporaryHandle;
+  savedDraft.temporaryExecutionMode = state.tabs.find((tab) => tab.id === tabId)?.draft.temporaryExecutionMode;
   savedDraft.multipartParts = attachMultipartBindings(
     savedDraft.multipartParts,
     state.tabs.find((tab) => tab.id === tabId)?.draft.multipartParts ?? [],

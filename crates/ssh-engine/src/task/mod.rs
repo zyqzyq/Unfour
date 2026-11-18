@@ -9,10 +9,18 @@ use unfour_core::models::{SshTaskRunEvent, SSH_TASK_OUTCOME_UNCERTAIN};
 
 #[cfg(any(feature = "ssh-native", test))]
 mod command_step;
+#[cfg(feature = "ssh-native")]
+pub(in crate::ssh) use command_step::stream::StreamBuffer as TaskOutputBuffer;
 mod context;
+#[cfg(any(feature = "ssh-native", test))]
+mod diagnostics;
+#[cfg(any(feature = "ssh-native", test))]
+use diagnostics::{redact_driver_output, redact_task_error};
 mod domain;
 #[cfg(feature = "ssh-native")]
 mod download_step;
+#[cfg(feature = "ssh-native")]
+pub(in crate::ssh) mod ephemeral;
 #[cfg(any(feature = "ssh-native", test))]
 mod events;
 #[cfg(feature = "ssh-native")]
@@ -20,8 +28,12 @@ mod native;
 mod owner;
 #[cfg(any(feature = "ssh-native", test))]
 mod runner;
+#[cfg(feature = "ssh-native")]
+pub(in crate::ssh) mod shared;
 mod storage;
 mod template;
+#[cfg(feature = "ssh-native")]
+pub(in crate::ssh) mod terminal;
 #[cfg(feature = "ssh-native")]
 mod upload_step;
 
@@ -55,6 +67,30 @@ impl SshService {
 
     pub async fn run_task(&self, input: SshTaskRunInput) -> AppResult<SshTaskRun> {
         self.run_task_via(input, None).await
+    }
+
+    #[cfg(not(feature = "ssh-native"))]
+    pub async fn run_temporary_task(
+        &self,
+        _input: SshTaskRunInput,
+        _handle: &str,
+    ) -> AppResult<SshTaskRun> {
+        Err(AppError::Validation("TEMPORARY_NATIVE_REQUIRED".into()))
+    }
+
+    #[cfg(not(feature = "ssh-native"))]
+    pub async fn run_temporary_task_with_mode(
+        &self,
+        _input: SshTaskRunInput,
+        _handle: &str,
+        _mode: &str,
+    ) -> AppResult<SshTaskRun> {
+        Err(AppError::Validation("TEMPORARY_NATIVE_REQUIRED".into()))
+    }
+
+    #[cfg(not(feature = "ssh-native"))]
+    pub fn is_temporary_task_run(&self, _workspace: &str, _id: &str) -> bool {
+        false
     }
 
     pub async fn run_task_via(
@@ -130,28 +166,7 @@ impl SshService {
         #[cfg(feature = "ssh-native")]
         {
             // Validate every transfer before the first remote command can have side effects.
-            let mut downloaded = std::collections::HashSet::new();
-            for step in &steps {
-                if matches!(step.step_type.as_str(), "upload" | "download") {
-                    let path = step.config_json["localPath"].as_str().unwrap_or_default();
-                    let resolved_path = std::env::current_dir()?.join(path);
-                    let result =
-                        unfour_core::local_path::check_runtime(path, step.step_type == "download");
-                    // A preceding download may provide a later upload's source.
-                    let result =
-                        if result == Err("pathMissing") && downloaded.contains(&resolved_path) {
-                            Ok(())
-                        } else {
-                            result
-                        };
-                    result.map_err(|code| {
-                        AppError::Validation(format!("LOCAL_PATH_UNAVAILABLE:{code}:{}", step.name))
-                    })?;
-                    if step.step_type == "download" {
-                        downloaded.insert(resolved_path);
-                    }
-                }
-            }
+            ephemeral::validate_task_transfer_paths(&steps)?;
             self.record_task_connection_use(&input.workspace_id, &detail.task.id, &connection_id)
                 .await?;
             let run_id = unfour_core::id::new_id();
@@ -211,6 +226,10 @@ impl SshService {
 
     pub async fn cancel_task_run(&self, input: SshTaskCancelInput) -> AppResult<SshTaskRun> {
         validate_workspace_id(&input.workspace_id)?;
+        #[cfg(feature = "ssh-native")]
+        if let Some(run) = self.cancel_temporary_task(&input.workspace_id, &input.run_id)? {
+            return Ok(run);
+        }
         #[cfg(not(feature = "ssh-native"))]
         {
             let _ = input;
@@ -347,7 +366,7 @@ fn task_run_event_from_runner(
             task_id,
             &step,
             &stream,
-            redact_task_secret_values(&data, secret_values),
+            redact_driver_output(&stream, data, secret_values),
         ),
         RunnerEvent::Driver(step, DriverEvent::Transfer(progress)) => {
             transfer_event(run_id, task_id, &step, &progress)
@@ -378,16 +397,6 @@ fn redact_task_run_outcome(outcome: TaskRunOutcome, secret_values: &[String]) ->
             .error
             .map(|value| redact_task_error(value, secret_values)),
     }
-}
-
-#[cfg(any(feature = "ssh-native", test))]
-fn redact_task_error(value: String, secret_values: &[String]) -> String {
-    // This fixed diagnostic contains no runtime data. Preserve its identity
-    // for history, live events and Flow even if a secret is part of its spelling.
-    if value == SSH_TASK_OUTCOME_UNCERTAIN {
-        return value;
-    }
-    redact_task_secret_values(&value, secret_values)
 }
 
 #[cfg(test)]

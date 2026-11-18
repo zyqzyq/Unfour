@@ -191,6 +191,7 @@ impl CommandBusAdapter for ApiStubCommandBus {
     ) -> Result<ApiResponse, CommandBusAdapterError> {
         Ok(ApiResponse {
             request_snapshot: None,
+            terminal_timing: None,
             diagnostic_projection: None,
             history_id: "hist-1".to_string(),
             status: 200,
@@ -392,6 +393,7 @@ impl CommandBusAdapter for ApiStubCommandBus {
         assert_eq!(input.workspace_id, "ws-1");
         Ok(ApiResponse {
             request_snapshot: None,
+            terminal_timing: None,
             diagnostic_projection: None,
             history_id: "hist-post".to_string(),
             status: 201,

@@ -6,7 +6,7 @@ import { getApiRoutes, listSshConnections, listTemporaryRoutes, setApiEnvironmen
 import { useState } from "react";
 import { useApiRoutes } from "../hooks/useApiRoutes";
 import { createNewRequestTab, emptyApiTabsState } from "../model/request-tabs";
-import type { ApiRoute, ApiRouteEdit } from "@unfour/command-client";
+import type { ApiRoute, ApiRouteEdit, TemporaryApiExecutionMode } from "@unfour/command-client";
 import { ApiRoutePicker } from "./ApiRoutePicker";
 
 vi.mock("@unfour/command-client", async (load) => ({
@@ -20,9 +20,43 @@ const sshRoute: ApiRoute = { mode: "ssh", sshConnectionId: "ssh-1" };
 function TestBar({ onApplied }: { onApplied?: (route: ApiRouteEdit | undefined) => void } = {}) {
   const [draft, setDraft] = useState<ApiRouteEdit>();
   const [handle, setHandle] = useState<string>();
+  const [mode, setMode] = useState<TemporaryApiExecutionMode>();
   const routing = useApiRoutes("w", { ...tab, draft: { ...tab.draft, route: draft, temporaryHandle: handle } }, "env-1", "success");
-  return <ApiRoutePicker routing={routing} draft={draft} onChange={(route, live) => { onApplied?.(route); setDraft(route); setHandle(live); }} disabled={false} environmentName="QA" />;
+  return <ApiRoutePicker routing={routing} draft={draft} temporaryExecutionMode={mode} onChange={(route, live, executionMode) => { onApplied?.(route); setDraft(route); setHandle(live); setMode(executionMode); }} disabled={false} environmentName="QA" />;
 }
+
+it("offers terminal curl explicitly without changing the stored environment route", async () => {
+  vi.mocked(getApiRoutes).mockResolvedValue({ environmentId: "env-1", request: { mode: "inherit" }, environment: { mode: "direct" }, effective: { mode: "direct" } });
+  vi.mocked(listSshConnections).mockResolvedValue([]);
+  vi.mocked(listTemporaryRoutes).mockResolvedValue([{ handle: "live-node", displayName: "Target node", endpoint: "fixture.invalid:22" }]);
+  const client = new QueryClient();
+  render(<QueryClientProvider client={client}><TestBar /></QueryClientProvider>);
+  fireEvent.click(await screen.findByRole("button", { name: /Network route · Environment · Direct/ }));
+  const request = screen.getByLabelText("This request");
+  await within(request).findByRole("option", { name: "Target node · fixture.invalid:22" });
+  expect(screen.queryByText("Add a connection in SSH to route requests through it.")).not.toBeInTheDocument();
+  fireEvent.change(request, { target: { value: "live:live-node" } });
+  expect(screen.getByLabelText("Execution mode")).toHaveValue("tcp");
+  fireEvent.change(screen.getByLabelText("Execution mode"), { target: { value: "terminalCurl" } });
+  expect(screen.getByText(/The selected host sends the request with curl/)).toBeInTheDocument();
+  expect(screen.queryByText("Add a connection in SSH to route requests through it.")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+  expect(await screen.findByRole("button", { name: /Network route · Terminal curl · Target node/ })).toBeInTheDocument();
+  expect(setApiEnvironmentRoute).not.toHaveBeenCalled();
+});
+
+it("shows connection setup help only after both saved and live hosts are confirmed empty", async () => {
+  vi.mocked(getApiRoutes).mockResolvedValue({ environmentId: "env-1", request: { mode: "inherit" }, environment: { mode: "direct" }, effective: { mode: "direct" } });
+  vi.mocked(listSshConnections).mockResolvedValue([]);
+  let resolveSessions!: (routes: []) => void;
+  vi.mocked(listTemporaryRoutes).mockReturnValue(new Promise((resolve) => { resolveSessions = resolve; }));
+  const client = new QueryClient();
+  render(<QueryClientProvider client={client}><TestBar /></QueryClientProvider>);
+  fireEvent.click(await screen.findByRole("button", { name: /Network route · Environment · Direct/ }));
+  expect(screen.queryByText("Add a connection in SSH to route requests through it.")).not.toBeInTheDocument();
+  resolveSessions([]);
+  expect(await screen.findByText("Add a connection in SSH to route requests through it.")).toBeVisible();
+});
 
 it("offers a bastion session for this request only", async () => {
   vi.mocked(getApiRoutes).mockResolvedValue({ environmentId: "env-1", request: { mode: "inherit" }, environment: { mode: "direct" }, effective: { mode: "direct" } });

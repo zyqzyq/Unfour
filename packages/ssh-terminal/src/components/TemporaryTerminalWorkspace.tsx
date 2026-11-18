@@ -6,6 +6,7 @@ import {
   type TemporarySshSummary, type SshSessionEvent,
 } from "@unfour/command-client";
 import { TerminalPane } from "./TerminalPane";
+import { TemporaryCapabilityDialog } from "./TemporaryCapabilityDialog";
 
 function createScope(workspaceId: string) {
   return { workspaceId, alive: true, connecting: new Set<string>(), closing: new Set<string>(), closed: new Set<string>() };
@@ -151,11 +152,14 @@ export function TemporaryTerminalWorkspace({ workspaceId, autoClaim = false, sur
       <div className="flex items-center gap-2 px-3 py-1 text-xs">
         <span className="min-w-0 truncate" title={temporarySshLabel(active, t("ssh.temporary.title"))}>{temporarySshLabel(active, t("network.temporarySession", { id: active.handle.slice(-8) }))}</span>
         <span>{t(`ssh.temporary.status.${active.status}`)}</span>
+        {active.terminalTaskBusy && <span role="status">{t("ssh.temporary.terminalTaskBusy")}</span>}
+        {active.terminalRecoveryRequired && <span role="alert">{t("ssh.tasks.run.errors.SSH_TASK_TERMINAL_RECOVERY_REQUIRED")}</span>}
         {active.errorCode && <span role="alert">{t(`ssh.temporary.errors.${active.errorCode}`, t("ssh.temporary.failed"))}</span>}
         {active.status === "claimed" && <Button disabled={connecting.includes(active.handle)} onClick={() => void connect(active.handle)}>{t("ssh.temporary.connect")}</Button>}
+        {surfaceActive && ["connected", "disconnected"].includes(active.status) && <TemporaryCapabilityDialog key={`${workspaceId}:${active.handle}`} workspaceId={workspaceId} handle={active.handle} connected={active.status === "connected"} terminalBusy={Boolean(active.terminalTaskBusy)} terminalRecoveryRequired={Boolean(active.terminalRecoveryRequired)} label={temporarySshLabel(active, t("ssh.temporary.title"))} />}
         <Button variant="secondary" onClick={() => void close(active.handle)}>{t("ssh.temporary.cancel")}</Button>
       </div>
-      <TerminalPane key={active.handle} active={surfaceActive} temporary session={session} events={events[active.handle] ?? []} inputDisabled={active.status !== "connected"} />
+      <TerminalPane key={active.handle} active={surfaceActive} temporary session={session} events={events[active.handle] ?? []} inputDisabled={active.status !== "connected" || active.terminalTaskBusy || active.terminalRecoveryRequired} />
     </div> : null}
     <div className={active ? "hidden" : "flex min-h-0 flex-1 flex-col"}>{typeof children === "function" ? children(Boolean(active), showSaved) : children}</div>
   </>;

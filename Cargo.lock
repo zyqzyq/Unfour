@@ -4789,8 +4789,6 @@ dependencies = [
 [[package]]
 name = "russh"
 version = "0.61.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f67013f080c226e5a34db1c71f2567f44d95a6300005bb6cd4e2c8fe3c326d1b"
 dependencies = [
  "aes 0.9.1",
  "bitflags 2.11.1",
@@ -7156,6 +7154,7 @@ dependencies = [
  "base64 0.22.1",
  "rand 0.10.1",
  "russh",
+ "russh-sftp",
  "serde",
  "serde_json",
  "sqlx",
@@ -7331,6 +7330,7 @@ dependencies = [
 name = "unfour-ssh-engine"
 version = "0.14.0"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
  "russh",
  "russh-sftp",
@@ -7341,6 +7341,7 @@ dependencies = [
  "ssh-key",
  "tempfile",
  "tokio",
+ "tokio-util",
  "unfour-core",
  "unfour-diag",
  "unfour-local-storage",

@@ -3,12 +3,13 @@ import type {
   SshTaskRun,
   SshTaskRunEvent,
 } from "@unfour/command-client";
+import { isTemporarySshTaskRun } from "@unfour/command-client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Button, StatusBadge, useI18n } from "@unfour/ui";
 import { CircleStop, FolderOpen, X } from "lucide-react";
-import { formatTaskRunError, taskDisplayStatus } from "../model/errors";
+import { formatTaskHistoryLog, formatTaskRunError, taskDisplayStatus } from "../model/errors";
 import { buildTaskRunTranscript } from "../model/task-run-transcript";
 
 const HEIGHT_KEY = "unfour.ssh.task-run-panel-height";
@@ -123,7 +124,7 @@ export function TaskRunPanel({
   );
 
   const hasLiveTranscript = transcript.length > 0;
-  const historyLog = (logText ?? "").trim();
+  const historyLog = formatTaskHistoryLog((logText ?? "").trim(), t);
   const showHistoryLog = !hasLiveTranscript && !running && Boolean(historyLog);
 
   useEffect(() => {
@@ -154,6 +155,7 @@ export function TaskRunPanel({
           <StatusBadge tone={statusTone(status)}>
             {t(`ssh.tasks.run.status.${status}`)}
           </StatusBadge>
+          {isTemporarySshTaskRun(run) && <span className="text-[11px] text-[var(--u-color-text-muted)]" title={t("ssh.tasks.run.temporaryHelp")}>{t("ssh.tasks.run.memoryOnly")}</span>}
           {currentStep && (
             <span className="truncate text-[11px] text-[var(--u-color-text-muted)]">
               {t("ssh.tasks.run.currentStep", { name: currentStep.stepName ?? "" })}

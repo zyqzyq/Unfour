@@ -16,18 +16,21 @@ export function useApiRoutes(workspaceId: string, tab: ApiRequestTab | null, env
   const environmentReady = environmentStatus === "success";
   const client = useQueryClient();
   const query = useQuery({
+    networkMode: "always",
     enabled: Boolean(workspaceId && tab && environmentReady),
     queryKey: routeQueryKey(workspaceId, tab?.savedRequestId, environmentId),
     queryFn: () => getApiRoutes(workspaceId, tab?.savedRequestId, environmentId),
     meta: { cloudSyncWorkspaceId: workspaceId, localDataDomains: ["environments", "api-requests", "ssh-connections"] },
   });
   const ssh = useQuery({
+    networkMode: "always",
     enabled: Boolean(workspaceId && tab),
     queryKey: ["ssh-connections", workspaceId],
     queryFn: () => listSshConnections(workspaceId),
     meta: { cloudSyncWorkspaceId: workspaceId, localDataDomains: ["ssh-connections"] },
   });
   const environmentMutation = useMutation({
+    networkMode: "always",
     mutationKey: environmentRouteMutationKey(workspaceId),
     mutationFn: ({ id, edit }: { id: string; edit: ApiRouteEdit }) => setApiEnvironmentRoute(workspaceId, id, edit),
     onSuccess: () => client.invalidateQueries({ queryKey: ["api-routes", workspaceId] }),
@@ -35,6 +38,7 @@ export function useApiRoutes(workspaceId: string, tab: ApiRequestTab | null, env
   const view = routePreview(query, ssh, tab?.draft.route?.route, environmentId, environmentStatus);
   const temporaryHandle = tab?.draft.temporaryHandle;
   const temporary = useQuery({
+    networkMode: "always",
     enabled: Boolean(temporaryHandle),
     queryKey: ["api-live-sessions", workspaceId],
     queryFn: () => listTemporaryRoutes(workspaceId),
@@ -43,7 +47,10 @@ export function useApiRoutes(workspaceId: string, tab: ApiRequestTab | null, env
   const ready = temporaryHandle
     ? query.isSuccess && query.data.environmentId === environmentId && environmentReady && temporary.isSuccess && temporary.data.some((entry) => entry.handle === temporaryHandle)
     : view.ready;
-  return { query, ssh, ...view, workspaceId, temporaryHandle, temporary, environmentStatus, ready: ready && !environmentMutation.isPending,
+  const terminal = tab?.draft.temporaryExecutionMode === "terminalCurl" && Boolean(temporaryHandle);
+  const session = temporary.data?.find((entry) => entry.handle === temporaryHandle);
+  const terminalReady = !terminal || Boolean(session && !session.terminalTaskBusy && !session.terminalRecoveryRequired);
+  return { query, ssh, ...view, workspaceId, temporaryHandle, temporary, environmentStatus, ready: ready && terminalReady && !environmentMutation.isPending,
     pending: temporaryHandle ? query.isLoading || temporary.isLoading || environmentStatus === "pending" : view.pending, environmentMutation };
 }
 

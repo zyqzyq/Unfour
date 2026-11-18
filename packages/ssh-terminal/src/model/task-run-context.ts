@@ -84,6 +84,7 @@ export function taskRunSelection(detail: SshTaskDetail, variables: WorkspaceVari
 
 function recallNotice(detail: SshTaskDetail, environment: WorkspaceEnvironmentLike | null, run?: SshTaskRun) {
   if (!run) return null;
+  if (run.warnings?.includes("SSH_TASK_TEMPORARY_RUN")) return "ssh.tasks.run.temporaryReselect";
   if (run.context?.version !== 1) return "ssh.tasks.run.legacyContext";
   if (run.context.taskVersion !== taskVersion(detail)) return "ssh.tasks.run.taskChanged";
   if (run.context.environmentUpdatedAt !== (environment?.updatedAt ?? null)) return "ssh.tasks.run.environmentChanged";

@@ -1,103 +1,8 @@
 use super::*;
 use tokio::sync::watch;
 
-pub(crate) struct TrustPrompt {
-    pub(super) queue: std::sync::Weak<Mutex<Queue>>,
-    pub(super) handle: String,
-    pub(super) initial_exchange_seen: bool,
-}
-impl TrustPrompt {
-    pub(crate) fn finish_key_exchange(&mut self, workspace: &str) -> Result<(), russh::Error> {
-        if !self.initial_exchange_seen {
-            self.initial_exchange_seen = true;
-            return Ok(());
-        }
-        // russh 0.61 calls check_server_key only for the initial exchange. At
-        // this callback the new keys have not been installed; the host public
-        // key is unavailable, so a temporary session must end here.
-        if let Some(queue) = self.queue.upgrade() {
-            if let Ok(mut queue) = queue.lock() {
-                if let Ok(entry) = queue.owned(workspace, &self.handle) {
-                    entry.summary.error_code = Some("TEMPORARY_REKEY_REQUIRES_RELAUNCH".into());
-                    if let Some(cancel) = &entry.cancel {
-                        cancel.send_replace(true);
-                    }
-                }
-            }
-        }
-        Err(russh::Error::UnknownKey)
-    }
-
-    pub(crate) async fn verify(
-        &self,
-        store: &HostKeyStore,
-        workspace: &str,
-        host: &str,
-        port: u16,
-        fingerprint: &str,
-    ) -> bool {
-        // Match normal SSH's trust-on-first-use interaction, while retaining
-        // temporary endpoint associations only until the workspace closes.
-        // Existing durable pins still take precedence; never overwrite them.
-        let stored = match store
-            .matches_known_fingerprint(workspace, host, port, fingerprint)
-            .await
-        {
-            Ok(stored) => stored,
-            Err(_) => return false,
-        };
-        let Some(queue) = self.queue.upgrade() else {
-            return false;
-        };
-        let Ok(mut queue) = queue.lock() else {
-            return false;
-        };
-        // Database lookup can yield while a label/workspace closes. Check
-        // ownership and lifecycle again before accepting even a known key.
-        let Ok(entry) = queue.owned(workspace, &self.handle) else {
-            return false;
-        };
-        if entry.summary.status != "connecting" || entry.summary.error_code.is_some() {
-            return false;
-        }
-        if stored == Some(false)
-            || entry
-                .trusted_fingerprint
-                .as_deref()
-                .is_some_and(|expected| expected != fingerprint)
-        {
-            entry.summary.error_code = Some("TEMPORARY_HOST_KEY_MISMATCH".into());
-            return false;
-        }
-        let key = (workspace.to_owned(), host.to_ascii_lowercase(), port);
-        if let Some(expected) = queue.trusted_hosts.get(&key) {
-            if expected != fingerprint {
-                queue
-                    .owned(workspace, &self.handle)
-                    .expect("owned while locked")
-                    .summary
-                    .error_code = Some("TEMPORARY_HOST_KEY_MISMATCH".into());
-                return false;
-            }
-        } else {
-            // Do not evict a pin and silently accept a changed key as new.
-            if queue.trusted_hosts.len() >= MAX_TRUSTED_HOSTS {
-                queue
-                    .owned(workspace, &self.handle)
-                    .expect("owned while locked")
-                    .summary
-                    .error_code = Some("TEMPORARY_TRUST_CAPACITY".into());
-                return false;
-            }
-            queue.trusted_hosts.insert(key, fingerprint.to_owned());
-        }
-        queue
-            .owned(workspace, &self.handle)
-            .expect("owned while locked")
-            .trusted_fingerprint = Some(fingerprint.to_owned());
-        true
-    }
-}
+mod trust;
+pub(crate) use trust::TrustPrompt;
 
 impl SshService {
     pub fn trust_temporary(
@@ -186,14 +91,12 @@ impl SshService {
                         };
                         match message {
                             Some(message) => {
-                                if let Some(data) =
-                                    native_supervisor::terminal_output_from_channel_message(
-                                        &message,
-                                    )
-                                {
-                                    if let Ok(mut queue) = self.temporary.0.lock() {
-                                        if let Ok(entry) = queue.owned(&workspace, &id) {
+                                if let Ok(mut queue) = self.temporary.0.lock() {
+                                    if let Ok(entry) = queue.owned(&workspace, &id) {
+                                        if !super::terminal::route(entry, &message) {
+                                            if let Some(data) = native_supervisor::terminal_output_from_channel_message(&message) {
                                             append_pending_output(&mut entry.output, &data);
+                                            }
                                         }
                                     }
                                 }
@@ -201,10 +104,24 @@ impl SshService {
                                     message,
                                     russh::ChannelMsg::Eof | russh::ChannelMsg::Close
                                 ) {
+                                    keepalive::record_channel_close(
+                                        self,
+                                        &workspace,
+                                        &id,
+                                        "TEMPORARY_REMOTE_SHELL_CLOSED",
+                                    );
                                     break;
                                 }
                             }
-                            None => break,
+                            None => {
+                                keepalive::record_channel_close(
+                                    self,
+                                    &workspace,
+                                    &id,
+                                    "TEMPORARY_TRANSPORT_CLOSED",
+                                );
+                                break;
+                            }
                         }
                     }
                 }
@@ -272,19 +189,16 @@ impl SshService {
             workspace_id: workspace.into(),
             host: request.host.to_string(),
             port: request.port,
-            temporary_trust: Some(TrustPrompt {
-                queue: Arc::downgrade(&self.temporary.0),
-                handle: id.into(),
-                initial_exchange_seen: false,
-            }),
+            temporary_trust: Some(TrustPrompt::new(
+                Arc::downgrade(&self.temporary.0),
+                id.into(),
+            )),
         };
         // Key exchange, authentication and PTY + shell setup have independent
         // bounds. First-use verification no longer waits for a UI response.
-        let mut config = native_client_config();
-        // A setup timeout must own its outcome. Normal-session keepalives
-        // otherwise disconnect a slow authentication/channel after nine seconds.
-        // Temporary sessions perform no background liveness probes or reconnect.
-        config.keepalive_interval = None;
+        // The temporary connection owns a less aggressive, protocol-only
+        // keepalive policy; setup deadlines remain independent. No reconnect.
+        let config = keepalive::client_config();
         let handle = tokio::time::timeout(
             Duration::from_secs(30),
             native_transport::connect_transport(
@@ -382,6 +296,9 @@ impl SshService {
         if input.data.len() > 64 * 1024 {
             return Err(failure("TEMPORARY_INPUT_TOO_LARGE"));
         }
+        let _input_guard = self
+            .terminal_input_guard(&input.workspace_id, &input.session_id)
+            .await?;
         let native = self.temporary_native(&input.workspace_id, &input.session_id)?;
         tokio::time::timeout(
             Duration::from_secs(5),

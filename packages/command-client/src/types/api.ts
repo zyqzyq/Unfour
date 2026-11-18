@@ -88,7 +88,19 @@ export type ApiClientPreferences = {
   requestTimeoutMs: number;
 };
 
+export type TerminalCurlTiming = {
+  prepareMs: number;
+  inputMs: number;
+  inputAckCount: number;
+  inputAckWaitMs: number;
+  executionAndOutputMs: number;
+  curlStartTransferMs: number | null;
+  curlTotalMs: number | null;
+  restoreMs: number;
+};
+
 export type ApiResponse = {
+  terminalTiming?: TerminalCurlTiming;
   /** Non-fatal completion warnings; absent in older responses. */
   warnings?: string[];
   requestSnapshot?: ApiExecutedRequestSnapshot | null;

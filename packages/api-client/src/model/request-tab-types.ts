@@ -16,6 +16,7 @@ import type {
 export type ApiRequestTab = {
   baseline: string | null;
   cancelling: boolean;
+  cancelError?: string | null;
   draft: RequestDraft;
   execution: RequestExecutionResult | null;
   id: string;

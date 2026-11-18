@@ -52,6 +52,8 @@ mod storage;
 #[path = "task/mod.rs"]
 mod task;
 pub mod temporary;
+#[cfg(feature = "ssh-native")]
+mod terminal_wire;
 mod tunnel;
 pub use tunnel::{SshTunnel, TemporarySshTunnel, TunnelProxyLease};
 
@@ -244,6 +246,19 @@ struct SshClientHandler {
 impl russh::client::Handler for SshClientHandler {
     type Error = russh::Error;
 
+    async fn disconnected(
+        &mut self,
+        reason: russh::client::DisconnectReason<Self::Error>,
+    ) -> Result<(), Self::Error> {
+        if let Some(trust) = &mut self.temporary_trust {
+            temporary::record_transport_disconnect(trust, &self.workspace_id, &reason);
+        }
+        match reason {
+            russh::client::DisconnectReason::ReceivedDisconnect(_) => Ok(()),
+            russh::client::DisconnectReason::Error(error) => Err(error),
+        }
+    }
+
     async fn kex_done(
         &mut self,
         _shared_secret: Option<&[u8]>,
@@ -268,7 +283,7 @@ impl russh::client::Handler for SshClientHandler {
             return Ok(expected == &fingerprint);
         }
 
-        if let Some(trust) = &self.temporary_trust {
+        if let Some(trust) = &mut self.temporary_trust {
             return Ok(trust
                 .verify(
                     &self.host_key_store,

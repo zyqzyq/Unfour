@@ -51,6 +51,73 @@ fn variable(key: &str, value: &str, secret: bool) -> WorkspaceVariableInput {
 }
 
 #[tokio::test]
+async fn temporary_task_context_hydrates_without_saved_connection_and_rejects_stale_inputs() {
+    let bus = test_bus().await;
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    bus.workspace_variables_replace(
+        workspace.clone(),
+        vec![variable("TOKEN", "synthetic-secret", true)],
+    )
+    .await
+    .unwrap();
+    let mut input = SshTaskRunInput {
+        workspace_id: workspace.clone(),
+        task_id: "task".into(),
+        connection_id: None,
+        inputs: [("TOKEN".into(), String::new())].into_iter().collect(),
+        secret_input_names: vec![],
+        context: Some(SshTaskRunContextInput {
+            environment_id: None,
+            task_version: "current".into(),
+            environment_updated_at: None,
+            input_versions: None,
+            input_sources: [("TOKEN".into(), SshTaskInputSource::Workspace)]
+                .into_iter()
+                .collect(),
+        }),
+    };
+    refresh_versions(&bus, &mut input).await;
+    assert!(
+        bus.prepare_ssh_task_context(&mut input).await.is_err(),
+        "saved-target path still requires a saved connection"
+    );
+    let before: (i64,) = sqlx::query_as("SELECT total_changes()")
+        .fetch_one(bus.db.pool())
+        .await
+        .unwrap();
+    bus.prepare_ssh_task_context_for_target(&mut input, false)
+        .await
+        .unwrap();
+    assert_eq!(input.inputs["TOKEN"], "synthetic-secret");
+    assert!(input.secret_input_names.contains(&"TOKEN".into()));
+    assert!(input.connection_id.is_none());
+    let after: (i64,) = sqlx::query_as("SELECT total_changes()")
+        .fetch_one(bus.db.pool())
+        .await
+        .unwrap();
+    assert_eq!(
+        before, after,
+        "temporary input preparation must not write runtime data"
+    );
+    input
+        .context
+        .as_mut()
+        .unwrap()
+        .input_versions
+        .as_mut()
+        .unwrap()
+        .get_mut("TOKEN")
+        .unwrap()
+        .revision += 1;
+    assert!(bus
+        .prepare_ssh_task_context_for_target(&mut input, false)
+        .await
+        .unwrap_err()
+        .to_string()
+        .contains("SSH_TASK_INPUTS_CHANGED"));
+}
+
+#[tokio::test]
 async fn ssh_context_resolves_current_values_and_taints_manual_aliases() {
     let bus = test_bus().await;
     let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;

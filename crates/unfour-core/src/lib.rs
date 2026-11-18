@@ -7,6 +7,7 @@ pub mod models;
 pub mod naming;
 pub mod network;
 pub mod redaction;
+pub mod terminal_curl_contract;
 pub mod time;
 
 pub use app_error::{AppError, AppResult};

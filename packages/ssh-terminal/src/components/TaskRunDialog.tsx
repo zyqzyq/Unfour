@@ -1,4 +1,4 @@
-import { connectionTemporaryHandle, type SshConnection, type SshTaskDetail } from "@unfour/command-client";
+import { connectionTemporaryHandle, temporarySshLabel, type TemporarySshRoute, type TemporaryTaskExecutionMode, type SshConnection, type SshTaskDetail } from "@unfour/command-client";
 import { Lock, LockOpen } from "lucide-react";
 import { useId, type ChangeEvent } from "react";
 import {
@@ -18,12 +18,21 @@ import {
   useI18n,
 } from "@unfour/ui";
 import { detectTaskInputs } from "../model/task-template";
+import { formatTaskRunError } from "../model/errors";
+import { TemporaryTaskExecutionControls } from "./TemporaryTaskExecutionControls";
 
 export function TaskRunDialog({
   activeEnvironmentName,
   automaticSecretInputNames,
   connectionId,
   connections,
+  temporaryHandle = null,
+  temporarySessions = [],
+  temporaryLoading = false,
+  temporaryExecutionMode = "terminal",
+  terminalReady = false,
+  onTemporaryExecutionModeChange,
+  onTerminalReadyChange,
   environmentId,
   environmentLoadFailed,
   environments,
@@ -32,6 +41,7 @@ export function TaskRunDialog({
   inputValues,
   inputScopeKey,
   onConnectionChange,
+  onTemporaryChange,
   onEnvironmentChange,
   onInputChange,
   onOpenChange,
@@ -48,6 +58,14 @@ export function TaskRunDialog({
   automaticSecretInputNames: string[];
   connectionId: string;
   connections: SshConnection[];
+  temporaryHandle?: string | null;
+  temporarySessions?: TemporarySshRoute[];
+  temporaryLoading?: boolean;
+  temporaryExecutionMode?: TemporaryTaskExecutionMode;
+  terminalReady?: boolean;
+  onTemporaryExecutionModeChange?: (mode: TemporaryTaskExecutionMode) => void;
+  onTerminalReadyChange?: (ready: boolean) => void;
+  onTemporaryChange?: (handle: string) => void;
   environmentId: string;
   environmentLoadFailed: boolean;
   environments: Array<{ id: string; name: string }>;
@@ -70,20 +88,20 @@ export function TaskRunDialog({
 }) {
   const { t } = useI18n();
   const detectedInputs = task ? detectTaskInputs(task.steps, true) : [];
-  const connection = connections.find((item) => item.id === connectionId && !item.deletedAt && item.workspaceId === task?.task.workspaceId) ?? null;
+  const connection = !temporaryHandle ? connections.find((item) => item.id === connectionId && !item.deletedAt && item.workspaceId === task?.task.workspaceId) ?? null : null;
+  const temporary = temporaryHandle ? temporarySessions.find((item) => item.handle === temporaryHandle) : null;
+  const targetValue = temporaryHandle ? `temporary:${temporaryHandle}` : connectionId;
+  const temporaryLabel = (item: TemporarySshRoute) => temporarySshLabel(item, t("network.temporarySession", { id: item.handle.slice(-8) }));
   const parent = connection && connectionTemporaryHandle("ssh", connection.workspaceId, connection.id);
   const missingEnvironment = Boolean(environmentId && !environments.some((env) => env.id === environmentId));
   const missing = detectedInputs.some((name) => !inputValues[name]?.trim());
-  const canRun = Boolean(task && connection && !missing && !missingEnvironment && !environmentLoadFailed && task.steps.some((step) => step.enabled));
+  const commandOnly = !task?.steps.some((step) => step.enabled && step.stepType !== "command");
+  const terminalBlocked = temporaryHandle && temporaryExecutionMode === "terminal" && (!terminalReady || !commandOnly || temporary?.terminalRecoveryRequired);
+  const canRun = Boolean(task && (connection || temporary) && !temporary?.terminalTaskBusy && !terminalBlocked && !missing && !missingEnvironment && !environmentLoadFailed && task.steps.some((step) => step.enabled));
   const title = t("ssh.tasks.run.title");
   const secretNames = new Set(secretInputNames);
   const automaticSecretNames = new Set(automaticSecretInputNames);
-  const errorMessage = error?.message.includes("SSH_TASK_DEFINITION_CHANGED") ? `${t("ssh.tasks.run.taskChanged")} ${t("ssh.tasks.run.prepareAgain")}`
-    : error?.message.includes("SSH_TASK_ENVIRONMENT_CHANGED") ? `${t("ssh.tasks.run.environmentChanged")} ${t("ssh.tasks.run.prepareAgain")}`
-    : error?.message.includes("SSH_TASK_ENVIRONMENT_MISSING") ? t("ssh.tasks.run.environmentMissing")
-    : error?.message.includes("SSH_TASK_INPUT_SOURCE_MISSING") ? t("ssh.tasks.run.prepareAgain")
-    : error?.message.includes("SSH_TASK_INPUTS_CHANGED") ? t("ssh.tasks.run.inputsChanged")
-    : error?.message.includes("SSH_TASK_CONNECTION_REQUIRED") ? t("ssh.tasks.run.connectionMissing") : error?.message;
+  const errorMessage = taskRunErrorMessage(error, t);
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -97,23 +115,35 @@ export function TaskRunDialog({
             {notice && <p className="text-[12px] text-[var(--u-color-warning)]" role="status">{notice}</p>}
             <div className="grid grid-cols-2 gap-3 text-[12px]">
               <Summary label={t("ssh.tasks.run.taskName")} value={task?.task.name ?? "—"} />
-              <Summary label={t("ssh.tasks.run.host")} value={connection ? `${connection.username}@${connection.host}:${connection.port}` : "—"} />
+              <Summary label={t("ssh.tasks.run.host")} value={temporary ? temporaryLabel(temporary) : connection ? `${connection.username}@${connection.host}:${connection.port}` : "—"} />
               {parent && <Summary label={t("redis.route.label")} value={t("network.temporarySession", { id: parent.slice(-8) })} />}
             </div>
             <label className="flex flex-col gap-1">
               <span className="text-[11px] font-medium text-[var(--u-color-text-muted)]">
                 {t("ssh.tasks.run.connection")}
               </span>
-              <Select disabled={pending} onChange={(event) => onConnectionChange(event.target.value)} value={connectionId}>
+              <Select disabled={pending} onChange={(event) => {
+                const value = event.target.value;
+                if (value.startsWith("temporary:")) onTemporaryChange?.(value.slice("temporary:".length));
+                else onConnectionChange(value);
+              }} value={targetValue}>
                 <option value="">{t("ssh.tasks.run.selectConnection")}</option>
                 {connectionId && !connection && <option disabled value={connectionId}>{t("ssh.tasks.run.connectionMissing")}</option>}
+                {temporaryHandle && !temporary && <option disabled value={targetValue}>{t("network.temporaryUnavailable")}</option>}
                 {connections.filter((item) => !item.deletedAt && item.workspaceId === task?.task.workspaceId).map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.name} · {item.host}
                   </option>
                 ))}
+                {onTemporaryChange && temporarySessions.map((item) => <option key={`temporary:${item.handle}`} value={`temporary:${item.handle}`}>
+                  {t("ssh.tasks.run.temporaryTarget", { name: temporaryLabel(item) })}
+                </option>)}
               </Select>
             </label>
+            {temporaryLoading && !temporarySessions.length && <p role="status" className="text-[12px] text-[var(--u-color-text-muted)]">{t("ssh.tasks.run.loadingTemporary")}</p>}
+            {temporaryHandle && <p role="note" className="text-[12px] text-[var(--u-color-text-muted)]">{t("ssh.tasks.run.temporaryHelp")}</p>}
+            {temporaryHandle && <TemporaryTaskExecutionControls mode={temporaryExecutionMode} ready={terminalReady} busy={Boolean(temporary?.terminalTaskBusy)} recoveryRequired={Boolean(temporary?.terminalRecoveryRequired)} commandOnly={commandOnly} pending={pending}
+              onModeChange={onTemporaryExecutionModeChange} onReadyChange={onTerminalReadyChange} />}
 
             <label className="flex flex-col gap-1">
               <span className="text-[11px] font-medium text-[var(--u-color-text-muted)]">
@@ -134,7 +164,7 @@ export function TaskRunDialog({
               </Select>
             </label>
             {missingEnvironment && <p className="text-[12px] text-[var(--u-color-danger)]" role="alert">{t("ssh.tasks.run.environmentMissing")}</p>}
-            {!connection && <p className="text-[12px] text-[var(--u-color-danger)]" role="alert">{t("ssh.tasks.run.connectionMissing")}</p>}
+            {!connection && !temporary && <p className="text-[12px] text-[var(--u-color-danger)]" role="alert">{t(temporaryHandle ? "network.temporaryUnavailable" : "ssh.tasks.run.connectionMissing")}</p>}
             {environmentLoadFailed && (
               <p className="text-[12px] text-[var(--u-color-warning)]" role="alert">
                 {t("ssh.tasks.run.environmentLoadFailed")}
@@ -236,7 +266,7 @@ function TaskRunInputField({ automatic, autoFocus, inputScopeKey, name, onChange
   const sensitive = automatic || secret;
   const action = t(automatic ? "ssh.tasks.run.secretInput" : sensitive ? "ssh.tasks.run.unmarkSensitive" : "ssh.tasks.run.markSensitive");
   const tooltip = automatic ? t("ssh.tasks.run.automaticSensitive") : action;
-  const inputProps = { id, "aria-label": name, autoFocus, disabled: pending, value,
+  const inputProps = { id, "aria-label": name, autoComplete: "off", autoFocus, disabled: pending, value,
     onChange: (event: ChangeEvent<HTMLInputElement>) => onChange(event.target.value) };
 
   return (
@@ -269,4 +299,20 @@ function Summary({ label, value }: { label: string; value: string }) {
       <span className="mt-0.5 block truncate text-[var(--u-color-text)]">{value}</span>
     </div>
   );
+}
+
+function taskRunErrorMessage(error: Error | null, t: ReturnType<typeof useI18n>["t"]) {
+  if (!error) return undefined;
+  if (error.message.includes("SSH_TASK_DEFINITION_CHANGED")) return `${t("ssh.tasks.run.taskChanged")} ${t("ssh.tasks.run.prepareAgain")}`;
+  if (error.message.includes("SSH_TASK_ENVIRONMENT_CHANGED")) return `${t("ssh.tasks.run.environmentChanged")} ${t("ssh.tasks.run.prepareAgain")}`;
+  const keys: Record<string, string> = {
+    SSH_TASK_ENVIRONMENT_MISSING: "ssh.tasks.run.environmentMissing",
+    SSH_TASK_INPUT_SOURCE_MISSING: "ssh.tasks.run.prepareAgain",
+    SSH_TASK_INPUTS_CHANGED: "ssh.tasks.run.inputsChanged",
+    SSH_TASK_CONNECTION_REQUIRED: "ssh.tasks.run.connectionMissing",
+    SSH_TUNNEL_TEMPORARY_UNAVAILABLE: "network.errors.SSH_TUNNEL_TEMPORARY_UNAVAILABLE",
+    TEMPORARY_NOT_FOUND: "network.errors.SSH_TUNNEL_TEMPORARY_UNAVAILABLE",
+  };
+  const code = Object.keys(keys).find((key) => error.message.includes(key));
+  return code ? t(keys[code]) : formatTaskRunError(error.message, t);
 }

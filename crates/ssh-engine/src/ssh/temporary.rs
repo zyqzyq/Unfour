@@ -5,8 +5,21 @@ use std::time::Duration;
 use tokio::time::Instant;
 use zeroize::Zeroizing;
 
+pub(in crate::ssh) mod probe;
+pub use probe::{TemporaryProbeCheck, TemporaryProbeKind, TemporaryProbeReport};
+mod terminal_operation;
+pub use terminal_operation::{TemporaryTerminalOperation, TerminalOperationResult};
+
+#[cfg(feature = "ssh-native")]
+mod keepalive;
 #[cfg(feature = "ssh-native")]
 mod native;
+#[cfg(feature = "ssh-native")]
+pub(super) use keepalive::record_transport_disconnect;
+#[cfg(feature = "ssh-native")]
+mod task_runs;
+#[cfg(feature = "ssh-native")]
+pub(in crate::ssh) mod terminal;
 #[cfg(feature = "ssh-native")]
 pub(super) use native::TrustPrompt;
 #[cfg(test)]
@@ -128,6 +141,8 @@ pub struct TemporarySummary {
     pub error_code: Option<String>,
     pub display_name: String,
     pub endpoint: String,
+    pub terminal_task_busy: bool,
+    pub terminal_recovery_required: bool,
 }
 
 struct Entry {
@@ -145,6 +160,17 @@ struct Entry {
     // Only child session IDs are retained, never the downstream credentials.
     children: std::collections::HashSet<String>,
     output: String,
+    probe: Option<TemporaryProbeReport>,
+    #[cfg(feature = "ssh-native")]
+    probe_cancel: Option<tokio::sync::watch::Sender<bool>>,
+    #[cfg(feature = "ssh-native")]
+    task_runs: std::collections::VecDeque<super::task::ephemeral::MemoryTaskRecord>,
+    #[cfg(feature = "ssh-native")]
+    terminal: Option<terminal::TerminalOwner>,
+    #[cfg(feature = "ssh-native")]
+    input_gate: Arc<tokio::sync::Mutex<()>>,
+    #[cfg(feature = "ssh-native")]
+    input_paused: tokio::sync::watch::Sender<bool>,
 }
 
 #[derive(Default)]
@@ -192,7 +218,16 @@ impl Queue {
         }
         // Closed/expired entries do not retain authorization or grow forever.
         self.entries.retain(|_, e| {
+            #[cfg(feature = "ssh-native")]
+            if !e.task_runs.is_empty() {
+                return true;
+            }
             e.deadline > now
+                // A disconnected probe may contain the sole record of a file
+                // needing manual cleanup. Keep its bounded, memory-only report
+                // until the tab/workspace closes, not just the 120s ingress TTL.
+                // MAX_REQUESTS still caps all retained entries.
+                || e.probe.is_some()
                 || matches!(
                     e.summary.status.as_str(),
                     "connecting" | "awaiting-trust" | "connected"
@@ -294,11 +329,24 @@ impl SshService {
                         request.display_name.clone()
                     },
                     endpoint: request.display_endpoint(),
+                    terminal_task_busy: false,
+                    terminal_recovery_required: false,
                 },
                 deadline: receipt.deadline,
                 request: Some(request),
                 children: Default::default(),
                 output: String::new(),
+                probe: None,
+                #[cfg(feature = "ssh-native")]
+                probe_cancel: None,
+                #[cfg(feature = "ssh-native")]
+                task_runs: Default::default(),
+                #[cfg(feature = "ssh-native")]
+                terminal: None,
+                #[cfg(feature = "ssh-native")]
+                input_gate: Arc::new(tokio::sync::Mutex::new(())),
+                #[cfg(feature = "ssh-native")]
+                input_paused: tokio::sync::watch::channel(false).0,
                 trusted_fingerprint: None,
                 #[cfg(feature = "ssh-native")]
                 cancel: None,

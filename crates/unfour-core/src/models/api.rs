@@ -107,6 +107,8 @@ pub struct ApiClientPreferences {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiResponse {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal_timing: Option<TerminalCurlTiming>,
     /// Safe response view captured with the exact execution's secret provenance.
     /// Kept in-process only: post scripts and Desktop still consume the raw body.
     #[serde(skip)]
@@ -125,6 +127,27 @@ pub struct ApiResponse {
     pub headers: Vec<KeyValue>,
     pub body: String,
     pub duration_ms: u128,
+}
+
+/// Monotonic driver observations. ACK wait is a subset of input time.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalOperationTiming {
+    pub prepare_ms: u128,
+    pub input_ms: u128,
+    pub input_ack_count: usize,
+    pub input_ack_wait_ms: u128,
+    pub execution_and_output_ms: u128,
+    pub restore_ms: u128,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalCurlTiming {
+    #[serde(flatten)]
+    pub transport: TerminalOperationTiming,
+    pub curl_total_ms: Option<u64>,
+    pub curl_start_transfer_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone)]

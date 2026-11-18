@@ -47,6 +47,10 @@ export type MultipartPart =
 
 export type RequestDraft = {
   temporaryHandle?: string;
+  /** Runtime-only execution choice; never saved in request definitions or history. */
+  temporaryExecutionMode?: "tcp" | "terminalCurl";
+  /** Consumed by a single Send and invalidated by edits or terminal ownership changes. */
+  terminalConfirmed?: boolean;
   /** Present only when a local routing override was edited in this draft. */
   route?: ApiRouteEdit;
   /** Explicit review of a lossy historical snapshot; never serialized to IPC. */

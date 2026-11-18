@@ -5,11 +5,13 @@ import {
   interruptLegacySshTaskRun,
   clearSshTaskRuns,
   getSshTask,
+  isTemporarySshTaskRun,
   type SshTaskDetail,
   type SshTaskRun,
 } from "@unfour/command-client";
 import { useFeedback, useFeedbackErrorHandler, useI18n } from "@unfour/ui";
 import { useSshTaskRunOutput } from "./useSshTaskRunOutput";
+import { useTemporaryTaskRunCache } from "./useTemporaryTaskRunCache";
 
 import { useTaskRunDialogState } from "./useTaskRunDialogState";
 
@@ -57,15 +59,17 @@ export function useSshTaskRunSession({
     setActiveRunState(run);
   }, []);
 
-  const dialog = useTaskRunDialogState({ workspaceId, handleError, onStarted: (run, detail) => {
+  const dialog = useTaskRunDialogState({ workspaceId, handleError, onAccepted: (run) => trackTemporaryRun(run), onStarted: (run, detail) => {
     setActiveRun(run);
     setActiveRunTask(detail);
     showCompletionWarning(run);
   } });
 
   const {
-    eventsByRun, historyLogByRun, historyLogLoading, loadHistoryLog, clearTaskOutput,
+    eventsByRun, historyLogByRun, historyLogLoading, loadHistoryLog, clearTaskOutput, clearRunOutput,
   } = useSshTaskRunOutput({ active, activeRunId: activeRun?.id ?? null, handleError, workspaceId });
+
+  const { track: trackTemporaryRun, contains: hasTemporaryRun } = useTemporaryTaskRunCache(workspaceId, clearRunOutput, setActiveRunState);
 
   const cancelMutation = useMutation({
     mutationFn: () => cancelSshTaskRun({ workspaceId, runId: activeRun!.id }),
@@ -79,8 +83,9 @@ export function useSshTaskRunSession({
     setActiveRunState((current) => current?.workspaceId === run.workspaceId && current.id === run.id ? run : current);
   }, []);
   const closeRemovedRun = useCallback((run: SshTaskRun) => {
-    setActiveRunState((current) => current?.workspaceId === run.workspaceId && current.id === run.id && current.status === "running" ? null : current);
-  }, []);
+    if (isTemporarySshTaskRun(run)) clearRunOutput(run.id);
+    setActiveRunState((current) => current?.workspaceId === run.workspaceId && current.id === run.id && (current.status === "running" || isTemporarySshTaskRun(current)) ? null : current);
+  }, [clearRunOutput]);
   function refreshRecoveredRun(run: SshTaskRun) {
     settleSelectedRun(run);
     void queryClient.invalidateQueries({ queryKey: ["ssh-task-runs", run.workspaceId, run.taskId] });
@@ -113,11 +118,12 @@ export function useSshTaskRunSession({
   const openHistoryRun = useCallback(
     async (run: SshTaskRun) => {
       if (mountedScopeRef.current !== workspaceScope) return;
+      trackTemporaryRun(run);
       const generation = sessionGenerationRef.current;
       const selectionVersion = ++historySelectionVersionRef.current;
       historySelectionTaskIdRef.current = run.taskId;
       const isCurrent = () => mountedScopeRef.current === workspaceScope && generation === sessionGenerationRef.current &&
-        selectionVersion === historySelectionVersionRef.current;
+        selectionVersion === historySelectionVersionRef.current && (!isTemporarySshTaskRun(run) || hasTemporaryRun(run.id));
       try {
         const detail = await queryClient.fetchQuery({
           queryKey: ["ssh-task", workspaceId, run.taskId],
@@ -133,7 +139,7 @@ export function useSshTaskRunSession({
         if (isCurrent()) handleError(error, { key: "feedback.ssh.taskLoadFailed" });
       }
     },
-    [handleError, loadHistoryLog, queryClient, workspaceScope, workspaceId],
+    [handleError, hasTemporaryRun, loadHistoryLog, queryClient, trackTemporaryRun, workspaceScope, workspaceId],
   );
 
   return {

@@ -1,4 +1,6 @@
 import type { ApiResponse } from "@unfour/command-client";
+import { createTranslator } from "@unfour/ui";
+import { terminalApiOutcomeUnknown } from "./terminal-api";
 import { describe, expect, it } from "vitest";
 import {
   classifyRequestError,
@@ -24,6 +26,26 @@ describe("formatError", () => {
 });
 
 describe("classifyRequestError", () => {
+  it.each(["STARTUP", "READY", "ACCEPT", "INPUT_ACK", "BEGIN", "END", "RESTORE"])("localizes and classifies the %s terminal deadline", (phase) => {
+    const code = `SSH_TERMINAL_${phase}_TIMEOUT`;
+    for (const locale of ["en", "zh-CN"] as const) {
+      const message = createTranslator(locale)(`network.errors.${code}`);
+      expect(message).not.toContain(code);
+      expect(classifyRequestError({ code, message })).toBe("timeout");
+    }
+    expect(terminalApiOutcomeUnknown(code)).toBe(["INPUT_ACK", "BEGIN", "END"].includes(phase));
+  });
+  it.each([
+    ["SSH_TUNNEL_TARGET_CONNECT_FAILED", "network"],
+    ["SSH_TUNNEL_TRANSPORT_CLOSED", "network"],
+    ["SSH_TUNNEL_FORWARD_PROHIBITED", "failed"],
+    ["SSH_TUNNEL_CHANNEL_UNSUPPORTED", "failed"],
+    ["SSH_TUNNEL_RESOURCE_SHORTAGE", "failed"],
+    ["SSH_TUNNEL_FORWARD_FAILED", "failed"],
+  ])("classifies %s without interpreting translated server text", (code, expected) => {
+    expect(classifyRequestError({ code, message: "connection timeout 转发失败" })).toBe(expected);
+  });
+
   it("classifies tunnel errors consistently across display languages", () => {
     expect(classifyRequestError({ code: "SSH_TUNNEL_TIMEOUT", message: "经 SSH 的请求超时。" })).toBe("timeout");
     expect(classifyRequestError({ code: "SSH_TUNNEL_TARGET_UNREACHABLE", message: "无法连接目标" })).toBe("network");

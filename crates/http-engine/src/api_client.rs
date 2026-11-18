@@ -18,6 +18,8 @@ mod collections;
 mod domain;
 pub use domain::runtime_request_secret_values;
 mod execution;
+mod terminal_curl;
+pub use terminal_curl::{prepare_terminal_curl, PreparedTerminalCurl};
 mod execution_snapshot;
 pub use execution_snapshot::script_mutation_secret_values;
 mod history;

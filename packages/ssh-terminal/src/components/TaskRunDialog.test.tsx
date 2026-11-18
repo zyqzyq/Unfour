@@ -11,6 +11,49 @@ const t = createTranslator("en");
 afterEach(cleanup);
 
 describe("TaskRunDialog", () => {
+  it.each([false, true])("disables WebView form history for runtime inputs with sensitive=%s", (sensitive) => {
+    render(<TaskRunDialog {...inputProps()} secretInputNames={sensitive ? ["VERSION"] : []} />);
+    expect(screen.getByLabelText("VERSION")).toHaveAttribute("autocomplete", "off");
+    if (sensitive) {
+      fireEvent.click(screen.getByRole("button", { name: t("variables.showSecret") }));
+      expect(screen.getByLabelText("VERSION")).toHaveAttribute("autocomplete", "off");
+    }
+  });
+  it("runs on a live temporary target without any saved connection and blocks a removed target", () => {
+    const props = { ...inputProps(), connectionId: "", connections: [], temporaryHandle: "live", temporaryExecutionMode: "exec" as const, onTemporaryChange: vi.fn() };
+    const { rerender } = render(<TaskRunDialog {...props} temporarySessions={[{ handle: "live", displayName: "Node", endpoint: "10.0.0.3:22" }]} />);
+    expect(screen.getByRole("option", { name: "Bastion · Node · 10.0.0.3:22" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: t("ssh.tasks.actions.run") })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: t("ssh.tasks.actions.run") }));
+    expect(props.onRun).toHaveBeenCalledOnce();
+    expect(screen.getByRole("note")).toHaveTextContent("Closing its parent session stops the task");
+    rerender(<TaskRunDialog {...props} temporarySessions={[]} />);
+    expect(screen.getByRole("button", { name: t("ssh.tasks.actions.run") })).toBeDisabled();
+  });
+  it("requires terminal readiness and blocks transfer steps, busy and unrecovered terminals", () => {
+    const props = { ...inputProps(), connectionId: "", connections: [], temporaryHandle: "live", onTemporaryChange: vi.fn(), onTerminalReadyChange: vi.fn(), onTemporaryExecutionModeChange: vi.fn() };
+    const target = { handle: "live", displayName: "Node", endpoint: "10.0.0.3:22" };
+    const mounted = render(<TaskRunDialog {...props} temporarySessions={[target]} />);
+    const run = () => screen.getByRole("button", { name: t("ssh.tasks.actions.run") });
+    expect(run()).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: t("ssh.tasks.run.terminalReady") }));
+    expect(props.onTerminalReadyChange).toHaveBeenCalledWith(true);
+    mounted.rerender(<TaskRunDialog {...props} terminalReady temporarySessions={[target]} />);
+    expect(run()).toBeEnabled();
+    mounted.rerender(<TaskRunDialog {...props} terminalReady temporarySessions={[{ ...target, terminalTaskBusy: true }]} />);
+    expect(run()).toBeDisabled();
+    mounted.rerender(<TaskRunDialog {...props} terminalReady temporarySessions={[{ ...target, terminalRecoveryRequired: true }]} />);
+    expect(run()).toBeDisabled();
+    expect(screen.getByRole("alert")).toHaveTextContent(t("ssh.tasks.run.errors.SSH_TASK_TERMINAL_RECOVERY_REQUIRED"));
+    const transfer = { ...props.task!, steps: [{ ...props.task!.steps[0], stepType: "upload" as const }] };
+    mounted.rerender(<TaskRunDialog {...props} task={transfer} terminalReady temporarySessions={[target]} />);
+    expect(run()).toBeDisabled();
+    expect(screen.getByRole("alert")).toHaveTextContent(t("ssh.tasks.run.errors.SSH_TASK_TERMINAL_COMMAND_ONLY"));
+    fireEvent.change(screen.getByRole("combobox", { name: t("ssh.tasks.run.executionMode") }), { target: { value: "exec" } });
+    expect(props.onTemporaryExecutionModeChange).toHaveBeenCalledWith("exec");
+    mounted.rerender(<TaskRunDialog {...props} task={transfer} temporaryExecutionMode="exec" temporarySessions={[target]} />);
+    expect(run()).toBeEnabled();
+  });
   it.each(["connection", "environment", "inputs", "pending"])("blocks execution with missing %s and keeps recall explicit", (missing) => {
     const onRun = vi.fn();
     const onUsePrevious = vi.fn();

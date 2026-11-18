@@ -29,4 +29,7 @@ version = "0.14.0"
 # SQLx 0.8.6 needs a pool-scoped socket factory to carry its normal database
 # handshake and TLS identity over an already authorized SSH channel.
 sqlx-core = { path = "vendor/sqlx-core" }
+# russh 0.61.1 must verify the host key on every rekey before installing keys.
+# See vendor/russh/UNFOUR_PATCH.md for the minimal audited local patch.
+russh = { path = "vendor/russh" }
 

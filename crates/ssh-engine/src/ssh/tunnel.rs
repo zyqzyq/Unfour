@@ -128,20 +128,29 @@ impl SshTunnel {
     }
 }
 
-fn target_host(host: &str, port: u16) -> AppResult<&str> {
+pub(in crate::ssh) fn target_host(host: &str, port: u16) -> AppResult<&str> {
     if host.is_empty()
         || host.len() > 255
         || port == 0
         || host.bytes().any(|b| {
-            b.is_ascii_control() || b.is_ascii_whitespace() || matches!(b, b'/' | b'\\' | b'@')
+            b.is_ascii_control()
+                || b.is_ascii_whitespace()
+                || matches!(b, b'/' | b'\\' | b'@' | b'?' | b'#' | b'%')
         })
     {
         return Err(failure("SSH_TUNNEL_INVALID_TARGET"));
     }
-    Ok(host
+    let normalized = host
         .strip_prefix('[')
         .and_then(|s| s.strip_suffix(']'))
-        .unwrap_or(host))
+        .unwrap_or(host);
+    if normalized.is_empty()
+        || ((host.contains(['[', ']']) || normalized.contains(':'))
+            && normalized.parse::<std::net::Ipv6Addr>().is_err())
+    {
+        return Err(failure("SSH_TUNNEL_INVALID_TARGET"));
+    }
+    Ok(normalized)
 }
 
 #[cfg(feature = "ssh-native")]
@@ -168,8 +177,33 @@ async fn forward_stream(
     let channel = client
         .channel_open_direct_tcpip(host, u32::from(port), "127.0.0.1", 0)
         .await
-        .map_err(|_| failure("SSH_TUNNEL_TARGET_UNREACHABLE"))?;
+        .map_err(|error| failure(forward_open_failure_code(&error)))?;
     Ok(Box::new(channel.into_stream()))
+}
+
+/// Keep only the SSH protocol reason, never a peer's free-form error text.
+#[cfg(feature = "ssh-native")]
+pub(in crate::ssh) fn forward_open_failure_code(error: &russh::Error) -> &'static str {
+    use russh::ChannelOpenFailure;
+    match error {
+        russh::Error::ChannelOpenFailure(ChannelOpenFailure::AdministrativelyProhibited) => {
+            "SSH_TUNNEL_FORWARD_PROHIBITED"
+        }
+        russh::Error::ChannelOpenFailure(ChannelOpenFailure::ConnectFailed) => {
+            "SSH_TUNNEL_TARGET_CONNECT_FAILED"
+        }
+        russh::Error::ChannelOpenFailure(ChannelOpenFailure::UnknownChannelType) => {
+            "SSH_TUNNEL_CHANNEL_UNSUPPORTED"
+        }
+        russh::Error::ChannelOpenFailure(ChannelOpenFailure::ResourceShortage) => {
+            "SSH_TUNNEL_RESOURCE_SHORTAGE"
+        }
+        russh::Error::ChannelOpenFailure(_) => "SSH_TUNNEL_FORWARD_FAILED",
+        russh::Error::ConnectionTimeout
+        | russh::Error::KeepaliveTimeout
+        | russh::Error::InactivityTimeout => "SSH_TUNNEL_TIMEOUT",
+        _ => "SSH_TUNNEL_TRANSPORT_CLOSED",
+    }
 }
 
 impl TunnelConnector for SshTunnel {

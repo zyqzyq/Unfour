@@ -13,6 +13,9 @@ export function ResponseSendNotice({ tab, canRetry, onRetry }: {
   tab: ApiRequestTab; canRetry: boolean; onRetry: () => void;
 }) {
   const { t } = useI18n();
+  if (tab.cancelError && tab.sending) return <div role="alert" className="shrink-0 border-b border-[var(--u-color-border)] bg-[var(--u-color-danger-soft)] px-3 py-2 text-[12px]">
+    {tab.cancelError}
+  </div>;
   if (!["request", "tests", "console"].includes(tab.responseTab) ||
     !["network", "timeout", "failed", "pre-script-error", "pre-script-timeout"].includes(deriveTabResponseState(tab))) return null;
   return <div role="alert" className="flex max-h-32 shrink-0 items-start gap-2 overflow-auto border-b border-[var(--u-color-border)] bg-[var(--u-color-danger-soft)] px-3 py-2 text-[12px]">
@@ -87,14 +90,15 @@ export function ResponseBodyView({
   }
 
   if (response.status >= 400) {
+    const isAuthError = response.status === 401 || response.status === 403;
     const body = response.body.trim();
     const displayBody = looksLikeJson(body) ? formatResponseBody(body) : body;
 
     return (
       <ResponsePaneState
-        description={t("api.response.rejectedDescription")}
+        description={t(isAuthError ? "api.response.rejectedDescription" : "api.response.httpErrorDescription")}
         icon={<AlertCircle size={24} />}
-        title={t("api.response.rejectedTitle")}
+        title={isAuthError ? t("api.response.rejectedTitle") : t("api.response.httpErrorTitle", { status: response.status })}
         tone="error"
       >
         {body && (
@@ -102,9 +106,11 @@ export function ResponseBodyView({
             {displayBody}
           </pre>
         )}
-        <Button onClick={onOpenAuthSettings} size="sm" type="button" variant="outline">
-          {t("api.response.openAuthSettings")}
-        </Button>
+        {isAuthError && (
+          <Button onClick={onOpenAuthSettings} size="sm" type="button" variant="outline">
+            {t("api.response.openAuthSettings")}
+          </Button>
+        )}
       </ResponsePaneState>
     );
   }
@@ -361,8 +367,10 @@ export function ResponseTiming({ response }: { response: ApiResponse | null }) {
     return <EmptyState className="m-3">{t("api.response.noTiming")}</EmptyState>;
   }
   const bodyBytes = new TextEncoder().encode(response.body).length;
+  const timing = response.terminalTiming;
+  const ms = (value: number | null) => value === null ? "—" : `${value} ms`;
   return (
-    <div className="grid gap-3 p-4 text-[12px] sm:grid-cols-2">
+    <div className="grid h-full content-start gap-3 overflow-auto p-4 text-[12px] sm:grid-cols-2">
       <Metric label={t("api.response.metrics.total")} value={`${response.durationMs}ms`} />
       <Metric
         label={t("api.response.metrics.status")}
@@ -376,6 +384,25 @@ export function ResponseTiming({ response }: { response: ApiResponse | null }) {
         label={t("api.response.metrics.headers")}
         value={String(response.headers.length)}
       />
+      {timing && (
+        <dl className="col-span-full divide-y divide-[var(--u-color-border)]">
+          {[
+            [t("api.response.metrics.prepare"), ms(timing.prepareMs)],
+            [t("api.response.metrics.input"), ms(timing.inputMs)],
+            [t("api.response.metrics.acks"), String(timing.inputAckCount)],
+            [t("api.response.metrics.ackWait"), ms(timing.inputAckWaitMs)],
+            [t("api.response.metrics.executionAndOutput"), ms(timing.executionAndOutputMs)],
+            [t("api.response.metrics.curlTotal"), ms(timing.curlTotalMs)],
+            [t("api.response.metrics.curlFirstByte"), ms(timing.curlStartTransferMs)],
+            [t("api.response.metrics.restore"), ms(timing.restoreMs)],
+          ].map(([label, value]) => (
+            <div className="flex justify-between gap-3 py-1.5" key={label}>
+              <dt className="text-[var(--u-color-text-muted)]">{label}</dt>
+              <dd className="font-mono">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
     </div>
   );
 }

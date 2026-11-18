@@ -72,13 +72,16 @@ export function TerminalPane({
     const sessionId = session?.sessionId ?? null;
     const workspaceId = session?.workspaceId ?? "";
 
-    onSendInputRef.current =
+    const sendInput =
       sessionId && workspaceId && !readOnly && !inputDisabled
         ? (data: string) => {
             inputQueueRef.current = inputQueueRef.current
               .catch(() => undefined)
-              .then(() =>
-                (temporary ? sendTemporarySshInput : sendSshInput)({
+              .then(() => {
+                // A task lease, session change or unmount invalidates queued
+                // keystrokes. Never send them after the terminal becomes writable again.
+                if (onSendInputRef.current !== sendInput) return;
+                return (temporary ? sendTemporarySshInput : sendSshInput)({
                   workspaceId,
                   sessionId,
                   data,
@@ -97,10 +100,11 @@ export function TerminalPane({
                       lastInputErrorToastAtRef.current = now;
                       handleError(error, { key: "feedback.ssh.inputFailed" });
                     }
-                  }),
-              );
+                  });
+              });
           }
         : null;
+    onSendInputRef.current = sendInput;
 
     onResizeRef.current =
       sessionId && workspaceId && !readOnly && !inputDisabled
@@ -117,6 +121,9 @@ export function TerminalPane({
           });
         }
       : null;
+    return () => {
+      if (onSendInputRef.current === sendInput) onSendInputRef.current = null;
+    };
   }, [
     appendTerminalEvents,
     handleError,

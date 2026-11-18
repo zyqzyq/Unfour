@@ -3,12 +3,19 @@ use russh::server::{Msg, Server as _, Session};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+mod curl;
+#[path = "../../examples/bastion_fixture/raw_terminal.rs"]
+mod raw_terminal;
+mod task;
+
 #[derive(Clone, Default)]
 struct Server {
     calls: Arc<Mutex<Vec<&'static str>>>,
     stall: Option<&'static str>,
     forward_target: Option<std::net::SocketAddr>,
     downstream: bool,
+    temporary_task: bool,
+    raw_terminal: Option<raw_terminal::RawTerminal>,
     forwarding_channels: std::collections::HashSet<russh::ChannelId>,
     pending_open: Arc<tokio::sync::Notify>,
 }
@@ -105,8 +112,19 @@ impl russh::server::Handler for Server {
     ) -> Result<(), Self::Error> {
         self.calls.lock().unwrap().push("shell");
         if self.stall == Some("rekey-before-shell") {
-            // Cross the server's test-only rekey threshold before acknowledging the shell.
+            // Cross the test-only byte limit and start KEX before enqueueing
+            // the shell ACK. The server Handle queue is not consumed during
+            // KEX, so receiving its ACK/marker proves setup survived a rekey.
             session.data(channel, vec![b'x'; 16 * 1024])?;
+            session.flush()?;
+            let handle = session.handle();
+            tokio::spawn(async move {
+                handle.channel_success(channel).await.unwrap();
+                handle
+                    .data(channel, b"setup-rekey-complete\r\n".to_vec())
+                    .await
+                    .unwrap();
+            });
             return Ok(());
         }
         if self.stall == Some("shell") {
@@ -135,7 +153,22 @@ impl russh::server::Handler for Server {
             return Ok(());
         }
         self.calls.lock().unwrap().push("input");
+        if let Some(raw) = &mut self.raw_terminal {
+            if raw.active() || data.starts_with(b" sh -c '") {
+                return raw.feed(channel, data, session);
+            }
+        }
         session.data(channel, data.to_vec())?;
+        if self.stall == Some("rekey-after-input") && data.len() >= 16 * 1024 {
+            session.flush()?;
+            let handle = session.handle();
+            tokio::spawn(async move {
+                handle
+                    .data(channel, b"connected-rekey-complete\r\n".to_vec())
+                    .await
+                    .unwrap();
+            });
+        }
         Ok(())
     }
     async fn exec_request(
@@ -144,10 +177,14 @@ impl russh::server::Handler for Server {
         data: &[u8],
         session: &mut Session,
     ) -> Result<(), Self::Error> {
-        assert!(self.downstream, "no exec probes on the bastion");
+        assert!(
+            self.downstream || self.temporary_task,
+            "no unsolicited exec on the bastion"
+        );
         assert_eq!(data, b"fixture-task");
         self.calls.lock().unwrap().push("task");
         session.channel_success(channel)?;
+        session.data(channel, b"synthetic-task-output\n".to_vec())?;
         session.exit_status_request(channel, 0)?;
         session.eof(channel)?;
         session.close(channel)
@@ -188,16 +225,43 @@ async fn wait_for(bus: &CommandBus, workspace: &str, status: &str) -> TemporaryS
 mod forwarding;
 
 #[tokio::test]
-async fn temporary_rekey_requires_a_new_launch_during_setup_and_after_connecting() {
+async fn temporary_rekey_preserves_setup_terminal_and_existing_tunnel() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    async fn output_contains(bus: &CommandBus, workspace: &str, handle: &str, expected: &str) {
+        let mut output = String::new();
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while !output.contains(expected) {
+                for event in bus.temporary_ssh_output(workspace, handle).unwrap() {
+                    output.push_str(&event.data);
+                }
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("expected output after completed rekey");
+    }
     let bus = CommandBus::ephemeral().await.unwrap();
     let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
     for during_setup in [true, false] {
+        let target = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let target_address = target.local_addr().unwrap();
+        let echo = tokio::spawn(async move {
+            let (mut socket, _) = target.accept().await.unwrap();
+            let (mut reader, mut writer) = socket.split();
+            let _ = tokio::io::copy(&mut reader, &mut writer).await;
+        });
         let socket = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = socket.local_addr().unwrap().port();
         let mut server = Server {
-            stall: during_setup.then_some("rekey-before-shell"),
+            stall: Some(if during_setup {
+                "rekey-before-shell"
+            } else {
+                "rekey-after-input"
+            }),
+            forward_target: Some(target_address),
             ..Default::default()
         };
+        let calls = server.calls.clone();
         let config = Arc::new(russh::server::Config {
             keys: vec![russh::keys::PrivateKey::random(
                 &mut rand::rng(),
@@ -224,11 +288,18 @@ async fn temporary_rekey_requires_a_new_launch_during_setup_and_after_connecting
             .unwrap();
         bus.claim_temporary_ssh(&workspace, &handle).await.unwrap();
         bus.start_temporary_ssh(&workspace, &handle).unwrap();
-        let mut forwarding = None;
+        wait_for(&bus, &workspace, "connected").await;
+        let tunnel = bus.ssh.temporary_tunnel(&workspace, &handle).unwrap();
+        let lease = tunnel.http_proxy().await.unwrap();
+        let mut forwarded = tunnel.connect("ssh-target.invalid", 2222).await.unwrap();
+        forwarded.write_all(b"before").await.unwrap();
+        let mut before = [0; 6];
+        tokio::time::timeout(Duration::from_secs(2), forwarded.read_exact(&mut before))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(&before, b"before");
         if !during_setup {
-            wait_for(&bus, &workspace, "connected").await;
-            let tunnel = bus.ssh.temporary_tunnel(&workspace, &handle).unwrap();
-            forwarding = Some((tunnel.http_proxy().await.unwrap(), tunnel));
             bus.temporary_ssh_input(SshSessionInput {
                 workspace_id: workspace.clone(),
                 session_id: handle.clone(),
@@ -237,22 +308,72 @@ async fn temporary_rekey_requires_a_new_launch_during_setup_and_after_connecting
             .await
             .unwrap();
         }
-        let ended = wait_for(&bus, &workspace, "disconnected").await;
-        assert_eq!(
-            ended.error_code.as_deref(),
-            Some("TEMPORARY_REKEY_REQUIRES_RELAUNCH")
-        );
-        if let Some((lease, tunnel)) = forwarding {
-            tokio::time::timeout(Duration::from_secs(2), tunnel.closed())
-                .await
-                .unwrap();
-            assert!(tokio::net::TcpStream::connect(lease.address())
-                .await
-                .is_err());
-            assert!(tunnel.connect("ssh-target.invalid", 2222).await.is_err());
+        output_contains(
+            &bus,
+            &workspace,
+            &handle,
+            if during_setup {
+                "setup-rekey-complete"
+            } else {
+                "connected-rekey-complete"
+            },
+        )
+        .await;
+        let connected = wait_for(&bus, &workspace, "connected").await;
+        assert!(connected.error_code.is_none());
+        bus.temporary_ssh_input(SshSessionInput {
+            workspace_id: workspace.clone(),
+            session_id: handle.clone(),
+            data: "after-rekey\n".into(),
+        })
+        .await
+        .unwrap();
+        output_contains(&bus, &workspace, &handle, "after-rekey\n").await;
+        forwarded.write_all(b"after").await.unwrap();
+        let mut after = [0; 5];
+        tokio::time::timeout(Duration::from_secs(2), forwarded.read_exact(&mut after))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(&after, b"after");
+        assert!(tokio::net::TcpStream::connect(lease.address())
+            .await
+            .is_ok());
+        {
+            let calls = calls.lock().unwrap();
+            for expected in ["login", "auth", "channel", "pty", "shell", "forward"] {
+                assert_eq!(
+                    calls.iter().filter(|&&call| call == expected).count(),
+                    1,
+                    "{expected}: {calls:?}"
+                );
+            }
         }
         bus.cancel_temporary_ssh(&workspace, &handle).unwrap();
+        tokio::time::timeout(Duration::from_secs(2), tunnel.closed())
+            .await
+            .unwrap();
+        // Wait for the proxy itself to observe parent cancellation and drop
+        // its serve future. The parent's watch notification alone is earlier.
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while lease.remote_failure_code() != Some("SSH_TUNNEL_TEMPORARY_UNAVAILABLE") {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("proxy must observe parent cancellation");
+        // Windows can take just over two seconds to report WSAECONNREFUSED
+        // even for a socket that was already closed before connect began.
+        assert!(tokio::time::timeout(
+            Duration::from_secs(5),
+            tokio::net::TcpStream::connect(lease.address()),
+        )
+        .await
+        .expect("closed proxy must finish the connection attempt")
+        .is_err());
+        assert!(tunnel.connect("ssh-target.invalid", 2222).await.is_err());
         task.abort();
+        echo.abort();
     }
 }
 
@@ -298,6 +419,33 @@ async fn temporary_loopback_terminal_single_login_channel_and_zero_database_writ
     bus.start_temporary_ssh(&workspace, &handle).unwrap();
     wait_for(&bus, &workspace, "connected").await;
     assert!(bus.start_temporary_ssh(&workspace, &handle).is_err());
+    assert!(bus
+        .temporary_ssh_probe(&workspace, &handle)
+        .unwrap()
+        .is_none());
+    for kind in [
+        TemporaryProbeKind::Exec,
+        TemporaryProbeKind::Channels,
+        TemporaryProbeKind::Sftp,
+        TemporaryProbeKind::Terminal,
+        TemporaryProbeKind::Transport,
+        TemporaryProbeKind::Curl,
+    ] {
+        assert!(bus
+            .start_temporary_ssh_probe(&workspace, &handle, kind, false)
+            .is_err());
+    }
+    assert!(bus.temporary_ssh_probe("other-workspace", &handle).is_err());
+    assert!(bus
+        .start_temporary_ssh_probe("other-workspace", &handle, TemporaryProbeKind::Exec, true)
+        .is_err());
+    assert!(bus
+        .cancel_temporary_ssh_probe("other-workspace", &handle, "unknown-run")
+        .is_err());
+    assert!(bus
+        .temporary_ssh_probe(&workspace, &handle)
+        .unwrap()
+        .is_none());
     bus.temporary_ssh_input(SshSessionInput {
         workspace_id: workspace.clone(),
         session_id: handle.clone(),

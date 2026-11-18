@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, waitFor } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   resetTerminalMocks,
@@ -15,6 +15,29 @@ import { TerminalPane } from "./TerminalPane";
 
 describe("TerminalPane", () => {
   beforeEach(resetTerminalMocks);
+
+  it.each(["task", "unmount"])("drops queued temporary keystrokes after %s invalidates manual input", async (change) => {
+    let finish!: () => void;
+    temporaryInputMock.mockImplementationOnce(() => new Promise((resolve) => {
+      finish = () => resolve({ sessionId: "session-1", kind: "input", data: "", createdAt: "" });
+    }));
+    const mounted = render(<TerminalPane active temporary events={[]} session={session} />);
+    terminalState.dataHandlers[0]?.("first");
+    terminalState.dataHandlers[0]?.("queued-before-task");
+    await waitFor(() => expect(temporaryInputMock).toHaveBeenCalledTimes(1));
+    if (change === "task") {
+      mounted.rerender(<TerminalPane active temporary inputDisabled events={[]} session={session} />);
+      // The old chunk remains invalid even after the task has released the terminal.
+      mounted.rerender(<TerminalPane active temporary inputDisabled={false} events={[]} session={session} />);
+    } else mounted.unmount();
+    await act(async () => { finish(); });
+    expect(temporaryInputMock).toHaveBeenCalledTimes(1);
+    if (change === "task") {
+      terminalState.dataHandlers[0]?.("fresh-after-task");
+      await waitFor(() => expect(temporaryInputMock).toHaveBeenCalledTimes(2));
+      expect(temporaryInputMock).toHaveBeenLastCalledWith({ workspaceId: "ws-1", sessionId: "session-1", data: "fresh-after-task" });
+    }
+  });
 
   it("routes temporary I/O separately without saved history or endpoint display", async () => {
     render(<TerminalPane active temporary events={[]} session={session} />);

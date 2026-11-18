@@ -1,4 +1,5 @@
 use super::*;
+mod rekey_tests;
 
 async fn connecting(service: &SshService, workspace: &str) -> TrustPrompt {
     let handle = service
@@ -9,11 +10,7 @@ async fn connecting(service: &SshService, workspace: &str) -> TrustPrompt {
     let entry = queue.owned(workspace, &handle).unwrap();
     entry.request = None;
     entry.summary.status = "connecting".into();
-    TrustPrompt {
-        queue: Arc::downgrade(&service.temporary.0),
-        handle,
-        initial_exchange_seen: false,
-    }
+    TrustPrompt::new(Arc::downgrade(&service.temporary.0), handle)
 }
 
 #[tokio::test]
@@ -24,7 +21,7 @@ async fn first_use_connects_without_approval_and_does_not_persist() {
         .fetch_one(service.db.pool())
         .await
         .unwrap();
-    let prompt = connecting(&service, &workspace).await;
+    let mut prompt = connecting(&service, &workspace).await;
     assert!(
         prompt
             .verify(&store, &workspace, "fixture", 22, "first")
@@ -63,25 +60,25 @@ async fn first_use_connects_without_approval_and_does_not_persist() {
 async fn repeated_launches_share_pin_until_workspace_closes() {
     let (service, workspace) = fixture().await;
     let store = HostKeyStore::new(service.db.pool().clone());
-    let first = connecting(&service, &workspace).await;
+    let mut first = connecting(&service, &workspace).await;
     assert!(
         first
             .verify(&store, &workspace, "Fixture", 22, "first")
             .await
     );
     service.cancel_temporary(&workspace, &first.handle).unwrap();
-    let next = connecting(&service, &workspace).await;
+    let mut next = connecting(&service, &workspace).await;
     assert!(
         next.verify(&store, &workspace, "fixture", 22, "first")
             .await
     );
-    let changed = connecting(&service, &workspace).await;
+    let mut changed = connecting(&service, &workspace).await;
     assert!(
         !changed
             .verify(&store, &workspace, "fixture", 22, "changed")
             .await
     );
-    let other_port = connecting(&service, &workspace).await;
+    let mut other_port = connecting(&service, &workspace).await;
     assert!(
         other_port
             .verify(&store, &workspace, "fixture", 23, "changed")
@@ -89,7 +86,7 @@ async fn repeated_launches_share_pin_until_workspace_closes() {
     );
     service.close_temporary_workspace(&workspace).unwrap();
     assert!(service.temporary.0.lock().unwrap().trusted_hosts.is_empty());
-    let reopened = connecting(&service, &workspace).await;
+    let mut reopened = connecting(&service, &workspace).await;
     assert!(
         reopened
             .verify(&store, &workspace, "fixture", 22, "changed")
@@ -105,14 +102,14 @@ async fn durable_pin_mismatch_and_cancelled_known_host_fail_closed() {
         .record_fingerprint(&workspace, "fixture", 22, "expected")
         .await
         .unwrap();
-    let mismatch = connecting(&service, &workspace).await;
+    let mut mismatch = connecting(&service, &workspace).await;
     assert!(
         !mismatch
             .verify(&store, &workspace, "fixture", 22, "changed")
             .await
     );
     assert!(service.temporary.0.lock().unwrap().trusted_hosts.is_empty());
-    let known = connecting(&service, &workspace).await;
+    let mut known = connecting(&service, &workspace).await;
     assert!(
         known
             .verify(&store, &workspace, "fixture", 22, "expected")
@@ -135,8 +132,8 @@ async fn durable_pin_mismatch_and_cancelled_known_host_fail_closed() {
 async fn concurrent_first_uses_cannot_replace_each_others_pin() {
     let (service, workspace) = fixture().await;
     let store = HostKeyStore::new(service.db.pool().clone());
-    let a = connecting(&service, &workspace).await;
-    let b = connecting(&service, &workspace).await;
+    let mut a = connecting(&service, &workspace).await;
+    let mut b = connecting(&service, &workspace).await;
     let (accepted_a, accepted_b) = tokio::join!(
         a.verify(&store, &workspace, "fixture", 22, "a"),
         b.verify(&store, &workspace, "fixture", 22, "b"),
@@ -153,13 +150,13 @@ async fn known_dns_names_are_case_insensitive_and_conflicting_pins_fail_closed()
         .record_fingerprint(&workspace, "FIXTURE", 22, "expected")
         .await
         .unwrap();
-    let known = connecting(&service, &workspace).await;
+    let mut known = connecting(&service, &workspace).await;
     assert!(
         known
             .verify(&store, &workspace, "fixture", 22, "expected")
             .await
     );
-    let changed = connecting(&service, &workspace).await;
+    let mut changed = connecting(&service, &workspace).await;
     assert!(
         !changed
             .verify(&store, &workspace, "fixture", 22, "changed")
@@ -169,7 +166,7 @@ async fn known_dns_names_are_case_insensitive_and_conflicting_pins_fail_closed()
         .record_fingerprint(&workspace, "fixture", 22, "different")
         .await
         .unwrap();
-    let conflict = connecting(&service, &workspace).await;
+    let mut conflict = connecting(&service, &workspace).await;
     assert!(
         !conflict
             .verify(&store, &workspace, "FIXTURE", 22, "expected")
@@ -186,17 +183,16 @@ async fn cancellation_during_known_pin_lookup_cannot_accept_the_host() {
         .record_fingerprint(&workspace, "fixture", 22, "expected")
         .await
         .unwrap();
-    let prompt = connecting(&service, &workspace).await;
+    let mut prompt = connecting(&service, &workspace).await;
     let connection = service.db.pool().acquire().await.unwrap();
+    let handle = prompt.handle.clone();
     let verify = prompt.verify(&store, &workspace, "fixture", 22, "expected");
     tokio::pin!(verify);
     assert!(matches!(
         std::future::poll_fn(|cx| Poll::Ready(verify.as_mut().poll(cx))).await,
         Poll::Pending
     ));
-    service
-        .cancel_temporary(&workspace, &prompt.handle)
-        .unwrap();
+    service.cancel_temporary(&workspace, &handle).unwrap();
     drop(connection);
     assert!(!verify.await);
     assert!(service.temporary.0.lock().unwrap().trusted_hosts.is_empty());
@@ -206,8 +202,8 @@ async fn cancellation_during_known_pin_lookup_cannot_accept_the_host() {
 async fn full_pin_cache_rejects_new_hosts_without_evicting_known_pins() {
     let (service, workspace) = fixture().await;
     let store = HostKeyStore::new(service.db.pool().clone());
-    let known = connecting(&service, &workspace).await;
-    let new = connecting(&service, &workspace).await;
+    let mut known = connecting(&service, &workspace).await;
+    let mut new = connecting(&service, &workspace).await;
     {
         let mut queue = service.temporary.0.lock().unwrap();
         for i in 0..MAX_TRUSTED_HOSTS {

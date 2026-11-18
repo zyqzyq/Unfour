@@ -11,3 +11,10 @@
 
 # Shell scripts are also sensitive to CRLF on Windows; keep them LF.
 *.sh text eol=lf
+
+# Preserve the published crate bytes used by the russh provenance and secret checks.
+vendor/russh/** -text
+
+# Upstream README spacing and the leading space on empty patch context lines are original.
+vendor/russh/README.md whitespace=-blank-at-eol
+vendor/russh/unfour-rekey.patch whitespace=-blank-at-eol

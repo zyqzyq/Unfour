@@ -1,4 +1,4 @@
-import type { SshTaskRun } from "@unfour/command-client";
+import { isTemporarySshTaskRun, type SshTaskRun } from "@unfour/command-client";
 import { Button, ConfirmDialog, ErrorState, LoadingState, StatusBadge, useI18n } from "@unfour/ui";
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -112,7 +112,7 @@ export function TaskHistory({
                       className="truncate px-2 font-mono text-[11px] text-[var(--u-color-text-muted)]"
                       title={run.logPath}
                     >
-                      {run.logPath}
+                      {isTemporarySshTaskRun(run) ? t("ssh.tasks.run.memoryOnly") : run.logPath}
                     </td>
                     <td className="px-2">
                       {onRerun && run.status !== "running" && <Button onClick={(event) => { event.stopPropagation(); onRerun(run); }} size="sm" variant={run.status === "failed" ? "secondary" : "ghost"}>{t("ssh.tasks.actions.rerun")}</Button>}

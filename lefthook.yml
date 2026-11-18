@@ -12,6 +12,8 @@ pre-commit:
   commands:
     rust-fmt:
       glob: "**/*.rs"
+      # Keep the reviewed russh distribution byte-for-byte reproducible.
+      exclude: "vendor/russh/**"
       run: cargo fmt -- "{staged_files}"
       stage_fixed: true
     frontend-lint:

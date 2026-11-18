@@ -27,6 +27,8 @@ unfour-workspace-engine = { path = "../workspace-engine" }
 
 [dev-dependencies]
 russh = { version = "0.61", default-features = false, features = ["flate2", "ring", "rsa"] }
+# The offline acceptance fixture serves only synthetic, in-memory SFTP files.
+russh-sftp = "2.3"
 rand = "0.10"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
 

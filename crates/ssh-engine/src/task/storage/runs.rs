@@ -27,11 +27,19 @@ impl SshService {
             ORDER BY started_at DESC, id DESC
             "#,
         )
-        .bind(workspace_id)
-        .bind(task_id)
+        .bind(&workspace_id)
+        .bind(&task_id)
         .fetch_all(&mut *db)
         .await?;
-        Ok(rows.into_iter().map(run_from_row).collect())
+        let mut runs: Vec<_> = rows.into_iter().map(run_from_row).collect();
+        #[cfg(feature = "ssh-native")]
+        runs.extend(self.temporary_task_runs(&workspace_id, &task_id)?);
+        runs.sort_by(|a, b| {
+            b.started_at
+                .cmp(&a.started_at)
+                .then_with(|| b.id.cmp(&a.id))
+        });
+        Ok(runs)
     }
 
     /// Read the on-disk task run log for history replay in the UI.
@@ -42,6 +50,10 @@ impl SshService {
         run_id: String,
     ) -> AppResult<String> {
         validate_workspace_id(&workspace_id)?;
+        #[cfg(feature = "ssh-native")]
+        if let Some(log) = self.temporary_task_log(&workspace_id, &run_id)? {
+            return Ok(log);
+        }
         if run_id.trim().is_empty() {
             return Err(AppError::Validation("run id is required".to_string()));
         }
@@ -86,6 +98,18 @@ impl SshService {
         &self,
         input: SshTaskCleanupInput,
     ) -> AppResult<SshTaskCleanupResult> {
+        self.clear_task_runs_with_persistent_count(input)
+            .await
+            .map(|(result, _)| result)
+    }
+
+    /// Separates durable deletions for activity recording from memory-only
+    /// temporary observations. Neither the latter's existence nor count is
+    /// eligible for durable activity details.
+    pub async fn clear_task_runs_with_persistent_count(
+        &self,
+        input: SshTaskCleanupInput,
+    ) -> AppResult<(SshTaskCleanupResult, usize)> {
         validate_workspace_id(&input.workspace_id)?;
         if let Some(task_id) = input.task_id.as_deref() {
             self.get_task(&input.workspace_id, task_id).await?;
@@ -101,14 +125,23 @@ impl SshService {
         .bind(input.task_id.as_deref())
         .fetch_all(&mut *db)
         .await?;
-        Ok(SshTaskCleanupResult {
-            warnings: Vec::new(),
-            deleted_runs: log_paths.len(),
-            deleted_logs: remove_task_logs(
-                log_paths.into_iter().map(PathBuf::from).collect(),
-                &self.task_log_dir,
-            ),
-        })
+        #[cfg(feature = "ssh-native")]
+        let memory_runs =
+            self.clear_temporary_task_runs(&input.workspace_id, input.task_id.as_deref())?;
+        #[cfg(not(feature = "ssh-native"))]
+        let memory_runs = 0;
+        let persistent_count = log_paths.len();
+        Ok((
+            SshTaskCleanupResult {
+                warnings: Vec::new(),
+                deleted_runs: log_paths.len() + memory_runs,
+                deleted_logs: remove_task_logs(
+                    log_paths.into_iter().map(PathBuf::from).collect(),
+                    &self.task_log_dir,
+                ),
+            },
+            persistent_count,
+        ))
     }
 
     #[cfg(any(feature = "ssh-native", test))]
@@ -206,6 +239,13 @@ impl SshService {
         let mut completed_seen = 0_usize;
         let mut remove = Vec::new();
         for run in runs {
+            if run
+                .warnings
+                .iter()
+                .any(|warning| warning == "SSH_TASK_TEMPORARY_RUN")
+            {
+                continue;
+            }
             if run.status == "running" {
                 continue;
             }
@@ -239,6 +279,10 @@ impl SshService {
         workspace_id: &str,
         run_id: &str,
     ) -> AppResult<SshTaskRun> {
+        #[cfg(feature = "ssh-native")]
+        if let Some(run) = self.temporary_task_run(workspace_id, run_id)? {
+            return Ok(run);
+        }
         let mut db = self.db.pool().acquire().await?;
         self.recover_task_runs_on(&mut db, workspace_id, None)
             .await?;

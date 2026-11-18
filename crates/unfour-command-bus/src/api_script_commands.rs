@@ -79,7 +79,7 @@ impl CommandBus {
         .await
     }
 
-    pub async fn send_api_request_via(
+    pub async fn send_api_request_via_with_mode(
         &self,
         execution_id: &str,
         input: ApiRequestInput,
@@ -87,7 +87,14 @@ impl CommandBus {
         saved_id: Option<&str>,
         preview: Option<&unfour_core::network::ApiRoutingInput>,
         temporary_handle: Option<&str>,
+        temporary_execution_mode: &str,
+        terminal_confirmed: bool,
     ) -> AppResult<RequestExecutionResult> {
+        super::api_terminal::validate_mode(
+            temporary_handle,
+            temporary_execution_mode,
+            terminal_confirmed,
+        )?;
         let execution = self.api_executions.register(execution_id)?;
         let cancellation = execution.token();
         let input = self.resolve_desktop_api_timeout(input).await?;
@@ -124,6 +131,16 @@ impl CommandBus {
                 preview.and_then(|p| p.expected_ssh_revision),
             )
             .await?
+        };
+        // Own the selected terminal before scripts can change environment state.
+        // Dropping an unused lease does not write anything to the remote shell.
+        let terminal_operation = if temporary_execution_mode == "terminalCurl" {
+            Some(self.ssh.claim_temporary_terminal_operation(
+                &input.workspace_id,
+                temporary_handle.expect("terminal mode target validated"),
+            )?)
+        } else {
+            None
         };
         let pre_environment = self
             .script_environment(&input.workspace_id, environment_id.as_deref())
@@ -223,8 +240,16 @@ impl CommandBus {
                 })
                 .map(|variable| variable.value.clone()),
         );
-        let mut response = match self
-            .send_routed_http_via(
+        let http_result = if let Some(operation) = terminal_operation {
+            self.send_terminal_curl(
+                resolved_request.clone(),
+                cancellation.clone(),
+                &secrets,
+                operation,
+            )
+            .await
+        } else {
+            self.send_routed_http_via(
                 resolved_request.clone(),
                 cancellation.clone(),
                 &secrets,
@@ -233,7 +258,8 @@ impl CommandBus {
                 temporary_handle,
             )
             .await
-        {
+        };
+        let mut response = match http_result {
             Ok(response) => response,
             Err(error) => {
                 let error_code = error.code().to_string();

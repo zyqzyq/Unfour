@@ -9,6 +9,10 @@ chrono = { version = "0.4", features = ["serde"] }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 zeroize = "1"
+# Raw terminal operations preserve binary HTTP responses across PTY line processing.
+base64 = "0.22"
+# Share cooperative cancellation with the HTTP execution pipeline.
+tokio-util = "0.7"
 sha2 = "0.10"
 sqlx = { version = "0.8", default-features = false, features = ["chrono", "json", "macros", "mysql", "postgres", "runtime-tokio-rustls", "sqlite", "uuid"] }
 unfour-core = { path = "../unfour-core" }

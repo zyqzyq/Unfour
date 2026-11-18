@@ -5,6 +5,7 @@ import type { ApiRequestTab } from "../model/request-tabs";
 import type { RequestDraft, RequestParamsTab, ResponseTab } from "../model/types";
 import { ApiRequestBar } from "./ApiRequestBar";
 import { ApiRoutePicker } from "./ApiRoutePicker";
+import { ApiTerminalExecutionNotice } from "./ApiTerminalExecutionNotice";
 import type { ApiRouteControls } from "../hooks/useApiRoutes";
 import { ApiRequestEditor } from "./ApiRequestEditor";
 import { ApiResponseViewer } from "./ApiResponseViewer";
@@ -66,9 +67,10 @@ export function ApiRequestWorkspace({
     <>
       <ApiRequestBar
         key={activeTab.id}
-        routeReady={routing.ready}
+        routeReady={routing.ready && !(activeTab.draft.temporaryHandle && activeTab.draft.temporaryExecutionMode === "terminalCurl" && !activeTab.draft.terminalConfirmed)}
         routeControl={active && <ApiRoutePicker key={workspaceId} routing={routing} environmentName={environmentName} draft={activeTab.draft.route}
-          disabled={activeTab.sending || activeTab.saving} onChange={(route, temporaryHandle) => onUpdateDraft(activeTab.id, { route, temporaryHandle })} />}
+          temporaryExecutionMode={activeTab.draft.temporaryExecutionMode}
+          disabled={activeTab.sending || activeTab.saving} onChange={(route, temporaryHandle, temporaryExecutionMode) => onUpdateDraft(activeTab.id, { route, temporaryHandle, temporaryExecutionMode })} />}
         onNameEditingChange={(editing) => useApiRequestTabStore.getState().setNameEditing(workspaceId, activeTab.id, editing)}
         onNameCommit={(name) => onRequestNameCommit(activeTab, name)}
         onSave={(name) => onSave(activeTab, name)}
@@ -78,6 +80,7 @@ export function ApiRequestWorkspace({
         tab={activeTab}
         urlInputRef={urlInputRef}
       />
+      <ApiTerminalExecutionNotice active={active} tab={activeTab} routing={routing} onUpdate={(patch) => onUpdateDraft(activeTab.id, patch)} />
       {activeTab.externalChange && (
         <div role="status" className="flex shrink-0 items-center gap-2 border-b border-[var(--u-color-border)] px-3 py-1 text-[12px] text-[var(--u-color-text-muted)]">
           <span className="flex-1">{t(`api.external.${activeTab.externalChange}`)}</span>

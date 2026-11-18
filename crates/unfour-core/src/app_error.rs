@@ -92,6 +92,8 @@ impl AppError {
             if let Some(code) = REDIS_ERROR_CODES
                 .iter()
                 .chain(TUNNEL_ERROR_CODES)
+                .chain(SSH_TASK_EXECUTION_CODES)
+                .chain(TERMINAL_HTTP_ERROR_CODES)
                 .find(|code| **code == reason)
             {
                 return code;
@@ -182,6 +184,12 @@ const TUNNEL_ERROR_CODES: &[&str] = &[
     "SSH_TUNNEL_HOST_KEY_UNTRUSTED",
     "SSH_TUNNEL_AUTH_FAILED",
     "SSH_TUNNEL_TARGET_UNREACHABLE",
+    "SSH_TUNNEL_FORWARD_PROHIBITED",
+    "SSH_TUNNEL_TARGET_CONNECT_FAILED",
+    "SSH_TUNNEL_CHANNEL_UNSUPPORTED",
+    "SSH_TUNNEL_RESOURCE_SHORTAGE",
+    "SSH_TUNNEL_TRANSPORT_CLOSED",
+    "SSH_TUNNEL_FORWARD_FAILED",
     "SSH_TUNNEL_TIMEOUT",
     "SSH_TUNNEL_INVALID_TARGET",
     "SSH_TUNNEL_PROXY_FAILED",
@@ -190,6 +198,56 @@ const TUNNEL_ERROR_CODES: &[&str] = &[
     "SSH_TUNNEL_ROUTE_CHANGED",
     "SSH_TUNNEL_TEMPORARY_UNAVAILABLE",
     "SSH_TUNNEL_FORWARD_BUSY",
+];
+
+const SSH_TASK_EXECUTION_CODES: &[&str] = &[
+    "SSH_TASK_EXECUTION_MODE_INVALID",
+    "SSH_TASK_TERMINAL_BUSY",
+    "SSH_TASK_TERMINAL_RECOVERY_REQUIRED",
+    "SSH_TASK_TERMINAL_COMMAND_ONLY",
+    "SSH_TASK_TERMINAL_NOT_READY",
+    "SSH_TASK_TERMINAL_INPUT_UNCONFIRMED",
+    "SSH_TASK_TERMINAL_OUTPUT_OVERFLOW",
+    "SSH_TASK_EXEC_QUEUE_TIMEOUT",
+];
+
+const TERMINAL_HTTP_ERROR_CODES: &[&str] = &[
+    "SSH_TERMINAL_BUSY",
+    "SSH_TERMINAL_RECOVERY_REQUIRED",
+    "SSH_TERMINAL_NOT_CONNECTED",
+    "SSH_TERMINAL_INPUT_LIMIT",
+    "SSH_TERMINAL_OUTPUT_LIMIT",
+    "SSH_TERMINAL_TRANSPORT_CLOSED",
+    "SSH_TERMINAL_BASE64_MISSING",
+    "SSH_TERMINAL_PRINTF_UNSUPPORTED",
+    "SSH_TERMINAL_LOGIN_REQUIRED",
+    "SSH_TERMINAL_NOT_READY",
+    "SSH_TERMINAL_PROTOCOL_ERROR",
+    "SSH_TERMINAL_CANCELLED",
+    "SSH_TERMINAL_TIMEOUT",
+    "SSH_TERMINAL_STARTUP_TIMEOUT",
+    "SSH_TERMINAL_READY_TIMEOUT",
+    "SSH_TERMINAL_ACCEPT_TIMEOUT",
+    "SSH_TERMINAL_INPUT_ACK_TIMEOUT",
+    "SSH_TERMINAL_BEGIN_TIMEOUT",
+    "SSH_TERMINAL_END_TIMEOUT",
+    "SSH_TERMINAL_RESTORE_TIMEOUT",
+    "SSH_TERMINAL_HTTP_MODE_INVALID",
+    "SSH_TERMINAL_HTTP_TARGET_REQUIRED",
+    "SSH_TERMINAL_HTTP_CONFIRMATION_REQUIRED",
+    "SSH_TERMINAL_HTTP_UNSUPPORTED_REQUEST",
+    "SSH_TERMINAL_HTTP_REQUEST_TOO_LARGE",
+    "SSH_TERMINAL_HTTP_CURL_UNAVAILABLE",
+    "SSH_TERMINAL_HTTP_CURL_UNSUPPORTED",
+    "SSH_TERMINAL_HTTP_CURL_BODY_UNSUPPORTED",
+    "SSH_TERMINAL_HTTP_DNS_FAILED",
+    "SSH_TERMINAL_HTTP_CONNECT_FAILED",
+    "SSH_TERMINAL_HTTP_TLS_FAILED",
+    "SSH_TERMINAL_HTTP_TIMEOUT",
+    "SSH_TERMINAL_HTTP_RESPONSE_TOO_LARGE",
+    "SSH_TERMINAL_HTTP_INVALID_RESPONSE",
+    "SSH_TERMINAL_HTTP_UNSUPPORTED_RESPONSE",
+    "SSH_TERMINAL_HTTP_TRANSFER_FAILED",
 ];
 
 const REDIS_ERROR_CODES: &[&str] = &[
@@ -323,6 +381,53 @@ fn truncate_chars(value: &str, max_chars: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tunnel_failure_codes_survive_adapter_serialization() {
+        for code in TUNNEL_ERROR_CODES {
+            let error = AppError::Validation((*code).into());
+            assert_eq!(error.code(), *code);
+            assert_eq!(serde_json::to_value(error).unwrap()["code"], *code);
+            assert_eq!(
+                AppError::Validation(format!("{code}: remote text")).code(),
+                "VALIDATION_ERROR"
+            );
+        }
+    }
+
+    #[test]
+    fn terminal_task_codes_survive_adapters_without_remote_text() {
+        for code in SSH_TASK_EXECUTION_CODES {
+            let error = AppError::Validation((*code).into());
+            assert_eq!(serde_json::to_value(error).unwrap()["code"], *code);
+            assert_eq!(
+                AppError::Validation(format!("{code}: remote text")).code(),
+                "VALIDATION_ERROR"
+            );
+        }
+    }
+
+    #[test]
+    fn terminal_http_codes_do_not_trust_peer_text() {
+        for code in TERMINAL_HTTP_ERROR_CODES {
+            assert_eq!(
+                serde_json::to_value(AppError::Validation((*code).into())).unwrap()["code"],
+                *code
+            );
+            assert_eq!(
+                AppError::Validation(format!("{code}\nprivate peer detail")).code(),
+                "VALIDATION_ERROR"
+            );
+            for text in [
+                format!("{code}: private peer detail"),
+                format!(" {code}"),
+                format!("{code}_UNRECOGNIZED"),
+            ] {
+                assert_eq!(AppError::Validation(text).code(), "VALIDATION_ERROR");
+            }
+            assert_eq!(AppError::ApiNetwork((*code).into()).code(), "NETWORK_ERROR");
+        }
+    }
 
     #[test]
     fn validation_codes_are_stable_and_serialized() {

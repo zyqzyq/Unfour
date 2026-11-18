@@ -4,7 +4,12 @@ use super::*;
 use super::{TaskStepError, TaskStepResult};
 
 #[cfg(feature = "ssh-native")]
-const TASK_COMMAND_MAX_OUTPUT_BYTES: usize = 64 * 1024;
+pub(super) mod stream;
+#[cfg(feature = "ssh-native")]
+use stream::{emit_diagnostic, emit_redacted, StreamBuffer};
+
+#[cfg(feature = "ssh-native")]
+const EXIT_DRAIN_GRACE: std::time::Duration = std::time::Duration::from_secs(2);
 
 #[cfg(feature = "ssh-native")]
 impl NativeTaskDriver {
@@ -34,41 +39,50 @@ impl NativeTaskDriver {
             message: error.to_string(),
             exit_code: None,
         })?;
-        let mut channel =
-            self.handle
-                .channel_open_session()
-                .await
-                .map_err(|error| TaskStepError::Failed {
-                    message: format!("open command channel failed: {error}"),
-                    exit_code: None,
-                })?;
+        let mut channel = self.open_task_channel().await?;
+        // One execution deadline covers both the bounded client send queue and
+        // the remote response. Channel acquisition has its own transport bound.
+        let deadline = tokio::time::Instant::now()
+            + std::time::Duration::from_secs(config.timeout_seconds.clamp(1, 3_600));
         // The exec future enqueues the request. Cancelling before the send
         // completes leaves no remote command to account for.
-        tokio::select! {
-            biased;
-            _ = cancel_rx.changed() => {
-                let _ = channel.close().await;
-                return Err(TaskStepError::Cancelled);
-            }
-            sent = channel.exec(true, command.as_bytes()) => sent.map_err(|error| TaskStepError::Failed {
-                message: format!("execute command failed: {error}"),
-                exit_code: None,
-            })?,
+        let sent =
+            send_exec_request(channel.exec(true, command.as_bytes()), cancel_rx, deadline).await;
+        if let Err(error) = sent {
+            let _ = tokio::time::timeout(std::time::Duration::from_secs(2), channel.close()).await;
+            return Err(error);
         }
         emit_redacted("command", &format!("$ {command}\n"), emit);
 
-        let timeout = tokio::time::sleep(std::time::Duration::from_secs(
-            config.timeout_seconds.clamp(1, 3_600),
-        ));
         let interrupt = async {
             tokio::select! {
-                _ = cancel_rx.changed() => true,
-                _ = timeout => false,
+                _ = cancel_rx.wait_for(|cancelled| *cancelled) => true,
+                _ = tokio::time::sleep_until(deadline) => false,
             }
         };
         let result = read_command_result(&mut channel, interrupt, emit).await;
-        let _ = channel.close().await;
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(2), channel.close()).await;
         result
+    }
+}
+
+#[cfg(feature = "ssh-native")]
+async fn send_exec_request(
+    send: impl std::future::Future<Output = Result<(), russh::Error>>,
+    cancel_rx: &mut tokio::sync::watch::Receiver<bool>,
+    deadline: tokio::time::Instant,
+) -> Result<(), TaskStepError> {
+    tokio::select! {
+        biased;
+        _ = cancel_rx.wait_for(|cancelled| *cancelled) => Err(TaskStepError::Cancelled),
+        _ = tokio::time::sleep_until(deadline) => Err(TaskStepError::Failed {
+            message: "SSH_TASK_EXEC_QUEUE_TIMEOUT".into(),
+            exit_code: None,
+        }),
+        sent = send => sent.map_err(|error| TaskStepError::Failed {
+            message: format!("execute command failed: {error}"),
+            exit_code: None,
+        }),
     }
 }
 
@@ -94,12 +108,27 @@ async fn read_command_result(
     interrupt: impl std::future::Future<Output = bool> + Send,
     emit: &mut (dyn FnMut(DriverEvent) + Send),
 ) -> Result<TaskStepResult, TaskStepError> {
+    read_command_result_with_grace(channel, interrupt, emit, EXIT_DRAIN_GRACE).await
+}
+
+#[cfg(feature = "ssh-native")]
+async fn read_command_result_with_grace(
+    channel: &mut impl CommandMessages,
+    interrupt: impl std::future::Future<Output = bool> + Send,
+    emit: &mut (dyn FnMut(DriverEvent) + Send),
+    drain_grace: std::time::Duration,
+) -> Result<TaskStepResult, TaskStepError> {
     let mut stdout = StreamBuffer::new();
     let mut stderr = StreamBuffer::new();
     let mut exit_code = None;
     let mut exit_signal = None;
     let mut interrupted = None;
     let mut remaining = 0;
+    let mut eof = false;
+    let mut closed = false;
+    let mut exit_deadline = None;
+    let mut prompt_reported = false;
+    let mut prompt_deadline = None;
     tokio::pin!(interrupt);
     loop {
         let message = if interrupted.is_some() {
@@ -122,6 +151,13 @@ async fn read_command_result(
                     remaining = native_client_config().channel_buffer_size;
                     continue;
                 }
+                _ = wait_for_exit_drain(exit_deadline) => break,
+                _ = wait_for_exit_drain(prompt_deadline) => {
+                    prompt_reported = true;
+                    prompt_deadline = None;
+                    emit_diagnostic("SSH_TASK_INTERACTIVE_LOGIN_PROMPT", emit);
+                    continue;
+                }
                 message = channel.next_message() => message,
             }
         };
@@ -138,6 +174,7 @@ async fn read_command_result(
             }
             Some(russh::ChannelMsg::ExitStatus { exit_status }) => {
                 exit_code = Some(exit_status as i32);
+                exit_deadline.get_or_insert(tokio::time::Instant::now() + drain_grace);
             }
             Some(russh::ChannelMsg::ExitSignal {
                 signal_name,
@@ -149,6 +186,7 @@ async fn read_command_result(
                 } else {
                     format!("signal {signal_name:?}: {error_message}")
                 });
+                exit_deadline.get_or_insert(tokio::time::Instant::now() + drain_grace);
             }
             // Exec is the only channel request awaiting a reply.
             // A refusal confirms the command did not start.
@@ -161,10 +199,29 @@ async fn read_command_result(
             // EOF only means stdout/stderr are done. ExitStatus often
             // arrives afterwards; breaking here used to drop the code and
             // mark failed docker/shell commands as success via unwrap_or(0).
-            Some(russh::ChannelMsg::Eof) => {}
-            Some(russh::ChannelMsg::Close) | None => break,
+            Some(russh::ChannelMsg::Eof) => eof = true,
+            Some(russh::ChannelMsg::Close) | None => {
+                closed = true;
+                break;
+            }
             _ => {}
         }
+        if !prompt_reported && (stdout.has_login_prompt() || stderr.has_login_prompt()) {
+            // A packet ending in "login:" may be the prefix of a longer log
+            // line. Allow continuation before reporting the observation.
+            prompt_deadline
+                .get_or_insert(tokio::time::Instant::now() + std::time::Duration::from_millis(250));
+        } else {
+            prompt_deadline = None;
+        }
+        // EOF establishes that no more stream data will arrive, but is not an
+        // exit code. Accept either ordering without waiting for a missing Close.
+        if eof && (exit_code.is_some() || exit_signal.is_some()) {
+            break;
+        }
+    }
+    if !prompt_reported && (stdout.has_login_prompt() || stderr.has_login_prompt()) {
+        emit_diagnostic("SSH_TASK_INTERACTIVE_LOGIN_PROMPT", emit);
     }
     stdout.flush("stdout", emit);
     stderr.flush("stderr", emit);
@@ -174,11 +231,22 @@ async fn read_command_result(
             data: "\n[command output truncated]\n".to_string(),
         });
     }
+    if !eof && !closed && (exit_code.is_some() || exit_signal.is_some()) {
+        emit_diagnostic("SSH_TASK_OUTPUT_INCOMPLETE", emit);
+    }
     command_step_outcome(
         exit_code,
         exit_signal.as_deref(),
         interrupted.unwrap_or(false),
     )
+}
+
+#[cfg(feature = "ssh-native")]
+async fn wait_for_exit_drain(deadline: Option<tokio::time::Instant>) {
+    match deadline {
+        Some(deadline) => tokio::time::sleep_until(deadline).await,
+        None => std::future::pending().await,
+    }
 }
 
 /// Decide command-step success from the SSH channel completion signals.
@@ -203,177 +271,9 @@ fn command_step_outcome(
     }
 }
 
-#[cfg(feature = "ssh-native")]
-struct StreamBuffer {
-    total: usize,
-    truncated: bool,
-    pending: String,
-}
-
-#[cfg(feature = "ssh-native")]
-impl StreamBuffer {
-    fn new() -> Self {
-        Self {
-            total: 0,
-            truncated: false,
-            pending: String::new(),
-        }
-    }
-
-    fn push(&mut self, data: &[u8], stream: &str, emit: &mut (dyn FnMut(DriverEvent) + Send)) {
-        if self.truncated || data.is_empty() {
-            return;
-        }
-        let remaining = TASK_COMMAND_MAX_OUTPUT_BYTES.saturating_sub(self.total);
-        if remaining == 0 {
-            self.truncated = true;
-            return;
-        }
-        let take = remaining.min(data.len());
-        if take < data.len() {
-            self.truncated = true;
-        }
-        self.total += take;
-        self.pending
-            .push_str(&String::from_utf8_lossy(&data[..take]));
-        while let Some(index) = self.pending.find('\n') {
-            let line = self.pending.drain(..=index).collect::<String>();
-            emit_redacted(stream, &line, emit);
-        }
-    }
-
-    fn flush(&mut self, stream: &str, emit: &mut (dyn FnMut(DriverEvent) + Send)) {
-        if self.pending.is_empty() {
-            return;
-        }
-        let pending = std::mem::take(&mut self.pending);
-        emit_redacted(stream, &pending, emit);
-    }
-}
-
-#[cfg(feature = "ssh-native")]
-fn emit_redacted(stream: &str, data: &str, emit: &mut (dyn FnMut(DriverEvent) + Send)) {
-    if data.is_empty() {
-        return;
-    }
-    let (redacted, _) = unfour_core::redaction::redact_sensitive_lines(data);
-    if redacted.is_empty() {
-        return;
-    }
-    emit(DriverEvent::Output {
-        stream: stream.to_string(),
-        data: redacted,
-    });
-}
-
 fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[cfg(feature = "ssh-native")]
-    impl CommandMessages for tokio::sync::mpsc::Receiver<russh::ChannelMsg> {
-        fn next_message(
-            &mut self,
-        ) -> impl std::future::Future<Output = Option<russh::ChannelMsg>> + Send {
-            self.recv()
-        }
-    }
-
-    #[cfg(feature = "ssh-native")]
-    #[tokio::test]
-    async fn queued_exit_status_wins_over_simultaneous_cancel_or_timeout() {
-        for cancelled in [false, true] {
-            for exit_status in [0, 7] {
-                let (sender, mut receiver) = tokio::sync::mpsc::channel(2);
-                sender.try_send(russh::ChannelMsg::Eof).unwrap();
-                sender
-                    .try_send(russh::ChannelMsg::ExitStatus { exit_status })
-                    .unwrap();
-                // Keep the sender open. A stopped reader must not wait for channel close.
-                let result = tokio::time::timeout(
-                    std::time::Duration::from_secs(1),
-                    read_command_result(&mut receiver, std::future::ready(cancelled), &mut |_| {}),
-                )
-                .await
-                .expect("stopped command reader waited for another SSH message");
-                assert_eq!(
-                    result,
-                    command_step_outcome(Some(exit_status as i32), None, cancelled)
-                );
-            }
-        }
-    }
-
-    #[cfg(feature = "ssh-native")]
-    #[tokio::test]
-    async fn continuous_output_cannot_starve_a_ready_interrupt() {
-        for cancelled in [false, true] {
-            let capacity = native_client_config().channel_buffer_size;
-            let (sender, mut receiver) = tokio::sync::mpsc::channel(capacity + 1);
-            for _ in 0..=capacity {
-                sender
-                    .try_send(russh::ChannelMsg::Data {
-                        data: b"x\n".as_slice().into(),
-                    })
-                    .unwrap();
-            }
-            let result =
-                read_command_result(&mut receiver, std::future::ready(cancelled), &mut |_| {})
-                    .await;
-            assert_eq!(result, Err(TaskStepError::OutcomeUncertain { cancelled }));
-            assert_eq!(
-                receiver.len(),
-                1,
-                "drain must be bounded even while more output is ready"
-            );
-        }
-    }
-
-    #[test]
-    fn quotes_working_directories_for_posix_shells() {
-        assert_eq!(shell_quote("/tmp/a b"), "'/tmp/a b'");
-        assert_eq!(shell_quote("/tmp/user's"), "'/tmp/user'\\''s'");
-    }
-
-    #[test]
-    fn missing_exit_status_and_signal_leave_the_dispatched_command_outcome_uncertain() {
-        for cancelled in [false, true] {
-            assert_eq!(
-                command_step_outcome(None, None, cancelled),
-                Err(TaskStepError::OutcomeUncertain { cancelled })
-            );
-        }
-    }
-
-    #[test]
-    fn non_zero_exit_status_is_failure() {
-        let err = command_step_outcome(Some(1), None, false).unwrap_err();
-        assert!(matches!(
-            err,
-            TaskStepError::Failed {
-                exit_code: Some(1),
-                ..
-            }
-        ));
-    }
-
-    #[test]
-    fn zero_exit_status_is_success() {
-        for cancelled in [false, true] {
-            assert_eq!(
-                command_step_outcome(Some(0), None, cancelled).unwrap(),
-                TaskStepResult { exit_code: Some(0) }
-            );
-        }
-    }
-
-    #[test]
-    fn exit_signal_is_failure_even_with_zero_code() {
-        let err = command_step_outcome(Some(0), Some("signal SIGKILL"), false).unwrap_err();
-        assert!(matches!(err, TaskStepError::Failed { .. }));
-    }
-}
+mod tests;

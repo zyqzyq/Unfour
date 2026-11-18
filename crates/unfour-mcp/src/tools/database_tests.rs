@@ -193,6 +193,7 @@ impl CommandBusAdapter for DbStubCommandBus {
     ) -> Result<ApiResponse, CommandBusAdapterError> {
         Ok(ApiResponse {
             request_snapshot: None,
+            terminal_timing: None,
             diagnostic_projection: None,
             history_id: "history-1".to_string(),
             status: 200,

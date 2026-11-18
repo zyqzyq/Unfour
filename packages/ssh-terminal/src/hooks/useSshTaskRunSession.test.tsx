@@ -11,15 +11,18 @@ vi.mock("@unfour/ui", async (importOriginal) => ({
   useFeedback: () => ({ info: warningMock }),
 }));
 
-vi.mock("@unfour/command-client", () => ({
+vi.mock("@unfour/command-client", async (original) => ({
+  ...await original<typeof import("@unfour/command-client")>(),
   cancelSshTaskRun: vi.fn(), clearSshTaskRuns: vi.fn(), getSshTask: vi.fn(),
   listWorkspaceEnvironments: vi.fn(), listWorkspaceVariables: vi.fn(), listSshTaskRuns: vi.fn(),
   readSshTaskRunLog: vi.fn(), registerSshTaskRunChannel: vi.fn(), runSshTask: vi.fn(),
+  listTemporaryRoutes: vi.fn(), runTemporarySshTask: vi.fn(),
 }));
 
 import {
   cancelSshTaskRun, clearSshTaskRuns, getSshTask, listWorkspaceEnvironments,
   listWorkspaceVariables, listSshTaskRuns, readSshTaskRunLog, registerSshTaskRunChannel, runSshTask,
+  listTemporaryRoutes, runTemporarySshTask,
 } from "@unfour/command-client";
 import { useSshTaskRunSession } from "./useSshTaskRunSession";
 
@@ -72,6 +75,7 @@ beforeEach(() => {
     return entry.registration.promise;
   });
   vi.mocked(listSshTaskRuns).mockResolvedValue([]);
+  vi.mocked(listTemporaryRoutes).mockResolvedValue([]);
   vi.mocked(listWorkspaceEnvironments).mockResolvedValue([]);
   vi.mocked(listWorkspaceVariables).mockResolvedValue([]);
   vi.mocked(getSshTask).mockResolvedValue(detail);
@@ -103,6 +107,49 @@ async function setup(active = true, strict = false) {
   await act(async () => {});
   return { ...hook, client, handleError, invalidate };
 }
+
+it("streams and cancels a temporary task, then removes memory output and cached history when its parent closes", async () => {
+  const temporaryRun = { ...run(), connectionId: null, context: null, warnings: ["SSH_TASK_TEMPORARY_RUN"] };
+  vi.mocked(listTemporaryRoutes).mockResolvedValue([{ handle: "live", displayName: "Node", endpoint: "host:22" }]);
+  vi.mocked(runTemporarySshTask).mockResolvedValue(temporaryRun);
+  vi.mocked(listSshTaskRuns).mockResolvedValue([temporaryRun]);
+  vi.mocked(cancelSshTaskRun).mockResolvedValue({ ...temporaryRun, status: "cancelled" });
+  const { result, client } = await setup();
+  await act(async () => { await result.current.prepareRun("task"); });
+  act(() => { result.current.setRunTemporaryHandle("live"); result.current.setRunTemporaryExecutionMode("exec"); });
+  await act(async () => { await result.current.runMutation.mutateAsync(); });
+  expect(result.current.activeRun?.warnings).toContain("SSH_TASK_TEMPORARY_RUN");
+  expect(runSshTask).not.toHaveBeenCalled();
+  await act(async () => { subscriptions[0].listener(event()); await vi.advanceTimersByTimeAsync(20); });
+  expect(result.current.eventsByRun.run[0].data).toBe("output");
+  await act(async () => { await result.current.cancelMutation.mutateAsync(); });
+  expect(cancelSshTaskRun).toHaveBeenCalledWith({ workspaceId: "w1", runId: "run" });
+  const saved = { ...run("saved"), status: "success" as const };
+  client.setQueryData(["ssh-task-runs", "w1", "task"], [temporaryRun, saved]);
+  vi.mocked(listSshTaskRuns).mockResolvedValue([saved]);
+  await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+  expect(result.current.activeRun).toBeNull();
+  expect(result.current.eventsByRun.run).toBeUndefined();
+  expect(client.getQueryData(["ssh-task-runs", "w1", "task"])).toEqual([saved]);
+  await act(async () => { subscriptions[0].listener(event()); await vi.advanceTimersByTimeAsync(20); });
+  expect(result.current.eventsByRun.run).toBeUndefined();
+});
+
+it("drops a late temporary history read when the parent is removed and clears temporary query rows on workspace leave", async () => {
+  const temporaryRun = { ...run(), status: "success" as const, connectionId: null, context: null, warnings: ["SSH_TASK_TEMPORARY_RUN"] };
+  const log = deferred<string>();
+  vi.mocked(readSshTaskRunLog).mockReturnValue(log.promise);
+  const { result, rerender, client, handleError } = await setup();
+  let opening!: Promise<void>;
+  await act(async () => { opening = result.current.openHistoryRun(temporaryRun); });
+  await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+  await act(async () => { log.resolve("private temporary output"); await opening; });
+  expect(result.current.historyLogByRun.run).toBeUndefined();
+  expect(handleError).not.toHaveBeenCalled();
+  client.setQueryData(["ssh-task-runs", "w1", "task"], [temporaryRun]);
+  rerender({ active: true, workspaceId: "w2" });
+  expect(client.getQueryData(["ssh-task-runs", "w1", "task"])).toEqual([]);
+});
 
 async function tick(ms: number) {
   await act(async () => { await vi.advanceTimersByTimeAsync(ms); });

@@ -70,6 +70,19 @@ export function useSshTaskRunHistory({
     return true;
   }, [workspaceScope]);
 
+  const clearRunHistoryLog = useCallback((runId: string) => {
+    if (mountedScopeRef.current !== workspaceScope) return;
+    const nextLogs = { ...historyLogByRunRef.current };
+    delete nextLogs[runId];
+    runTaskIdsRef.current.delete(runId);
+    historyLogByRunRef.current = nextLogs;
+    for (const [request, meta] of requestsRef.current) {
+      if (meta.runId === runId) requestsRef.current.delete(request);
+    }
+    setHistoryLogByRun(nextLogs);
+    setLoadingRuns(historyLoadingRuns(requestsRef.current));
+  }, [workspaceScope]);
+
   useEffect(() => {
     mountedScopeRef.current = workspaceScope;
     // Output caches belong to the current workspace lifecycle.
@@ -89,6 +102,7 @@ export function useSshTaskRunHistory({
     const taskGeneration = taskGenerationsRef.current.get(taskId) ?? 0;
     const request = Symbol(runId);
     const isCurrent = () => mountedScopeRef.current === workspaceScope &&
+      requestsRef.current.has(request) &&
       generation === generationRef.current &&
       (taskGenerationsRef.current.get(taskId) ?? 0) === taskGeneration;
     const cacheLog = (text: string) => {
@@ -119,5 +133,6 @@ export function useSshTaskRunHistory({
     historyLogLoading: activeRunId !== null && loadingRuns.has(activeRunId),
     loadHistoryLog,
     clearTaskHistoryLogs,
+    clearRunHistoryLog,
   };
 }

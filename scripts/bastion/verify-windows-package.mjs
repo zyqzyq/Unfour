@@ -11,13 +11,20 @@ import { createInterface } from "node:readline";
 import { DatabaseSync } from "node:sqlite";
 import { setTimeout as delay } from "node:timers/promises";
 import { chromium, expect } from "@playwright/test";
+import { verifyCapabilityChecks, verifyDisconnectedReport, verifyTerminalUx } from "./verify-package-capabilities.mjs";
+import { verifyTemporaryTasks } from "./verify-package-temporary-task.mjs";
+import { verifyCurlCapability, verifyTerminalCurlApi } from "./verify-package-curl.mjs";
+import { verifyBackgroundKeepalive } from "./verify-package-keepalive.mjs";
+import { verifyCurlRecovery } from "./verify-package-curl-recovery.mjs";
 
 const mode = process.argv[3] ?? "xshell";
+const checkKeepalive = Boolean(process.env.UNFOUR_BASTION_QA_KEEPALIVE);
+const checkCurlRecovery = Boolean(process.env.UNFOUR_BASTION_QA_RAW_RECOVERY);
 if (process.platform !== "win32" || ![3, 4].includes(process.argv.length) || !["xshell", "scrt"].includes(mode)) {
   throw new Error("Usage on Windows: node verify-windows-package.mjs <extracted-package-directory> [xshell|scrt]");
 }
 const directory = resolve(process.argv[2]);
-const metadata = JSON.parse(await readFile(join(directory, "build-metadata.json"), "utf8"));
+const metadata = JSON.parse(await readFile(process.env.UNFOUR_BASTION_QA_METADATA ?? join(directory, "build-metadata.json"), "utf8"));
 assert.equal(metadata.channel, "test");
 const root = await mkdtemp(join(tmpdir(), "unfour-a2-qa-"));
 const webview = join(root, "webview");
@@ -38,7 +45,8 @@ const env = { ...process.env, UNFOUR_DATA_DIR: workspace, WEBVIEW2_USER_DATA_FOL
   WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: "--remote-debugging-address=127.0.0.1 --remote-debugging-port=0 --proxy-server=" + proxy + " --proxy-bypass-list=tauri.localhost" };
 const children = [];
 function launch(name, args) {
-  const child = spawn(join(directory, name), args, { cwd: directory, env, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+  const executable = name === "bastion-loopback.exe" && process.env.UNFOUR_BASTION_QA_FIXTURE ? process.env.UNFOUR_BASTION_QA_FIXTURE : join(directory, name);
+  const child = spawn(executable, args, { cwd: directory, env, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
   children.push(child);
   return child;
 }
@@ -53,7 +61,9 @@ async function waitFor(check, message, timeout = 25000) {
 }
 const label = "SYNTHETIC-ASSET @different.invalid";
 const received = [];
+const reportSentinels = ["tcp.fixture.invalid", "denied.fixture.invalid"];
 let browser;
+let createdTasks = 0;
 async function rejectWithDiagnostic(argv, expectedCount) {
   const rejected = launch("unfour.exe", argv);
   const rejectedOutput = [];
@@ -149,19 +159,49 @@ try {
       assert.equal(primary.exitCode, null, "rejected hot launch affected the running app");
       await expect(rows).toContainText("A2_ECHO_OK");
       await expect(sidebarSearch).toBeVisible();
+      await verifyTerminalUx(page, received);
     }
     const text = await page.locator("body").innerText();
     assert.ok(text.includes(label));
     assert.ok(text.includes("127.0.0.1:" + port));
     for (const secret of ["fixture-user", "fixture-grant", url]) assert.ok(!text.includes(secret));
+    const completed = await verifyCapabilityChecks(page, received, metadata,
+      ["fixture-user", "fixture-grant", label, url, "127.0.0.1"],
+      i === 0 ? process.env.UNFOUR_BASTION_QA_SCREENSHOT : undefined);
+    reportSentinels.push(...completed.sentinels);
+    if (i === 0) {
+      const taskChecks = await verifyTemporaryTasks(page, received, label + " · 127.0.0.1:" + port, process.env.UNFOUR_BASTION_QA_TASK_SCREENSHOT);
+      createdTasks += taskChecks.createdTasks;
+      reportSentinels.push(...taskChecks.sentinels, ...taskChecks.runIds);
+      if (checkCurlRecovery) {
+        const recovery = await verifyCurlRecovery(page, received, process.env.UNFOUR_BASTION_QA_CURL_SCREENSHOT);
+        reportSentinels.push(...recovery.sentinels);
+      }
+      const curlProbe = await verifyCurlCapability(page, received, process.env.UNFOUR_BASTION_QA_CURL_SCREENSHOT);
+      const curlChecks = await verifyTerminalCurlApi(page, received, label + " · 127.0.0.1:" + port, process.env.UNFOUR_BASTION_QA_CURL_SCREENSHOT);
+      reportSentinels.push(...curlProbe.sentinels, ...curlChecks.sentinels);
+      if (checkKeepalive) await verifyBackgroundKeepalive(page, received, label + " · 127.0.0.1:" + port, process.env.UNFOUR_BASTION_QA_KEEPALIVE_SCREENSHOT);
+    }
+    if (i === launches.length - 1) await verifyDisconnectedReport(page, received, completed.reportText);
     await page.getByRole("button", { name: /Close \/ cancel|关闭／取消/ }).last().click();
     await expect(page.getByRole("tab", { name: label + " · 127.0.0.1:" + port, exact: true })).toHaveCount(0);
     await expect(sidebarSearch).toBeVisible();
     console.log(launches[i] + " temporary terminal " + (i + 1) + " verified without a trust prompt, displayed the node, rendered SSH reply and closed");
   }
-  for (const marker of ["FIXTURE_AUTH_OK", "FIXTURE_PTY_OK", "FIXTURE_ROUNDTRIP_OK"]) {
+  for (const marker of ["FIXTURE_AUTH_OK", "FIXTURE_PTY_OK"]) {
     assert.equal(received.filter((x) => x === marker).length, launches.length);
   }
+  assert.equal(received.filter((x) => x === "FIXTURE_ROUNDTRIP_OK").length, launches.length * 2 + 3 + Number(checkKeepalive) + (checkCurlRecovery ? 2 : 0));
+  assert.equal(received.filter((x) => x === "FIXTURE_EXEC_OK 0").length, launches.length * 3);
+  assert.equal(received.filter((x) => x === "FIXTURE_EXEC_OK 23").length, launches.length);
+  for (const marker of ["FIXTURE_THREE_CHANNELS_OK", "FIXTURE_SFTP_OK", "FIXTURE_SFTP_CREATE_OK", "FIXTURE_SFTP_WRITE_OK", "FIXTURE_SFTP_READ_OK", "FIXTURE_SFTP_EOF_OK", "FIXTURE_SFTP_CLOSE_OK", "FIXTURE_SFTP_REMOVE_OK"]) {
+    assert.equal(received.filter((x) => x === marker).length, launches.length, marker);
+  }
+  assert.ok(!received.includes("FIXTURE_SFTP_REMAINING"), "synthetic SFTP file was not removed");
+  assert.equal(received.filter((line) => line === "FIXTURE_TCP_EMPTY_OK").length, launches.length);
+  assert.equal(received.filter((line) => line === "FIXTURE_TCP_DENIED").length, launches.length);
+  assert.ok(!received.includes("FIXTURE_TCP_UNEXPECTED_DATA"));
+  assert.equal(received.filter((line) => line === "FIXTURE_PTY_CLOSED").length, 1);
   await page.evaluate(() => window.__TAURI_INTERNALS__.invoke("plugin:window|close", { label: "main" })).catch(() => {});
   await waitFor(() => primary.exitCode !== null, "test window did not close");
   const db = new DatabaseSync(join(workspace, "unfour.sqlite"), { readOnly: true });
@@ -169,9 +209,23 @@ try {
     for (const table of ["ssh_connections", "ssh_host_keys", "ssh_terminal_history", "ssh_command_history", "ssh_task_run", "cloud_sync_outbox"]) {
       assert.equal(db.prepare("SELECT COUNT(*) AS n FROM " + table).get().n, 0, table);
     }
-    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM activity_events WHERE action LIKE 'ssh.%'").get().n, 0);
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM activity_events WHERE action LIKE 'ssh.%' AND action <> 'ssh.task.save'").get().n, 0);
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM ssh_task").get().n, createdTasks);
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM ssh_task_local_binding WHERE default_connection_id IS NOT NULL OR last_used_connection_id IS NOT NULL").get().n, 0);
   } finally {
     db.close();
+  }
+  const webData = new DatabaseSync(join(webview, "EBWebView", "Default", "Web Data"), { readOnly: true });
+  try {
+    for (const table of ["autofill", "autofill_edge_field_values"]) {
+      if (!webData.prepare("SELECT COUNT(*) AS n FROM sqlite_schema WHERE type = 'table' AND name = ?").get(table).n) continue;
+      for (const value of ["tcp.fixture.invalid", "denied.fixture.invalid", "fixture-task-ok", "fixture-task-wait"]) {
+        assert.equal(webData.prepare("SELECT COUNT(*) AS n FROM " + table + " WHERE value = ?").get(value).n, 0,
+          `WebView ${table} must not remember runtime input ${value}`);
+      }
+    }
+  } finally {
+    webData.close();
   }
   // All files in this newly created root belong to the test, including the WebView profile.
   for (const file of await readdir(root, { recursive: true, withFileTypes: true })) {
@@ -182,11 +236,11 @@ try {
       throw error;
     });
     if (data === null) continue;
-    for (const secret of ["fixture-user", "fixture-grant", label, url]) {
-      for (const encoding of ["utf8", "utf16le"]) assert.ok(!data.includes(Buffer.from(secret, encoding)), "sensitive sentinel found in isolated storage");
+    for (const secret of ["fixture-user", "fixture-grant", label, url, ...reportSentinels]) {
+      for (const encoding of ["utf8", "utf16le"]) assert.ok(!data.includes(Buffer.from(secret, encoding)), `sensitive sentinel found in isolated storage: ${join(file.parentPath, file.name)} (${encoding}; marker ${["fixture-user", "fixture-grant", label, url, ...reportSentinels].indexOf(secret)})`);
     }
   }
-  console.log("PASS: " + mode + " cold + warm + cross-client warm, zero saved SSH/trust/history/task/activity/outbox rows, no sentinels in the disposable DB/logs/WebView profile");
+  console.log("PASS: " + mode + " cold + warm + cross-client warm, " + createdTasks + " saved definitions; zero SSH/trust/history/task-run/runtime-activity/outbox rows or remembered targets; no runtime sentinels in DB/logs/WebView profile");
 } finally {
   await browser?.close().catch(() => {});
   for (const child of children) if (child.exitCode === null && !child.killed) child.kill();

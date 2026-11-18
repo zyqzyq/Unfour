@@ -6,6 +6,7 @@ pub use api_client::runtime_request_secret_values;
 pub use api_client::sanitize_portable_api_request;
 pub use api_client::script_mutation_secret_values;
 pub use api_client::ApiClientService;
+pub use api_client::{prepare_terminal_curl, PreparedTerminalCurl};
 pub use script_runtime::{
     run_script, validate_script_config, ScriptPhase, ScriptRequestContext, ScriptResponseContext,
     ScriptRunInput, ScriptRunOutcome, ScriptVariable, SCRIPT_SCHEMA_VERSION,

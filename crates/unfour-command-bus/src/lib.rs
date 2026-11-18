@@ -47,6 +47,7 @@ use unfour_workspace_engine::WorkspaceService;
 mod api_commands;
 mod api_routes;
 mod api_script_commands;
+mod api_terminal;
 mod command_models;
 mod completion_activity;
 mod core_commands;
@@ -65,7 +66,9 @@ mod flow_authoring;
 mod flow_commands;
 mod ssh_commands;
 mod temporary_ssh_commands;
-pub use temporary_ssh_commands::{LaunchReceipt, TemporaryRequest, TemporarySummary};
+pub use temporary_ssh_commands::{
+    LaunchReceipt, TemporaryProbeKind, TemporaryProbeReport, TemporaryRequest, TemporarySummary,
+};
 mod ssh_file_commands;
 mod ssh_task_context;
 mod workspace_variable_commands;

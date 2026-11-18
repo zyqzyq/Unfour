@@ -31,7 +31,7 @@ export function requestTabVisualState(tab: ApiRequestTab): ApiTabVisualState {
   if (tab.sending) {
     return "sending";
   }
-  if (tab.sendErrorCode === "API_CANCELLED") {
+  if (tab.sendErrorCode === "API_CANCELLED" || tab.sendErrorCode === "SSH_TERMINAL_CANCELLED") {
     return "cancelled";
   }
   if (hasRequestFailure(tab)) {

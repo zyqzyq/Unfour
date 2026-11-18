@@ -1,0 +1,43 @@
+diff --git a/src/client/mod.rs b/src/client/mod.rs
+index 6730858c..b999293c 100644
+--- a/src/client/mod.rs
++++ b/src/client/mod.rs
+@@ -1603,6 +1603,14 @@ async fn reply<H: Handler>(
+                     session.common.strict_kex =
+                         session.common.strict_kex || newkeys.names.strict_kex();
+ 
++                    // Authenticate the host on every exchange, including rekeys,
++                    // before notifying the handler or installing the new keys.
++                    if let Some(server_host_key) = &server_host_key {
++                        if !handler.check_server_key(server_host_key).await? {
++                            return Err(crate::Error::UnknownKey.into());
++                        }
++                    }
++
+                     // Call the kex_done handler before consuming newkeys
+                     let shared_secret = newkeys.kex.shared_secret_bytes();
+                     handler
+@@ -1629,13 +1637,6 @@ async fn reply<H: Handler>(
+                         session.pending_len = 0;
+                     } else {
+                         // This is the initial kex
+-                        if let Some(server_host_key) = &server_host_key {
+-                            let check = handler.check_server_key(server_host_key).await?;
+-                            if !check {
+-                                return Err(crate::Error::UnknownKey.into());
+-                            }
+-                        }
+-
+                         session
+                             .common
+                             .encrypted(initial_encrypted_state(session), newkeys);
+@@ -2096,7 +2097,8 @@ pub trait Handler: Sized + Send {
+         async { Ok(()) }
+     }
+ 
+-    /// Called to check the server's public key. This is a very important
++    /// Called to check the server's public key on every key exchange, including
++    /// rekeys, before `kex_done` and installing new keys. This is a very important
+     /// step to help prevent man-in-the-middle attacks. The default
+     /// implementation rejects all keys.
+     #[allow(unused_variables)]

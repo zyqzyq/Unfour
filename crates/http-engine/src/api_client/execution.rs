@@ -260,6 +260,7 @@ impl ApiClientService {
         );
 
         Ok(ApiResponse {
+            terminal_timing: None,
             diagnostic_projection: Some(super::history_redaction::diagnostic_response(
                 &response_headers,
                 &body,
@@ -276,7 +277,7 @@ impl ApiClientService {
         })
     }
 
-    async fn insert_history(
+    pub(super) async fn insert_history(
         &self,
         input: &ApiRequestInput,
         status: u16,
@@ -330,7 +331,7 @@ impl ApiClientService {
 
 const MAX_RESPONSE_BYTES: usize = 10 * 1024 * 1024;
 
-fn retain_canonical_secret_values(
+pub(super) fn retain_canonical_secret_values(
     input: &ApiRequestInput,
     url: &reqwest::Url,
     secrets: &mut Vec<String>,

@@ -76,6 +76,16 @@ export function runSshTask(input: SshTaskRunInput) {
   return call<SshTaskRun>("ssh_task_run", { input, ...(input.connectionId && temporaryRouteArgs("ssh", input.workspaceId, input.connectionId)) });
 }
 
+/** The handle is a one-run target, never a saved connection or task binding. */
+export type TemporaryTaskExecutionMode = "exec" | "terminal";
+export function runTemporarySshTask(input: SshTaskRunInput, handle: string, executionMode?: TemporaryTaskExecutionMode) {
+  return call<SshTaskRun>("ssh_temporary_task_run", { input: { ...input, connectionId: null }, handle, ...(executionMode && { executionMode }) });
+}
+
+export function isTemporarySshTaskRun(run: SshTaskRun) {
+  return run.warnings?.includes("SSH_TASK_TEMPORARY_RUN") ?? false;
+}
+
 export function cancelSshTaskRun(input: SshTaskCancelInput) {
   return call<SshTaskRun>("ssh_task_run_cancel", { input });
 }

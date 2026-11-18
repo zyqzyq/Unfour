@@ -24,6 +24,8 @@ mod api_routes;
 mod api_secret_projection;
 #[path = "lib_tests/api_snapshot.rs"]
 mod api_snapshot;
+#[path = "lib_tests/api_terminal.rs"]
+mod api_terminal;
 #[path = "lib_tests/ephemeral_lifecycle.rs"]
 mod ephemeral_lifecycle;
 #[path = "lib_tests/exchange.rs"]

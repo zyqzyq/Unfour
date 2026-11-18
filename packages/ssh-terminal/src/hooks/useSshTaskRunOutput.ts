@@ -27,9 +27,10 @@ export function useSshTaskRunOutput({
   const [eventsByRun, setEventsByRun] = useState<Record<string, SshTaskRunEvent[]>>({});
   const eventsByRunRef = useRef(eventsByRun);
   const pendingEventsRef = useRef<SshTaskRunEvent[]>([]);
+  const removedRunsRef = useRef(new Set<string>());
   const tasksSurfaceActiveRef = useRef(active);
   const activeRunIdRef = useRef(activeRunId);
-  const { historyLogByRun, historyLogLoading, loadHistoryLog, clearTaskHistoryLogs } =
+  const { historyLogByRun, historyLogLoading, loadHistoryLog, clearTaskHistoryLogs, clearRunHistoryLog } =
     useSshTaskRunHistory({ activeRunId, eventsByRunRef, handleError, workspaceId });
 
   useEffect(() => {
@@ -41,6 +42,7 @@ export function useSshTaskRunOutput({
     let disposed = false;
     let dispose: (() => void) | null = null;
     eventsByRunRef.current = {};
+    removedRunsRef.current.clear();
     // eslint-disable-next-line react-hooks/set-state-in-effect -- Live output is scoped to this workspace subscription.
     setEventsByRun({});
     // Coalesce per-line task output into one React update ~per frame. Without
@@ -75,7 +77,7 @@ export function useSshTaskRunOutput({
       }
     };
     registerSshTaskRunChannel((event) => {
-      if (disposed) return;
+      if (disposed || removedRunsRef.current.has(event.runId)) return;
       pendingEventsRef.current.push(event);
       if (pendingEventsRef.current.length > 10_000) {
         pendingEventsRef.current = pendingEventsRef.current.slice(-10_000);
@@ -105,5 +107,15 @@ export function useSshTaskRunOutput({
     setEventsByRun(eventsByRunRef.current);
   }, [clearTaskHistoryLogs]);
 
-  return { eventsByRun, historyLogByRun, historyLogLoading, loadHistoryLog, clearTaskOutput };
+  const clearRunOutput = useCallback((runId: string) => {
+    removedRunsRef.current.add(runId);
+    clearRunHistoryLog(runId);
+    pendingEventsRef.current = pendingEventsRef.current.filter((event) => event.runId !== runId);
+    const next = { ...eventsByRunRef.current };
+    delete next[runId];
+    eventsByRunRef.current = next;
+    setEventsByRun(next);
+  }, [clearRunHistoryLog]);
+
+  return { eventsByRun, historyLogByRun, historyLogLoading, loadHistoryLog, clearTaskOutput, clearRunOutput };
 }

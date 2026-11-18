@@ -5,7 +5,7 @@ import { formatFileSize } from "./sftp-format";
 export type TaskRunTranscriptLine = {
   key: string;
   kind: "header" | "command" | "output" | "meta" | "transfer" | "error";
-  stream?: "stdout" | "stderr" | "command" | null;
+  stream?: SshTaskRunEvent["stream"];
   text: string;
 };
 
@@ -106,9 +106,9 @@ function appendOutput(
   }
   state.lines.push({
     key: `output-${event.createdAt}-${index}`,
-    kind: event.stream === "command" ? "command" : "output",
+    kind: event.stream === "command" ? "command" : event.stream === "diagnostic" ? "meta" : "output",
     stream: event.stream,
-    text: event.data,
+    text: event.stream === "diagnostic" ? labels.stepError(event.data.trim()) : event.data,
   });
 }
 

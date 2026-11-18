@@ -588,6 +588,14 @@ export function SshTasksPage({
         connectionId={runConnectionId}
         connections={connections}
         environmentId={runEnvironmentId}
+        temporaryHandle={runSession.runTemporaryHandle}
+        temporarySessions={runSession.runTemporarySessions}
+        temporaryLoading={runSession.runTemporaryLoading}
+        onTemporaryChange={runSession.setRunTemporaryHandle}
+        temporaryExecutionMode={runSession.runTemporaryExecutionMode}
+        onTemporaryExecutionModeChange={runSession.setRunTemporaryExecutionMode}
+        terminalReady={runSession.runTerminalReady}
+        onTerminalReadyChange={runSession.setRunTerminalReady}
         environmentLoadFailed={runEnvironmentLoadFailed}
         environments={runEnvironments.map(({ id, name }) => ({ id, name }))}
         error={runMutation.error}

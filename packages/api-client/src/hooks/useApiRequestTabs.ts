@@ -17,9 +17,12 @@ import {
   type ApiRouteEdit,
   type ApiSavedRequest,
   type KeyValue,
+  type TemporarySshRoute,
 } from "@unfour/command-client";
 import { errorCode, formatError } from "../model/api-request-state";
+import { isTerminalApiError, terminalApiOutcomeUnknown, terminalApiSendError } from "../model/terminal-api";
 import { effectiveApiRoute, environmentRouteMutationKey, useApiRoutes } from "./useApiRoutes";
+import { useTerminalApiConfirmation } from "./useTerminalApiConfirmation";
 import { historyReplayError, localizeReplayError } from "../model/history-replay";
 import {
   DEFAULT_API_TAB_STATE,
@@ -50,17 +53,20 @@ export function useApiRequestTabs(workspaceId: string) {
   );
 
   const savedQuery = useQuery({
+    networkMode: "always",
     enabled: Boolean(workspaceId),
     queryKey: ["api-saved", workspaceId],
     meta: { cloudSyncWorkspaceId: workspaceId, localDataDomains: ["api-requests"] },
     queryFn: () => listSavedApiRequests(workspaceId),
   });
   const historyQuery = useQuery({
+    networkMode: "always",
     enabled: Boolean(workspaceId),
     queryKey: ["api-history", workspaceId],
     queryFn: () => listApiHistory(workspaceId),
   });
   const environmentsQuery = useQuery({
+    networkMode: "always",
     enabled: Boolean(workspaceId),
     queryKey: ["workspace-environments", workspaceId],
     meta: { cloudSyncWorkspaceId: workspaceId, localDataDomains: ["environments"] },
@@ -79,17 +85,21 @@ export function useApiRequestTabs(workspaceId: string) {
   }
 
   const sendMutation = useMutation({
-    mutationFn: ({ executionId, input, routing, temporaryHandle }: { executionId: string; input: ApiRequestInput; tabId: string; routing: NonNullable<Parameters<typeof sendApiRequest>[2]>; temporaryHandle?: string }) =>
-      temporaryHandle ? sendApiRequest(executionId, input, routing, temporaryHandle) : sendApiRequest(executionId, input, routing),
+    // This dispatches local IPC. Only the backend can assess the remote route.
+    networkMode: "always",
+    retry: false,
+    mutationFn: ({ executionId, input, routing, temporaryHandle, temporaryExecution }: { executionId: string; input: ApiRequestInput; tabId: string; routing: NonNullable<Parameters<typeof sendApiRequest>[2]>; temporaryHandle?: string; temporaryExecution?: Parameters<typeof sendApiRequest>[4] }) =>
+      temporaryExecution ? sendApiRequest(executionId, input, routing, temporaryHandle, temporaryExecution)
+        : temporaryHandle ? sendApiRequest(executionId, input, routing, temporaryHandle) : sendApiRequest(executionId, input, routing),
     onSuccess: (execution, variables) => {
       const workspaceId = variables.input.workspaceId;
       if (execution.httpErrorCode === "API_RESPONSE_TOO_LARGE") execution = { ...execution, httpError: t("api.response.tooLarge") };
       if (execution.httpError) execution = { ...execution, httpError: localizeReplayError(execution.httpError, t) };
-      if (execution.httpErrorCode?.startsWith("SSH_TUNNEL_")) {
+      if (execution.httpErrorCode?.startsWith("SSH_TUNNEL_") || isTerminalApiError(execution.httpErrorCode)) {
         execution = { ...execution, httpError: t(`network.errors.${execution.httpErrorCode}`, t("api.route.failed")) };
         refreshRouteContext(workspaceId);
       }
-      if (!execution.response && ["API_TIMEOUT", "API_CANCELLED", "NETWORK_ERROR", "HTTP_ERROR", "API_RESPONSE_TOO_LARGE", "SSH_TUNNEL_TARGET_UNREACHABLE", "SSH_TUNNEL_TEMPORARY_UNAVAILABLE"].includes(execution.httpErrorCode ?? "")) {
+      if (!execution.response && (["API_TIMEOUT", "API_CANCELLED", "NETWORK_ERROR", "HTTP_ERROR", "API_RESPONSE_TOO_LARGE"].includes(execution.httpErrorCode ?? "") || execution.httpErrorCode?.startsWith("SSH_TUNNEL_") || terminalApiOutcomeUnknown(execution.httpErrorCode))) {
         execution = { ...execution, httpError: `${execution.httpError ?? ""} ${t("feedback.apiOutcomeUncertain")}`.trim() };
       }
       if (execution.postResponse.error?.code === "API_POST_RESPONSE_FINALIZATION_FAILED") {
@@ -112,6 +122,7 @@ export function useApiRequestTabs(workspaceId: string) {
         feedback.info(t("feedback.apiPostResponseFailed"));
       }
       queryClient.invalidateQueries({ queryKey: ["api-history", workspaceId] });
+      if (variables.temporaryHandle) void queryClient.invalidateQueries({ queryKey: ["api-live-sessions", workspaceId] });
     },
     onError: (error, variables) => {
       const workspaceId = variables.input.workspaceId;
@@ -119,11 +130,13 @@ export function useApiRequestTabs(workspaceId: string) {
       const current = store.byWorkspace[workspaceId]?.tabs.find((tab) => tab.executionId === variables.executionId);
       const code = errorCode(error);
       let message = code === "API_RESPONSE_TOO_LARGE" ? t("api.response.tooLarge") : localizeReplayError(formatError(error), t);
-      if (code?.startsWith("SSH_TUNNEL_")) {
+      if (code?.startsWith("SSH_TUNNEL_") || isTerminalApiError(code)) {
         message = t(`network.errors.${code}`, t("api.route.failed"));
         refreshRouteContext(workspaceId);
       }
+      if (terminalApiOutcomeUnknown(code)) message = `${message} ${t("feedback.apiOutcomeUncertain")}`;
       if (current) store.failTabSend(workspaceId, current.id, message, code);
+      if (variables.temporaryHandle) void queryClient.invalidateQueries({ queryKey: ["api-live-sessions", workspaceId] });
     },
   });
 
@@ -199,6 +212,7 @@ export function useApiRequestTabs(workspaceId: string) {
   );
   const environmentId = activeEnvironment?.id ?? null;
   const routing = useApiRoutes(workspaceId, activeTab, environmentId, environmentsQuery.status);
+  useTerminalApiConfirmation(workspaceId, activeTab, routing, environmentId);
   const newRequest = useCallback((draft?: RequestDraft) => {
     useApiRequestTabStore.getState().newRequest(workspaceId, draft);
   }, [workspaceId]);
@@ -245,6 +259,18 @@ export function useApiRequestTabs(workspaceId: string) {
         return;
       }
       const routes = routing.routes;
+      const liveSessions = queryClient.getQueryData<TemporarySshRoute[]>(["api-live-sessions", workspaceId]) ?? routing.temporary.data;
+      const terminalError = terminalApiSendError(tab.draft, liveSessions?.find((entry) => entry.handle === tab.draft.temporaryHandle));
+      if (terminalError) {
+        useApiRequestTabStore.getState().updateTabDraft(workspaceId, tab.id, { terminalConfirmed: false });
+        // A blocked retry must retain the original failure or received response.
+        // The terminal notice already explains the recovery requirement.
+        if (terminalError === "SSH_TERMINAL_RECOVERY_REQUIRED" && (
+          isTerminalApiError(tab.sendErrorCode) || tab.response?.warnings?.includes("SSH_TERMINAL_HTTP_TERMINAL_RECOVERY_REQUIRED")
+        )) return;
+        useApiRequestTabStore.getState().failTabSend(workspaceId, tab.id, t(`network.errors.${terminalError}`), terminalError);
+        return;
+      }
       if (!routing.ready || !routes || tab.id !== activeTab?.id || queryClient.isMutating({ mutationKey: environmentRouteMutationKey(workspaceId) })) {
         const message = tab.draft.temporaryHandle && !routing.temporary.data?.some((entry) => entry.handle === tab.draft.temporaryHandle)
           ? t("network.errors.SSH_TUNNEL_TEMPORARY_UNAVAILABLE") : t("api.route.unavailable");
@@ -254,7 +280,8 @@ export function useApiRequestTabs(workspaceId: string) {
       const input = tabToInput(tab, workspaceId, { purpose: "send" });
       const executionId = crypto.randomUUID();
       useApiRequestTabStore.getState().startTabSend(workspaceId, tab.id, input, executionId);
-      sendRequest({ executionId, input, tabId: tab.id, temporaryHandle: tab.draft.temporaryHandle, routing: {
+      sendRequest({ executionId, input, tabId: tab.id, temporaryHandle: tab.draft.temporaryHandle,
+        ...(tab.draft.temporaryHandle && tab.draft.temporaryExecutionMode === "terminalCurl" && { temporaryExecution: { temporaryExecutionMode: "terminalCurl" as const, terminalConfirmed: true } }), routing: {
         requestId: tab.savedRequestId, route: tab.draft.route?.route,
         expectedEnvironmentId: routes.environmentId, expectedEffective: effectiveApiRoute(routes, tab.draft.route?.route),
         expectedSshRevision: routing.selectedHost?.revision,
@@ -264,10 +291,20 @@ export function useApiRequestTabs(workspaceId: string) {
   );
 
   const cancelTab = useCallback(async (tab: ApiRequestTab) => {
-    if (!tab.executionId || !tab.sending || tab.cancelling) return;
+    const live = useApiRequestTabStore.getState().byWorkspace[workspaceId]?.tabs.find((entry) => entry.id === tab.id);
+    if (!tab.executionId || live?.executionId !== tab.executionId || !live.sending || live.cancelling) return;
+    const executionId = tab.executionId;
     useApiRequestTabStore.getState().startTabCancel(workspaceId, tab.id);
-    await cancelApiRequest(tab.executionId);
-  }, [workspaceId]);
+    try {
+      if (await cancelApiRequest(executionId)) return;
+    } catch {
+      // A failed IPC does not establish that the remote request has stopped.
+    }
+    const store = useApiRequestTabStore.getState();
+    // Saving an unsaved request can replace its tab ID while cancellation is pending.
+    const current = store.byWorkspace[workspaceId]?.tabs.find((entry) => entry.executionId === executionId);
+    if (current) store.failTabCancel(workspaceId, current.id, executionId, t("api.response.cancelFailed"));
+  }, [workspaceId, t]);
 
   const saveTab = useCallback(
     async (

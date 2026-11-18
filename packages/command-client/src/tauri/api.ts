@@ -212,8 +212,11 @@ export function setApiEnvironmentRoute(workspaceId: string, environmentId: strin
   return call<void>("api_environment_route_set", { workspaceId, environmentId, edit });
 }
 
-export function sendApiRequest(executionId: string, input: ApiRequestInput, routing?: ApiRoutingInput, temporaryHandle?: string) {
-  return call<RequestExecutionResult>("api_send_request_v2", { executionId, input, routing, ...(temporaryHandle && { temporaryHandle }) });
+export type TemporaryApiExecutionMode = "tcp" | "terminalCurl";
+export type TemporaryApiExecution = { temporaryExecutionMode: TemporaryApiExecutionMode; terminalConfirmed?: boolean };
+export function sendApiRequest(executionId: string, input: ApiRequestInput, routing?: ApiRoutingInput, temporaryHandle?: string, temporaryExecution?: TemporaryApiExecution) {
+  return call<RequestExecutionResult>("api_send_request_v2", { executionId, input, routing, ...(temporaryHandle && { temporaryHandle }),
+    ...(temporaryExecution && { temporaryExecutionMode: temporaryExecution.temporaryExecutionMode, ...(temporaryExecution.terminalConfirmed !== undefined && { terminalConfirmed: temporaryExecution.terminalConfirmed }) }) });
 }
 
 export function cancelApiRequest(executionId: string) {

@@ -191,6 +191,7 @@ impl CommandBusAdapter for StubCommandBus {
     ) -> Result<ApiResponse, CommandBusAdapterError> {
         Ok(ApiResponse {
             request_snapshot: None,
+            terminal_timing: None,
             diagnostic_projection: None,
             history_id: "h-1".to_string(),
             status: 200,

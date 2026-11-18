@@ -36,6 +36,12 @@ const labels = {
 };
 
 describe("buildTaskRunTranscript", () => {
+  it("localizes diagnostic stream markers while preserving identical ordinary stdout", () => {
+    const data = "SSH_TASK_INTERACTIVE_LOGIN_PROMPT\n";
+    const lines = buildTaskRunTranscript([event({ stream: "diagnostic", data }), event({ stream: "stdout", data })], { ...labels, stepError: () => "Remote login prompt observed" });
+    expect(lines[0]).toMatchObject({ kind: "meta", stream: "diagnostic", text: "Remote login prompt observed" });
+    expect(lines[1]).toMatchObject({ kind: "output", stream: "stdout", text: data });
+  });
   it("segments command output by step and appends completion meta", () => {
     const lines = buildTaskRunTranscript(
       [

@@ -1,0 +1,330 @@
+[
+  {
+    "path": ".cargo_vcs_info.json",
+    "sha256": "ef7a80da88391c6812e72c73d73f2840c38e857db19a8ba1ee7b160beb269f1c"
+  },
+  {
+    "path": "benches/ciphers.rs",
+    "sha256": "8eed524c8e6d71b62ef484a6f75ea7695a5d2bb0d1824e430f8793d41e7d0b6f"
+  },
+  {
+    "path": "Cargo.lock",
+    "sha256": "8d480330b1fe504e6ddac411f657197af68533d6f3da9a5200083cf7a609b932"
+  },
+  {
+    "path": "Cargo.toml",
+    "sha256": "3fbc31c2518da5a746cc15f2f6551def835b0f03e74db194ca5ce2a97b9d0457"
+  },
+  {
+    "path": "Cargo.toml.orig",
+    "sha256": "d0cca52f0c3e671d0bbe37cbd1f6caa2cefc2492ca4a0e0a85aa25a2669fab30"
+  },
+  {
+    "path": "examples/client_exec_interactive.rs",
+    "sha256": "485a4fa3bb6e0a590e5cd03985a51aba79d06e0088bda0f90c4a69ae92c7993f"
+  },
+  {
+    "path": "examples/client_exec_simple.rs",
+    "sha256": "1e7158ea8a1fba454a960ca96bf9294d984ee1492a21e4a3450c321187910db2"
+  },
+  {
+    "path": "examples/client_open_direct_tcpip.rs",
+    "sha256": "54f2404bb607adb13bfaa227755a760fb7f4d24ef32b215c34b0262fc36c714a"
+  },
+  {
+    "path": "examples/echoserver.rs",
+    "sha256": "eb4b1a7ba82c059e43d34eba6581f6129489a803b64d46f41edd5bcd0cb93816"
+  },
+  {
+    "path": "examples/ratatui_app.rs",
+    "sha256": "dc746002c3387f091a72ba198043664762c9e45b9fdd2aa580ead0dff73a3f65"
+  },
+  {
+    "path": "examples/ratatui_shared_app.rs",
+    "sha256": "6859da0679e1397d2bb0f97992d6f0ec47f813f5b1a234d7c55040091f039b84"
+  },
+  {
+    "path": "examples/sftp_client.rs",
+    "sha256": "ac7a8bbcece3474cbc8ef4e41e4385b176b9ab2079655fc8d455e6ab06158d73"
+  },
+  {
+    "path": "examples/sftp_server.rs",
+    "sha256": "56f9e9c6e80246688e7bd91c05d6f7fb3827b348b0374d3449ab872fa51991b9"
+  },
+  {
+    "path": "examples/test.rs",
+    "sha256": "69a9c118b0bfb50720015735d398a5a3e9bb4778988ca2702a7a3a5709a47fc1"
+  },
+  {
+    "path": "README.md",
+    "sha256": "fdeab9b31178d54977f8629bd32db7e6c3abe5a05e1229be05fcff9f8b1bb1cf"
+  },
+  {
+    "path": "src/auth.rs",
+    "sha256": "66f44c09f50aec4a46d8f85e0dbf493be8ee9db2e4a442cacf7837c2a9a10b1c"
+  },
+  {
+    "path": "src/cert.rs",
+    "sha256": "690241c97a426034cf774091b8b99d9b25c09964700f9a166bb5af434df3760c"
+  },
+  {
+    "path": "src/channels/channel_ref.rs",
+    "sha256": "8d6678c43cae06d095ae4cc242ae33ca1bf65efcdef9a5948d382cbffb101f06"
+  },
+  {
+    "path": "src/channels/channel_stream.rs",
+    "sha256": "990be739b58d69e18682575a66eee123d7055a228f71429b9fb1276ed5419b9a"
+  },
+  {
+    "path": "src/channels/io/mod.rs",
+    "sha256": "d058ed66458c0d5a7da50c270cb6c6a9c067c68cc328cc91a990d3ff39be8c1d"
+  },
+  {
+    "path": "src/channels/io/rx.rs",
+    "sha256": "6e241986dcb5f75fdf9788000fa7e9f6c0dc7500c7062fbb16cbcba0c6e0d166"
+  },
+  {
+    "path": "src/channels/io/tx.rs",
+    "sha256": "8c62048b5176ba6b330c5b74148a328172920ca950bfe6bddd1ba5b1a2d16767"
+  },
+  {
+    "path": "src/channels/mod.rs",
+    "sha256": "27a7e4eb3fec2f75287160ee0e03b412a419ee685d749466e7b8e759e7d7b7ba"
+  },
+  {
+    "path": "src/cipher/benchmark.rs",
+    "sha256": "1632912cbd81f39684fdc57ef49f240677fd72c9176fa548eb9944b5d66ffeb9"
+  },
+  {
+    "path": "src/cipher/block.rs",
+    "sha256": "1abade93fa680ee57634f2287f6a3ad378aaf5557e21d12ed198a4620cfc33a4"
+  },
+  {
+    "path": "src/cipher/cbc.rs",
+    "sha256": "5349c7a22b070501fb237da568c8e4ccbf31268b393289355de17200cbac2523"
+  },
+  {
+    "path": "src/cipher/chacha20poly1305.rs",
+    "sha256": "461cf944d4d2fab4e0d494ad5bd0923e44795d34e03dc6556122f1a28ba4e47f"
+  },
+  {
+    "path": "src/cipher/clear.rs",
+    "sha256": "0d3c514e38f353f5134e939a0912e72a3e6e01cccf7f134a2304253b56a4e238"
+  },
+  {
+    "path": "src/cipher/gcm.rs",
+    "sha256": "f734b060f43e14aabfd8fc48891f57fab804d0f378374579b4bc3a5098a7b2e4"
+  },
+  {
+    "path": "src/cipher/mod.rs",
+    "sha256": "5793fb7f08d3494517c74264179adf78872ae8bdc5c7cedc8ed69f4a6cce52ec"
+  },
+  {
+    "path": "src/client/encrypted.rs",
+    "sha256": "02c3dc16b7bd6d74cd56c42263c1305c28bba14fa6a8018b281c9f54c7d742bf"
+  },
+  {
+    "path": "src/client/kex.rs",
+    "sha256": "4f540d935df565b1a1994784cee88186ae7b9b7fe4cd8ff68b771599d8d8b460"
+  },
+  {
+    "path": "src/client/mod.rs",
+    "sha256": "0099f76621a59460e5611480bdda45e5ac33570b7669c81ceb4ea7e0283fbcab"
+  },
+  {
+    "path": "src/client/session.rs",
+    "sha256": "d4996f1e00f456f02bb791101300d5f93c84e2db54101a27d69f1a0aa29518f6"
+  },
+  {
+    "path": "src/client/test.rs",
+    "sha256": "54352ce932c83283c56c89d0e6f7420deb46bb17ce7f774ead80640a66968d1c"
+  },
+  {
+    "path": "src/compression.rs",
+    "sha256": "774b59e33ff0746e2898d896074bcf800ab167f7174750c20ddfca69ada03c2c"
+  },
+  {
+    "path": "src/helpers.rs",
+    "sha256": "e92055a34871f714c284f85c9d38491c87e74ee18a047db263488032f1d19821"
+  },
+  {
+    "path": "src/kex/curve25519.rs",
+    "sha256": "d194184afb2d82f178918bd4a43a8eee10748c1de05673bc1568e53139519ebb"
+  },
+  {
+    "path": "src/kex/dh/groups.rs",
+    "sha256": "718f7e62a6da1289e652d4444e7d803ce5d74bfdffa3ad9ecc64c188f64517b1"
+  },
+  {
+    "path": "src/kex/dh/mod.rs",
+    "sha256": "c03651d5654fbb910efeab4528e6949c17a772d7b4145eb4c59133aa1827843e"
+  },
+  {
+    "path": "src/kex/ecdh_nistp.rs",
+    "sha256": "0bb7c452200130edf71be0966983ebdc311ca57154343d93eeab509ec2beaf17"
+  },
+  {
+    "path": "src/kex/hybrid_mlkem.rs",
+    "sha256": "c12f092465624e9d5bef94cbce3f2510ae1784c9a112aac3ea92e0527ba9a342"
+  },
+  {
+    "path": "src/kex/mod.rs",
+    "sha256": "3e1ee0458db94499e3808bab4b701d50d6501f07906ad371a9e7438605991933"
+  },
+  {
+    "path": "src/kex/none.rs",
+    "sha256": "8c0d847c2caadd7a2db77d34877d3182e38cb2e90ed44e3823b53361a770960d"
+  },
+  {
+    "path": "src/keys/agent/client.rs",
+    "sha256": "be3061d50eb957e7c102cb9ce57638391dddcc5679f0de666d98bda58ee8ecc7"
+  },
+  {
+    "path": "src/keys/agent/mod.rs",
+    "sha256": "5652be6d2079a3fdc8361f7e31cfe3a602bdc85a773b491d0bef91c909181e54"
+  },
+  {
+    "path": "src/keys/agent/msg.rs",
+    "sha256": "3461e3f12792ddbddc2aaddaca25f4e074e91a3e58488fe6b82dc087590134bc"
+  },
+  {
+    "path": "src/keys/agent/server.rs",
+    "sha256": "94876dc20ce2261881da41a36a9342b6970586937d2275b32364d98367f0f91f"
+  },
+  {
+    "path": "src/keys/format/mod.rs",
+    "sha256": "7ca4a796a523df1063f0ea0bac1b6d869288dd100d041a6455f8bd7d73b15678"
+  },
+  {
+    "path": "src/keys/format/openssh.rs",
+    "sha256": "e345287a5c5af34b95740c90431e322b86ba4230be4e116b2194c7de7bd99816"
+  },
+  {
+    "path": "src/keys/format/pkcs5.rs",
+    "sha256": "fe8c841b87992b49e4fe3337cfe4c427d31a4cacb0e5891d7e926aa3c76d6271"
+  },
+  {
+    "path": "src/keys/format/pkcs8_legacy.rs",
+    "sha256": "c751866710db20fa55fda72a8245a6d32c9b7acd49675309f08de9ae6f58b9c8"
+  },
+  {
+    "path": "src/keys/format/pkcs8.rs",
+    "sha256": "766c7c66c903319ec61a15e9362d82031441a97a09d9be26ba8b405e20e7f065"
+  },
+  {
+    "path": "src/keys/format/tests.rs",
+    "sha256": "47a0f71ac07b8bf2604bcdf47e18b2a29a91035432f24c41ec57b639b391e055"
+  },
+  {
+    "path": "src/keys/key.rs",
+    "sha256": "17b75a90739c32fc4b2fbeb31103b9cc8dd5f70c0b7de885bf1238b41b0b50e7"
+  },
+  {
+    "path": "src/keys/known_hosts.rs",
+    "sha256": "13802e03e9d8c11a25673ac29bddccaebedbbd759465b2d2ec847ba86e8e1049"
+  },
+  {
+    "path": "src/keys/mod.rs",
+    "sha256": "a68f9e90eed19a372f82245d722b46c5808a8e8a5f1fa15510e92d8f7d5e034f"
+  },
+  {
+    "path": "src/lib_inner.rs",
+    "sha256": "4ed5ae82d19d2a4eeae46266552f9f45ce6c34a57e1fb2787f93259b2ca97f6a"
+  },
+  {
+    "path": "src/lib.rs",
+    "sha256": "8398c8b25509efa7d56b8577ec9c46e27f8ab9b20ac0f2068e7390ddfad883a9"
+  },
+  {
+    "path": "src/mac/crypto_etm.rs",
+    "sha256": "36f76c3e30556c182bac25cc4b2918d6ce7f2be666531df849db4baf8fb02148"
+  },
+  {
+    "path": "src/mac/crypto.rs",
+    "sha256": "a6f8f5a98a6d342f925bb2842650b0c92e4c57c91036caf93aa2fdaa28a0b218"
+  },
+  {
+    "path": "src/mac/mod.rs",
+    "sha256": "a3418bb9fdc1cf9102ffd968811946e9c92cb4a3d50a0759f5cdb091cce6d18e"
+  },
+  {
+    "path": "src/mac/none.rs",
+    "sha256": "c58fe761c9e07df4956a8e349f2053e2d3fd28988b99a4af7b152f73a7db1211"
+  },
+  {
+    "path": "src/msg.rs",
+    "sha256": "c377a22642b6fd62d5be3676874e79173cd26d72e6a2a6bdc8ff86b1671eb20f"
+  },
+  {
+    "path": "src/negotiation.rs",
+    "sha256": "b88f4e8e266e7a72cebb8b804973cbef9c4cb9a25acc0c2b54063f6f5016c11b"
+  },
+  {
+    "path": "src/parsing.rs",
+    "sha256": "e3f006102267653d83224074a57f72486d7a3cd0742f64268d12e432ec257ab8"
+  },
+  {
+    "path": "src/pty.rs",
+    "sha256": "db018a9139923b907999fb9870aad0e9bc93fe03d11b65752f3f08fe63c4eb3b"
+  },
+  {
+    "path": "src/server/encrypted.rs",
+    "sha256": "89ab2c2c33dceb2b064ab6a38eaf7aa9229394c9da883134421aacee41e0dc76"
+  },
+  {
+    "path": "src/server/kex.rs",
+    "sha256": "e1975ea44e2233de66b33830eafc6eeea62a743961b5440feba07e5295afdc45"
+  },
+  {
+    "path": "src/server/mod.rs",
+    "sha256": "f069f72ce0aafb30efd6d08f2595f4d8ba1ecf70bf0427a1db499c950f161961"
+  },
+  {
+    "path": "src/server/session.rs",
+    "sha256": "7ef668aa90c80f20711b4331168cb0512871f59e576d565ad2dbcbdb8b2d5f42"
+  },
+  {
+    "path": "src/session.rs",
+    "sha256": "28e4594f7c6e587c54075b7e15321e43961f9e0ec3dcc734b47c5ccbd856dccb"
+  },
+  {
+    "path": "src/ssh_read.rs",
+    "sha256": "469bc85924824923372391eba9815e72434388e36f6f8c34d33aed2e95127a2f"
+  },
+  {
+    "path": "src/sshbuffer.rs",
+    "sha256": "ecd35c32beae59d63b9683ca30d1043bbf628a020c75cdbfe8d06fbf98a3680d"
+  },
+  {
+    "path": "src/tests.rs",
+    "sha256": "3a2b7f10ef4003ba8ec955cfca41056dc903a1ac19b9fdb23471a64a8bb01772"
+  },
+  {
+    "path": "tests/auth_state_reset.rs",
+    "sha256": "fbda2fc16da8ec666136f3a1d940a70114c1993454396dd6b3e6dda8a6e88d06"
+  },
+  {
+    "path": "tests/test_backpressure.rs",
+    "sha256": "afdda5a7c13eb75cbe2c83acc9c714909d6bfad2568f2571a808dc07cb800e5b"
+  },
+  {
+    "path": "tests/test_data_stream.rs",
+    "sha256": "734e3b9669d7a070af48f6995addc39184ce8e0d266900df23781f2cbb9f5b16"
+  },
+  {
+    "path": "tests/test_kex_shared_secret.rs",
+    "sha256": "43b64360b3fa06c88c8490a73ab667949091889fa10cf52019fa5570e3b2a86b"
+  },
+  {
+    "path": "tests/test_max_channel_packet_size.rs",
+    "sha256": "9f0137d81d46fa74ec42acb5481a6cc1f98f7dcd4e628dab220404f12b4fcb0a"
+  },
+  {
+    "path": "tests/test_mlkem_kex.rs",
+    "sha256": "481a55d30c61b8741436bf2f3aace02c7f6ee725ef9dcb2bbc963ce3a16bd0ca"
+  },
+  {
+    "path": "tests/test_rekey_strict_kex.rs",
+    "sha256": "a0097c9ca46d518d454328e26e4339fb813767befd17ca7bf6b2418f9748bf6b"
+  }
+]

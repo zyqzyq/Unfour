@@ -52,6 +52,7 @@ pub(super) struct TaskStepResult {
 #[cfg_attr(not(feature = "ssh-native"), allow(dead_code))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum TaskStepError {
+    InputUnconfirmed,
     Failed {
         message: String,
         exit_code: Option<i32>,
@@ -136,6 +137,20 @@ where
                 return TaskRunOutcome {
                     status: "cancelled".to_string(),
                     error: None,
+                };
+            }
+            Err(TaskStepError::InputUnconfirmed) => {
+                let error = "SSH_TASK_TERMINAL_INPUT_UNCONFIRMED".to_string();
+                emit(RunnerEvent::StepFinished {
+                    step,
+                    status: "failed".into(),
+                    duration_ms,
+                    exit_code: None,
+                    error: Some(error.clone()),
+                });
+                return TaskRunOutcome {
+                    status: "failed".into(),
+                    error: Some(error),
                 };
             }
             Err(TaskStepError::OutcomeUncertain { cancelled }) => {

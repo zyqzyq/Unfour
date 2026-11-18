@@ -2,7 +2,7 @@ use super::super::*;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use unfour_core::models::{ApiRequestInput, ApiSavedRequest};
 
-pub(super) async fn service() -> ApiClientService {
+pub(in crate::api_client) async fn service() -> ApiClientService {
     let options = SqliteConnectOptions::new()
         .filename(":memory:")
         .create_if_missing(true)

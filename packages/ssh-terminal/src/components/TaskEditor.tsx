@@ -145,7 +145,7 @@ export function TaskEditor({
             disabled={!draft.name.trim() || saving || saveDisabled}
             onClick={onSave}
             size="sm"
-            title="Ctrl+S"
+            title={!draft.name.trim() ? t("ssh.tasks.editor.nameRequired") : "Ctrl+S"}
             variant="secondary"
           >
             <Save size={13} />
@@ -162,6 +162,7 @@ export function TaskEditor({
           </Button>
         </div>
       </div>
+      {!draft.name.trim() && <p className="shrink-0 border-b border-[var(--u-color-border)] px-4 py-1 text-xs text-[var(--u-color-text-muted)]" role="status">{t("ssh.tasks.editor.nameRequired")}</p>}
 
       {showDescription && (
         <div className="shrink-0 border-b border-[var(--u-color-border)] px-4 py-3">
