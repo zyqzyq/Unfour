@@ -5,6 +5,8 @@ use super::{
 use std::{collections::VecDeque, time::Duration};
 use tokio::time::Instant;
 use unfour_core::models::TerminalOperationTiming;
+mod curl;
+pub(super) use curl::SAMPLE_BYTES;
 mod deadline;
 use deadline::{Deadline, Stage};
 
@@ -16,6 +18,7 @@ pub(super) struct Driver<'a> {
     session: String,
     recovery_attempted: bool,
     child_ready: bool,
+    curl_receiver: bool,
     child_exiting: bool,
     child_restored: bool,
     deadline: Deadline,
@@ -32,6 +35,7 @@ impl<'a> Driver<'a> {
             session: Uuid::new_v4().simple().to_string(),
             recovery_attempted: false,
             child_ready: false,
+            curl_receiver: false,
             child_exiting: false,
             child_restored: false,
             deadline: Deadline::new(timeout_ms),
@@ -141,7 +145,7 @@ impl<'a> Driver<'a> {
                 if frame == invalid {
                     // The child rejects mismatched final totals before eval
                     // and exits itself. Do not interrupt its parent shell.
-                    self.child_exiting = true;
+                    self.child_exiting = !self.curl_receiver;
                     return Err("SSH_TERMINAL_PROTOCOL_ERROR");
                 }
                 if frame.starts_with(&line_prefix) || frame.starts_with(&end_prefix) {
@@ -223,20 +227,33 @@ impl<'a> Driver<'a> {
         self.send(format!("{nonce}\n").as_bytes()).await?;
         self.frame(&format!("{nonce}:ACCEPT")).await?;
         self.deadline.enter(Stage::InputAck);
+        self.timing.prepare_ms = prepare_start.elapsed().as_millis();
+        self.confirm_input(encoding, command, &nonce, cancellation)
+            .await?;
+        self.receive(&nonce, max_bytes).await
+    }
+
+    async fn confirm_input(
+        &mut self,
+        encoding: protocol::InputEncoding,
+        command: &str,
+        nonce: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<(), &'static str> {
         let input_start = Instant::now();
-        self.timing.prepare_ms = (input_start - prepare_start).as_millis();
         let mut ack_wait = Duration::ZERO;
-        for (line, expected) in encoding.confirmed_payload(command, &nonce) {
+        for (line, expected) in encoding.confirmed_payload(command, nonce) {
             if cancellation.is_cancelled() {
                 return Err("SSH_TERMINAL_CANCELLED");
             }
             self.send(&line).await?;
+            self.timing.input_wire_bytes += line.len();
             // Only one short canonical line may be outstanding. Confirm its
             // consumed bytes, and the E terminator's totals, before advancing.
             // Encoded content stays inside this exclusive memory-only stream;
             // never include acknowledgements in diagnostics or error messages.
             let waiting = Instant::now();
-            self.input_frame(&nonce, &expected).await?;
+            self.input_frame(nonce, &expected).await?;
             ack_wait += waiting.elapsed();
             self.timing.input_ack_count += 1;
             self.deadline.enter(Stage::InputAck);
@@ -244,6 +261,15 @@ impl<'a> Driver<'a> {
         let execution_start = Instant::now();
         self.timing.input_ms = (execution_start - input_start).as_millis();
         self.timing.input_ack_wait_ms = ack_wait.as_millis();
+        Ok(())
+    }
+
+    async fn receive(
+        &mut self,
+        nonce: &str,
+        max_bytes: usize,
+    ) -> Result<(Vec<u8>, i32), &'static str> {
+        let execution_start = Instant::now();
         self.deadline.enter(Stage::Begin);
         let begin = format!("{nonce}:BEGIN");
         let end = format!("{nonce}:END:");
@@ -260,7 +286,7 @@ impl<'a> Driver<'a> {
                     if frame != format!("{end}0") {
                         return Err("SSH_TERMINAL_PROTOCOL_ERROR");
                     }
-                    let result = protocol::decode(&encoded, &nonce, max_bytes);
+                    let result = protocol::decode(&encoded, nonce, max_bytes);
                     self.timing.execution_and_output_ms = execution_start.elapsed().as_millis();
                     return result;
                 }
@@ -307,6 +333,29 @@ impl<'a> Driver<'a> {
             self.child_restored = true;
             return Ok(());
         }
+        if self.curl_receiver && !self.child_ready && !self.child_exiting {
+            // An early Stop can win before LOAD or READY reaches the client.
+            // These states wait for input indefinitely, so only interrupt after
+            // observing the particular waiter which we have not advanced.
+            loop {
+                if self.child_restored {
+                    return Ok(());
+                }
+                if let Fragment::Frame(marker) = self.next().await? {
+                    let Some(kind) = marker.strip_prefix(&format!("{}:", self.session)) else {
+                        continue;
+                    };
+                    if kind.starts_with("PREP:") {
+                        self.child_exiting = true;
+                        break;
+                    }
+                    if kind == "LOAD" {
+                        self.child_ready = true;
+                        break;
+                    }
+                }
+            }
+        }
         for _ in 0..self.lease.output.len() {
             self.deadline.check()?;
             let Ok(bytes) = self.lease.output.try_recv() else {
@@ -326,7 +375,14 @@ impl<'a> Driver<'a> {
         // inject Ctrl-C there. A prerequisite failure exits its child itself;
         // wait for that child's correlated restore instead of interrupting it.
         if self.child_ready && !self.child_exiting {
-            let sent = self.send(if interrupt { b"\x03" } else { b"Q\n" }).await;
+            let quit = if self.curl_receiver {
+                format!("Q:{}\n", self.session)
+            } else {
+                "Q\n".into()
+            };
+            let sent = self
+                .send(if interrupt { b"\x03" } else { quit.as_bytes() })
+                .await;
             if self.child_restored {
                 return Ok(());
             }
@@ -345,7 +401,7 @@ fn fragment_cost(part: &Fragment) -> usize {
 
 pub(super) async fn run(
     lease: terminal::TerminalLease,
-    command: &str,
+    operation: Operation<'_>,
     timeout_ms: Option<u64>,
     cancellation: CancellationToken,
     max_output_bytes: usize,
@@ -353,7 +409,7 @@ pub(super) async fn run(
     let mut lease = lease;
     let (result, restoration, timing) = run_report_borrowed(
         &mut lease,
-        command,
+        operation,
         timeout_ms,
         cancellation,
         max_output_bytes,
@@ -374,7 +430,7 @@ pub(super) async fn run(
 /// claim. Callers must stop after restoration fails, and release the claim.
 pub(super) async fn run_report_borrowed(
     lease: &mut terminal::TerminalLease,
-    command: &str,
+    operation: Operation<'_>,
     timeout_ms: Option<u64>,
     cancellation: CancellationToken,
     max_output_bytes: usize,
@@ -384,13 +440,37 @@ pub(super) async fn run_report_borrowed(
     TerminalOperationTiming,
 ) {
     let mut driver = Driver::new(lease, timeout_ms);
+    if let Operation::Curl(request) | Operation::Probe(request) = operation {
+        driver.curl_receiver = true;
+        driver.session = request.id.simple().to_string();
+    }
     let parent = driver.lease.parent.clone();
     let overflow = driver.lease.overflow.clone();
     if cancellation.is_cancelled() || *parent.borrow() {
         return (Err("SSH_TERMINAL_CANCELLED"), Ok(()), driver.timing);
     }
     let result = await_result(
-        driver.execute(command, max_output_bytes, &cancellation),
+        async {
+            match operation {
+                Operation::Command(command) => {
+                    driver
+                        .execute(command, max_output_bytes, &cancellation)
+                        .await
+                }
+                Operation::Curl(request) | Operation::Probe(request) => {
+                    driver
+                        .curl_input(
+                            request,
+                            matches!(operation, Operation::Probe(_)),
+                            &cancellation,
+                        )
+                        .await?;
+                    driver
+                        .receive(&request.id.simple().to_string(), max_output_bytes)
+                        .await
+                }
+            }
+        },
         &cancellation,
         parent,
         overflow,
@@ -400,6 +480,9 @@ pub(super) async fn run_report_borrowed(
     let restoring = Instant::now();
     let restoration = driver.restore(result.is_err()).await;
     driver.timing.restore_ms = restoring.elapsed().as_millis();
+    if result.is_err() || restoration.is_err() {
+        driver.lease.curl_context = None;
+    }
     if restoration.is_ok() {
         driver.lease.mark_clean();
     }

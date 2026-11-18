@@ -1,5 +1,7 @@
 # 终端 curl 输入确认与中断兼容修复
 
+后续协议、旧版回归和现场验收见[小请求耗时记录](bastion-curl-latency-2026-11-18.md)。
+
 ## 新现场证据
 
 上一轮新包的现场截图为 `SSH_TERMINAL_BEGIN_TIMEOUT`，随后

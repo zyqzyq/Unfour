@@ -163,10 +163,9 @@ try:
                 transfer = [call for call in argv if '--version' not in call]
                 assert len(transfer) == 1 and '--config' in transfer[0]
                 if scenario != 'text-at':
-                    assert sum('--version' in call for call in argv) == 1, 'redundant curl preflight'
+                    assert sum('--version' in call for call in argv) == (2 if label == 'modern' else 1)
                 assert ('--http1.1' in transfer[0]) == (label == 'modern')
-                timeout = transfer[0][transfer[0].index('--max-time')+1]
-                assert timeout == '20', 'production finite timeout missing'
+                assert 'max-time = 20\n' in (directory/'config.txt').read_text(encoding='utf-8'), 'production finite timeout missing'
                 assert transfer[0][transfer[0].index('--proxy')+1] == ''
                 assert transfer[0][transfer[0].index('--noproxy')+1] == '*'
             results.append({'case':name,'result':'EXPECTED_REJECTION' if rejected else 'PASS',

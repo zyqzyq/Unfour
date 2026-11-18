@@ -1,5 +1,6 @@
 // Actual-EXE checks using only public UI actions and a fixed synthetic SSH fixture.
 import assert from "node:assert/strict";
+import { measureCurlClick } from "./measure-curl-click.mjs";
 import { expect } from "@playwright/test";
 
 const markCount = (received, marker) => received.filter((line) => line === marker).length;
@@ -121,6 +122,9 @@ export async function verifyTerminalCurlApi(page, received, terminalLabel, scree
   await route.getByRole("button", { name: /^(Apply|应用)$/ }).click();
   const send = page.getByRole("button", { name: /^(Send|发送)$/ }).first();
   const confirm = page.getByRole("checkbox", { name: /For this send|本次发送前/ });
+  if (process.env.UNFOUR_BASTION_QA_CLICK_TIMING) {
+    return measureCurlClick(page, { url, send, confirm, received });
+  }
   const cases = [
     { path: "json", marker: "FIXTURE_CURL_RESPONSE 200", status: 200 },
     { path: "error", marker: "FIXTURE_CURL_RESPONSE 500", status: 500 },

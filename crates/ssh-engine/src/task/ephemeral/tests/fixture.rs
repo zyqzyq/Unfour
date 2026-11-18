@@ -41,6 +41,8 @@ pub(super) struct State {
     pub(super) terminal_raw_corrupt_end_total: bool,
     pub(super) terminal_raw_corrupt_end_ack: bool,
     pub(super) terminal_channel_messages_drained: usize,
+    pub(super) terminal_no_digest: bool,
+    pub(super) terminal_context: Option<char>,
     pub(super) terminal_curl_code: Option<i32>,
     pub(super) terminal_transport_code: Option<i32>,
     pub(super) terminal_transport_corrupt_output: bool,
@@ -129,8 +131,14 @@ impl russh::server::Handler for Server {
                 }
             }
             let delay = self.state.lock().unwrap().terminal_line_delay;
-            if let Some(delay) = delay.filter(|_| data.ends_with(b"\n")) {
-                tokio::time::sleep(delay).await;
+            if let Some(delay) = delay {
+                for part in data.split_inclusive(|byte| *byte == b'\n') {
+                    if part.ends_with(b"\n") {
+                        tokio::time::sleep(delay).await;
+                    }
+                    self.terminal.feed(id, part, session, &self.state)?;
+                }
+                return Ok(());
             }
             return self.terminal.feed(id, data, session, &self.state);
         }

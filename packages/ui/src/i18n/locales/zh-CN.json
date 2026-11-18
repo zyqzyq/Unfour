@@ -824,6 +824,10 @@
       "metrics": {
         "prepare": "终端准备",
         "input": "输入传输（含确认）",
+        "inputFrame": "请求帧大小",
+        "inputMode": "上传方式",
+        "burst": "整帧校验",
+        "confirmed": "逐行确认",
         "acks": "输入确认次数",
         "ackWait": "等待输入确认",
         "executionAndOutput": "远端执行与回传",

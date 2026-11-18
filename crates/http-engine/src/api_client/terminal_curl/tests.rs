@@ -17,25 +17,50 @@ fn prepared() -> PreparedTerminalCurl {
 #[test]
 fn terminal_timeout_is_bounded_and_shared_with_remote_curl() {
     for (requested, expected, option) in [
-        (None, 30_000, "--max-time 30 --config -"),
-        (Some(0), 30_000, "--max-time 30 --config -"),
-        (Some(1), 1, "--max-time 1 --config -"),
-        (Some(1_234), 1_234, "--max-time 2 --config -"),
-        (Some(60_000), 60_000, "--max-time 60 --config -"),
+        (None, 30_000, "max-time = 30\n"),
+        (Some(0), 30_000, "max-time = 30\n"),
+        (Some(1), 1, "max-time = 1\n"),
+        (Some(1_234), 1_234, "max-time = 2\n"),
+        (Some(60_000), 60_000, "max-time = 60\n"),
     ] {
         let mut request = input();
         request.timeout_ms = requested;
         let prepared = prepare_terminal_curl(request, &[]).unwrap();
         assert_eq!(prepared.timeout_ms(), Some(expected));
         assert_eq!(prepared.executed.timeout_ms, Some(expected));
-        assert!(prepared.command.contains(option));
-        assert!(prepared.command.contains("--retry 0"));
+        assert!(prepared.request.config.contains(option));
+        assert!(prepared.request.shell_fixture().contains("--retry 0"));
     }
     let mut request = input();
     request.timeout_ms = Some(unfour_core::models::MAX_API_TIMEOUT_MS + 1);
     assert_eq!(
         code(prepare_terminal_curl(request, &[]).err().unwrap()),
         "SSH_TERMINAL_HTTP_UNSUPPORTED_REQUEST"
+    );
+}
+
+#[test]
+fn preserves_exact_legacy_encoded_config_limit() {
+    let mut request = input();
+    request.body_kind = "text".into();
+    request.body = Some("x".into());
+    let prepared = prepare_terminal_curl(request.clone(), &[]).unwrap();
+    let fixed = prepared
+        .request
+        .config
+        .split_inclusive('\n')
+        .filter(|line| !line.starts_with("max-filesize = ") && !line.starts_with("max-time = "))
+        .map(str::len)
+        .sum::<usize>()
+        - 1;
+    let old_metadata = format!("write-out = \"\\nUNFOUR_CURL_RESULT_{}:%{{http_code}}:%{{size_download}}:%{{time_starttransfer}}:%{{time_total}}\\n\"\n", prepared.request.id.simple());
+    let boundary = MAX_REQUEST_BYTES - fixed - old_metadata.len();
+    request.body = Some("x".repeat(boundary));
+    assert!(prepare_terminal_curl(request.clone(), &[]).is_ok());
+    request.body.as_mut().unwrap().push('x');
+    assert_eq!(
+        code(prepare_terminal_curl(request, &[]).err().unwrap()),
+        "SSH_TERMINAL_HTTP_REQUEST_TOO_LARGE"
     );
 }
 
@@ -56,7 +81,7 @@ fn wire_with_trailers(
     out.extend_from_slice(
         format!(
             "\nUNFOUR_CURL_RESULT_{}:{status}:{}:0.123456:0.200\n",
-            prepared.nonce,
+            prepared.request.id.simple(),
             body.len()
         )
         .as_bytes(),
@@ -83,11 +108,7 @@ fn quoted_config_keeps_shell_and_curl_options_inside_values() {
         enabled: true,
     });
     let prepared = prepare_terminal_curl(request, &[]).unwrap();
-    let lines: Vec<_> = prepared.command.lines().collect();
-    assert!(lines[0].contains(
-        "case $(command -v printf):$(LC_ALL=C command -V printf 2>/dev/null) in printf:*builtin*) ;; *) exit 126;; esac;"
-    ));
-    assert!(!lines[0].contains("synthetic-token"));
+    let lines: Vec<_> = prepared.request.config.lines().collect();
     assert!(lines
         .iter()
         .any(|line| line.starts_with("data-binary = \"") && line.contains("\\n--output /nope")));
@@ -100,7 +121,7 @@ fn quoted_config_keeps_shell_and_curl_options_inside_values() {
         "--noproxy '*'",
         "header = \"accept-encoding: identity\"",
     ] {
-        assert!(prepared.command.contains(required));
+        assert!(prepared.request.shell_fixture().contains(required));
     }
     assert!(!prepared
         .snapshot
@@ -113,21 +134,26 @@ fn quoted_config_keeps_shell_and_curl_options_inside_values() {
 fn legacy_json_uses_literal_bytes_and_at_prefixed_text_never_becomes_a_file_read() {
     let prepared = prepared();
     assert!(prepared
-        .command
+        .request
+        .config
         .contains("\ndata-binary = \"{\\\"input\\\":"));
-    assert!(!prepared.command.contains("data-raw ="));
+    assert!(!prepared.request.config.contains("data-raw ="));
     assert!(prepared
-        .command
+        .request
+        .shell_fixture()
         .contains("--version </dev/null 2>/dev/null) || exit 125;"));
     for body in ["@/private/file", "@-", "@", "@file\nwith newline"] {
         let mut request = input();
         request.body_kind = "text".into();
         request.body = Some(body.into());
         let prepared = prepare_terminal_curl(request, &[]).unwrap();
-        assert!(prepared.command.contains("--data-raw '{}' --version"));
-        assert!(prepared.command.contains("|| exit 124; command printf"));
-        assert!(prepared.command.contains("\ndata-raw = \"@"));
-        assert!(!prepared.command.contains("\ndata-binary ="));
+        assert!(prepared
+            .request
+            .shell_fixture()
+            .contains("--data-raw '{}' --version"));
+        assert!(prepared.request.needs_data_raw);
+        assert!(prepared.request.config.contains("\ndata-raw = \"@"));
+        assert!(!prepared.request.config.contains("\ndata-binary ="));
         // History snapshots redact arbitrary text; the execution config above
         // is the wire source, verified byte-for-byte by loopback integration QA.
         assert_eq!(prepared.executed.body.as_deref(), Some("<redacted>"));
@@ -141,7 +167,7 @@ fn chinese_large_request_and_response_preserve_the_entire_payload() {
     let mut input = input();
     input.body = Some(body.clone());
     let prepared = prepare_terminal_curl(input, &[]).unwrap();
-    assert!(prepared.command.len() > 4096);
+    assert!(prepared.request.config.len() > 4096);
     let response = response::parse(
         &prepared,
         &wire(
@@ -363,10 +389,10 @@ fn head_and_empty_custom_headers_have_explicit_semantics() {
         enabled: true,
     });
     let prepared = prepare_terminal_curl(request, &[]).unwrap();
-    assert!(prepared.command.contains("\nhead\n"));
-    assert!(!prepared.command.contains("data-raw ="));
-    assert!(!prepared.command.contains("data-binary ="));
-    assert!(prepared.command.contains("header = \"x-empty;\""));
+    assert!(prepared.request.config.contains("\nhead\n"));
+    assert!(!prepared.request.config.contains("data-raw ="));
+    assert!(!prepared.request.config.contains("data-binary ="));
+    assert!(prepared.request.config.contains("header = \"x-empty;\""));
     let response = response::parse(
         &prepared,
         &wire(

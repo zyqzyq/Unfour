@@ -42,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "small-json" => ("json", serde_json::json!({"input":"x".repeat(118)}).to_string()),
         "text-at" => ("text", "@/UNFOUR_CURL_QA_MUST_NOT_READ\r\n中文 ' quote $(false) `false`".into()),
         "text-crlf" => ("text", "line1\r\n中文 ' quote $(false) `false`\nline3\tend".into()),
-        "empty" => ("text", String::new()),
+        "empty" | "get" | "long-header" => ("text", String::new()),
         _ => return Err("unknown synthetic scenario".into()),
     };
     let emit_only = match args.get(3).map(String::as_str) {
@@ -52,8 +52,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     std::fs::write(qa.join("request-body.bin"), body.as_bytes())?;
     let input: ApiRequestInput = serde_json::from_value(serde_json::json!({
-        "workspaceId":"terminal-curl-qa", "method":"POST", "url":url.as_str(),
-        "headers":[{"key":"Authorization","value":"Bearer UNFOUR_CURL_QA_SECRET","enabled":true}],
+        "workspaceId":"terminal-curl-qa", "method":if matches!(scenario, "get" | "long-header") { "GET" } else { "POST" }, "url":url.as_str(),
+        "headers":[{"key":"Authorization","value":format!("Bearer UNFOUR_CURL_QA_SECRET{}", if scenario == "long-header" { "x".repeat(1200) } else { String::new() }),"enabled":true}],
         "query":[{"key":"q","value":"中文 ' $() &","enabled":true}],
         "bodyKind":body_kind, "body":body, "timeoutMs":20000
     }))?;
@@ -61,7 +61,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Publish only after the complete command has been written; the external
     // PTY harness polls for command.sh and must never observe a partial file.
     let pending_command = qa.join("command.sh.pending");
-    std::fs::write(&pending_command, prepared.command())?;
+    std::fs::write(qa.join("config.txt"), &prepared.request.config)?;
+    std::fs::write(
+        qa.join("nonce.txt"),
+        prepared.request.id.simple().to_string(),
+    )?;
+    std::fs::write(&pending_command, prepared.request.shell_fixture())?;
     std::fs::rename(pending_command, qa.join("command.sh"))?;
     if emit_only {
         return Ok(());

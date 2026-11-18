@@ -55,8 +55,8 @@ impl CommandBus {
         let prepared = unfour_http_engine::prepare_terminal_curl(input, secrets)?;
         let started = std::time::Instant::now();
         let result = operation
-            .run(
-                prepared.command(),
+            .run_curl(
+                &prepared.request,
                 prepared.timeout_ms(),
                 cancellation,
                 prepared.max_output_bytes(),

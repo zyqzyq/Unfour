@@ -9,6 +9,8 @@ pub(super) struct Terminal {
     step: Option<String>,
     payload: Vec<u8>,
     raw: bool,
+    curl: bool,
+    burst: bool,
     input_lines: usize,
     input_encoded: usize,
 }
@@ -58,6 +60,9 @@ impl Terminal {
         session: &mut Session,
         state: &Arc<Mutex<State>>,
     ) -> Result<(), russh::Error> {
+        if self.curl && line.is_empty() {
+            return Ok(());
+        }
         if line.starts_with(b" sh -c '")
             && state.lock().unwrap().terminal_login_prompt == Some("SPLIT_STARTUP")
         {
@@ -67,6 +72,52 @@ impl Terminal {
         // Echo all inputs, including payload, to verify that echo cannot act as
         // a control frame or leak into ordinary terminal output.
         session.data(id, [line, b"\r\n"].concat())?;
+        if line.starts_with(b" sh -c '") {
+            self.curl = line.windows(14).any(|s| s == b"UNFOUR_CURL_V4");
+            if self.curl {
+                self.raw = true;
+                self.bootstrapped = true;
+                let sid = std::str::from_utf8(line)
+                    .unwrap()
+                    .split_whitespace()
+                    .last()
+                    .unwrap();
+                uuid::Uuid::parse_str(sid).unwrap();
+                self.session = Some(sid.to_owned());
+                return frame(id, &format!("{sid}:LOAD"), session);
+            }
+        } else if self.curl && self.bootstrapped {
+            if line == b"+" {
+                return frame(
+                    id,
+                    &format!("{}:PULSE", self.session.as_ref().unwrap()),
+                    session,
+                );
+            }
+            let script = std::str::from_utf8(line).unwrap();
+            let sid = self.session.clone().unwrap();
+            self.bootstrapped = false;
+            self.step = Some(sid.clone());
+            self.input_lines = 0;
+            self.input_encoded = 0;
+            if let Some(code) = state.lock().unwrap().terminal_curl_code {
+                frame(id, &format!("{sid}:PREP:{code}"), session)?;
+                return self.restore(id, session);
+            }
+            let state = state.lock().unwrap();
+            let ctx = if state.terminal_no_digest {
+                "-".into()
+            } else {
+                state.terminal_context.unwrap_or('a').to_string().repeat(64)
+            };
+            let fmt = if state.terminal_octal { "octal" } else { "b64" };
+            self.burst = !state.terminal_octal
+                && !state.terminal_no_digest
+                && (script.contains(&format!("= {ctx} ] && lane=B"))
+                    || script.contains(r#""${#ctx}" = 64"#));
+            let lane = if self.burst { "B" } else { "D" };
+            return frame(id, &format!("{sid}:READY:4:{fmt}:{ctx}:{lane}"), session);
+        }
         if line.starts_with(b" sh -c '") {
             if state.lock().unwrap().terminal_login_prompt == Some("STARTUP") {
                 login_prompt(id, session)?;
@@ -144,12 +195,14 @@ impl Terminal {
                 session,
             )?;
         } else if self.session.is_some() {
-            if line == b"Q" {
+            if line == b"Q"
+                || (self.curl && line == format!("Q:{}", self.session.as_ref().unwrap()).as_bytes())
+            {
                 if !state.lock().unwrap().terminal_ignore_restore {
                     self.restore_with_gate(id, session, state)?;
                 }
             } else if let Some(nonce) = self.step.clone() {
-                if line.starts_with(b"E:") {
+                if line.starts_with(b"E:") || (self.curl && line.starts_with(b"F:")) {
                     if self.raw {
                         let (stall, corrupt) = {
                             let mut state = state.lock().unwrap();
@@ -166,9 +219,18 @@ impl Terminal {
                         if stall == Some("INPUT_END") {
                             return Ok(());
                         }
-                        let expected = format!("E:{}:{}", self.input_lines, self.input_encoded);
+                        let totals = format!("{}:{}", self.input_lines, self.input_encoded);
+                        let expected = if self.curl && self.burst {
+                            use sha2::{Digest, Sha256};
+                            format!("F:{totals}:{:x}", Sha256::digest(&self.payload))
+                        } else {
+                            format!("E:{totals}")
+                        };
                         if corrupt || line != expected.as_bytes() {
                             frame(id, &format!("{nonce}:INPUT_INVALID"), session)?;
+                            if self.curl {
+                                return Ok(());
+                            }
                             return self.restore(id, session);
                         }
                         if stall != Some("INPUT_END_ACK") {
@@ -290,7 +352,14 @@ impl Terminal {
                     frame(id, &format!("{nonce}:END"), session)?;
                     self.step = None;
                 } else {
-                    assert_eq!(line.first(), Some(&b'D'));
+                    assert_eq!(
+                        line.first(),
+                        Some(if self.curl && self.burst {
+                            &b'B'
+                        } else {
+                            &b'D'
+                        })
+                    );
                     assert!(line.len() <= 241);
                     if !self.raw
                         && state.lock().unwrap().terminal_task_drop_line
@@ -330,7 +399,10 @@ impl Terminal {
                             );
                         }
                     }
-                    if !self.raw || state.lock().unwrap().terminal_raw_stall != Some("INPUT_ACK") {
+                    if !(self.curl && self.burst)
+                        && (!self.raw
+                            || state.lock().unwrap().terminal_raw_stall != Some("INPUT_ACK"))
+                    {
                         let index = self.input_lines
                             + usize::from(state.lock().unwrap().terminal_raw_wrong_input_index);
                         input_ack(

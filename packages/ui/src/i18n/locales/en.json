@@ -824,6 +824,10 @@
       "metrics": {
         "prepare": "Terminal preparation",
         "input": "Input transfer (including ACKs)",
+        "inputFrame": "Request frame size",
+        "inputMode": "Upload mode",
+        "burst": "Verified frame",
+        "confirmed": "Confirmed lines",
         "acks": "Input ACK count",
         "ackWait": "Time waiting for input ACKs",
         "executionAndOutput": "Remote execution and output",

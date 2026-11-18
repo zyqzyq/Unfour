@@ -91,6 +91,8 @@ export type ApiClientPreferences = {
 export type TerminalCurlTiming = {
   prepareMs: number;
   inputMs: number;
+  inputWireBytes?: number;
+  inputBurst?: boolean;
   inputAckCount: number;
   inputAckWaitMs: number;
   executionAndOutputMs: number;

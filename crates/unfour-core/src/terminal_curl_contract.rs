@@ -11,3 +11,33 @@ pub const CURL_SETUP: &str = concat!(
     // may use the default. A backport advertising HTTP2/3 still needs the flag.
     "h=--http1.1; case \"$v\" in *HTTP2*|*HTTP3*) ;; 'curl 7.29.'*|'curl 7.3'[0-2].*) h=;; esac; "
 );
+
+pub const HTTP_VERSION_CHECK: &str =
+    "if [ -n \"$h\" ]; then u_c $h --version </dev/null >/dev/null 2>&1 || exit 125; fi; ";
+pub const RAW_BODY_CHECK: &str =
+    "u_c --data-raw '{}' --version </dev/null >/dev/null 2>&1 || exit 124; ";
+pub const TRANSFER: &str = concat!(
+    "command printf '%s\\n' \"$cfg\" | u_c $h --config - --write-out ",
+    "\"\\nUNFOUR_CURL_RESULT_${sid}:%{http_code}:%{size_download}:%{time_starttransfer}:%{time_total}\\n\""
+);
+
+/// Only the random result correlation and fixed preflight choice may be
+/// passed to the bootstrap builder. The config stays in the post-READY frame.
+pub struct TerminalCurlRequest {
+    pub id: uuid::Uuid,
+    pub config: String,
+    pub needs_data_raw: bool,
+}
+
+impl TerminalCurlRequest {
+    /// Standalone QA uses the same preflight and transfer code as the PTY.
+    pub fn shell_fixture(&self) -> String {
+        let raw = if self.needs_data_raw {
+            RAW_BODY_CHECK
+        } else {
+            ""
+        };
+        let cfg = self.config.replace('\'', "'\\''");
+        format!("{CURL_SETUP}{HTTP_VERSION_CHECK}{raw}set +avx; unset cfg; sid={}; cfg='{cfg}'; {TRANSFER}\n", self.id.simple())
+    }
+}

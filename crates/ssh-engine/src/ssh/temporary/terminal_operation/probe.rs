@@ -1,15 +1,7 @@
 use super::*;
 use tokio::sync::watch;
-use unfour_core::terminal_curl_contract::CURL_SETUP;
+use unfour_core::terminal_curl_contract::TerminalCurlRequest;
 
-// No HTTP request and no filesystem mutation. --version causes curl to validate
-// its options without performing a transfer. All output is fixed/sanitized.
-fn curl_command() -> String {
-    format!(
-        "{CURL_SETUP}if [ -n \"$h\" ]; then u_c $h --version >/dev/null 2>&1 || exit 125; fi; command printf UNFOUR_CURL_TOOLS; exit 0"
-    )
-}
-const EXPECTED: &[u8] = b"UNFOUR_CURL_TOOLS";
 const TRANSPORT_SUFFIX: &[u8] = b"\n\0\x01\x1e\x1f\x7f\xff";
 
 fn transport_payload() -> (String, Vec<u8>) {
@@ -46,7 +38,7 @@ pub(in crate::ssh) async fn run(
     let (command, expected) = transport_payload();
     let (passed, mut restored) = observe(
         &mut lease,
-        &command,
+        Operation::Command(&command),
         &expected,
         23,
         "transport-roundtrip",
@@ -64,10 +56,18 @@ pub(in crate::ssh) async fn run(
         && !*cancelled.borrow()
         && cancelled.has_changed().is_ok()
     {
-        let (_, curl_restored) = observe(
+        // One fixed capacity sample. Echo only synthetic bytes and never run HTTP.
+        let sample = TerminalCurlRequest {
+            id: Uuid::new_v4(),
+            config: (0..driver::SAMPLE_BYTES)
+                .map(|i| char::from(b'A' + ((i + i / 83) % 26) as u8))
+                .collect(),
+            needs_data_raw: false,
+        };
+        let (matched, curl_restored) = observe(
             &mut lease,
-            &curl_command(),
-            EXPECTED,
+            Operation::Probe(&sample),
+            sample.config.as_bytes(),
             0,
             "curl-tools",
             "curl-recovery",
@@ -75,6 +75,9 @@ pub(in crate::ssh) async fn run(
             &mut checks,
         )
         .await;
+        if !matched || !curl_restored {
+            lease.curl_context = None;
+        }
         restored = curl_restored;
     }
     lease.release(restored);
@@ -84,7 +87,7 @@ pub(in crate::ssh) async fn run(
 
 async fn observe(
     lease: &mut terminal::TerminalLease,
-    command: &str,
+    operation: Operation<'_>,
     expected: &[u8],
     expected_exit: u32,
     id: &str,
@@ -93,7 +96,7 @@ async fn observe(
     checks: &mut Vec<TemporaryProbeCheck>,
 ) -> (bool, bool) {
     let (result, restoration, _) =
-        driver::run_report_borrowed(lease, command, Some(30_000), cancellation, 4096).await;
+        driver::run_report_borrowed(lease, operation, Some(30_000), cancellation, 4096).await;
     let (code, actual) = match result {
         Ok((stdout, exit_code)) => {
             let code = match (id, exit_code) {
@@ -111,6 +114,8 @@ async fn observe(
                 "SSH_TERMINAL_BASE64_MISSING" | "SSH_TERMINAL_PRINTF_UNSUPPORTED" => {
                     "TERMINAL_TOOLS_MISSING"
                 }
+                "SSH_TERMINAL_HTTP_CURL_UNAVAILABLE" => "CURL_MISSING",
+                "SSH_TERMINAL_HTTP_CURL_UNSUPPORTED" => "CURL_OPTIONS_UNSUPPORTED",
                 "SSH_TERMINAL_CANCELLED" => "CANCELLED",
                 "SSH_TERMINAL_TIMEOUT" => "TIMEOUT",
                 "SSH_TERMINAL_STARTUP_TIMEOUT"

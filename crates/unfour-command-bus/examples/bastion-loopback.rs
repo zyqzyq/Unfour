@@ -253,7 +253,9 @@ impl russh::server::Handler for Fixture {
             assert!(self.bootstrap.len() < 4096);
             if self.bootstrap.ends_with(b"\n") {
                 let bytes = std::mem::take(&mut self.bootstrap);
-                return if bytes.windows(13).any(|s| s == b"UNFOUR_RAW_V3") {
+                return if bytes.windows(13).any(|s| s == b"UNFOUR_RAW_V3")
+                    || bytes.windows(14).any(|s| s == b"UNFOUR_CURL_V4")
+                {
                     self.raw_terminal.feed(channel, &bytes, session)
                 } else {
                     self.terminal.feed(channel, &bytes, session)

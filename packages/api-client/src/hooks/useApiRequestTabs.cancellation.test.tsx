@@ -130,3 +130,24 @@ it("clears a rejected send even if the API surface unmounted", async () => {
   expect(useApiRequestTabStore.getState().byWorkspace.w.tabs[0].sendError).toContain("startup confirmation");
   expect(useApiRequestTabStore.getState().byWorkspace.w.tabs[0].sendError).not.toContain("untrusted detail");
 });
+
+it("keeps a terminal request addressable after leaving and reopening the API page", async () => {
+  const response = deferred<RequestExecutionResult>();
+  vi.mocked(sendApiRequest).mockReturnValue(response.promise);
+  vi.mocked(cancelApiRequest).mockResolvedValue(true);
+  const hook = await setup(true);
+  expect(sendApiRequest).toHaveBeenCalledTimes(0);
+  await act(async () => hook.result.current.sendTab(hook.result.current.activeTab!));
+  const executionId = hook.result.current.activeTab!.executionId;
+  hook.unmount();
+  expect(cancelApiRequest).toHaveBeenCalledTimes(0);
+  const reopened = renderHook(() => useApiRequestTabs("w"), {
+    wrapper: ({ children }: { children: ReactNode }) => <QueryClientProvider client={hook.client}>{children}</QueryClientProvider>,
+  });
+  expect(reopened.result.current.activeTab).toMatchObject({ executionId, sending: true });
+  await act(async () => reopened.result.current.cancelTab(reopened.result.current.activeTab!));
+  expect(cancelApiRequest).toHaveBeenCalledTimes(1);
+  await act(async () => response.resolve(ended));
+  await waitFor(() => expect(reopened.result.current.activeTab!.sending).toBe(false));
+  expect(sendApiRequest).toHaveBeenCalledTimes(1);
+});

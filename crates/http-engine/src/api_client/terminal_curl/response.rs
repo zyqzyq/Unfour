@@ -19,7 +19,7 @@ pub(super) fn parse(
     if stdout.len() > MAX_OUTPUT_BYTES {
         return Err(failure("SSH_TERMINAL_HTTP_RESPONSE_TOO_LARGE"));
     }
-    let prefix = format!("\nUNFOUR_CURL_RESULT_{}:", prepared.nonce);
+    let prefix = format!("\nUNFOUR_CURL_RESULT_{}:", prepared.request.id.simple());
     let at = stdout
         .windows(prefix.len())
         .rposition(|part| part == prefix.as_bytes())

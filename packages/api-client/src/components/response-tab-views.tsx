@@ -389,6 +389,10 @@ export function ResponseTiming({ response }: { response: ApiResponse | null }) {
           {[
             [t("api.response.metrics.prepare"), ms(timing.prepareMs)],
             [t("api.response.metrics.input"), ms(timing.inputMs)],
+            ...(timing.inputWireBytes === undefined ? [] : [
+              [t("api.response.metrics.inputFrame"), `${timing.inputWireBytes} B`],
+              [t("api.response.metrics.inputMode"), t(timing.inputBurst ? "api.response.metrics.burst" : "api.response.metrics.confirmed")],
+            ]),
             [t("api.response.metrics.acks"), String(timing.inputAckCount)],
             [t("api.response.metrics.ackWait"), ms(timing.inputAckWaitMs)],
             [t("api.response.metrics.executionAndOutput"), ms(timing.executionAndOutputMs)],

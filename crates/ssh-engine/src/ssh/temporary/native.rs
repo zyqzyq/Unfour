@@ -71,6 +71,8 @@ impl SshService {
             Ok(native) => {
                 let accepted = if let Ok(mut queue) = self.temporary.0.lock() {
                     if let Ok(entry) = queue.owned(&workspace, &id) {
+                        entry.curl_context = None;
+                        entry.short_curl_setup = false;
                         entry.native = Some(native.clone());
                         entry.summary.status = "connected".into();
                         entry.summary.fingerprint = None;

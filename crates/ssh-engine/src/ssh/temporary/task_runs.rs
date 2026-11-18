@@ -47,7 +47,9 @@ impl SshService {
             pending: entry.pending_forwards.clone(),
         };
         let terminal = if terminal_mode {
-            Some(super::terminal::claim(self, entry, workspace, handle)?)
+            let mut lease = super::terminal::claim(self, entry, workspace, handle)?;
+            lease.curl_context = None;
+            Some(lease)
         } else {
             None
         };

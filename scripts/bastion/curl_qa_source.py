@@ -21,21 +21,7 @@ def rust_string_constant(source, name):
 
 
 def curl_probe_command(root):
-    source = (root / 'crates/ssh-engine/src/ssh/temporary/terminal_operation/probe.rs').read_text(encoding='utf-8')
-    literal = r'"(?:[^"\\]|\\.)*"'
-    match = re.search(r'fn curl_command\(\)\s*->\s*String\s*\{\s*format!\(\s*(' + literal + ')', source)
-    if not match:
-        raise ValueError('Production curl_command format string not found')
-    template = json.loads(match.group(1))
     contract = (root / 'crates/unfour-core/src/terminal_curl_contract.rs').read_text(encoding='utf-8')
-    used = []
-    def expand(match):
-        name = match.group(1)
-        if name not in {'CURL_SETUP'}:
-            raise ValueError(f'Unexpected production probe substitution: {name}')
-        used.append(name)
-        return rust_string_constant(contract, name)
-    command = re.sub(r'\{([A-Z][A-Z0-9_]*)\}', expand, template)
-    if set(used) != {'CURL_SETUP'}:
-        raise ValueError('Production probe contract substitutions changed')
-    return command
+    return (rust_string_constant(contract, 'CURL_SETUP') +
+            rust_string_constant(contract, 'HTTP_VERSION_CHECK') +
+            'command printf UNFOUR_CURL_TOOLS; exit 0')

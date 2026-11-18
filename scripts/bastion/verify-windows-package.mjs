@@ -100,8 +100,9 @@ async function rejectWithDiagnostic(argv, expectedCount) {
   rejected.kill();
   await exited;
 }
-try {
+async function verify() {
   const fixture = launch("bastion-loopback.exe", []);
+  if (process.env.UNFOUR_BASTION_QA_CLICK_TIMING) fixture.stderr.pipe(process.stderr);
   createInterface({ input: fixture.stdout }).on("line", (line) => received.push(line));
   const ready = await waitFor(() => received.find((line) => line.startsWith("FIXTURE_READY ")), "fixture did not start");
   const [, port] = ready.split(" ");
@@ -125,6 +126,15 @@ try {
   browser = await chromium.connectOverCDP("http://127.0.0.1:" + debugPort);
   const page = await waitFor(() => browser.contexts().flatMap((c) => c.pages()).find((p) => /^https?:\/\/tauri\.localhost\//.test(p.url())), "packaged application page did not load");
   page.setDefaultTimeout(12000);
+  if (process.env.UNFOUR_BASTION_QA_CLICK_TIMING) {
+    const terminalLabel = label + " · 127.0.0.1:" + port;
+    await expect(page.getByRole("tab", { name: terminalLabel, exact: true })).toBeVisible();
+    await expect(page.locator(".xterm-rows:visible").last()).toContainText("A2 fixture ready");
+    await verifyTerminalCurlApi(page, received, terminalLabel);
+    await page.evaluate(() => window.__TAURI_INTERNALS__.invoke("plugin:window|close", { label: "main" })).catch(() => {});
+    await waitFor(() => primary.exitCode !== null, "test window did not close");
+    return;
+  }
   for (let i = 0; i < launches.length; i++) {
     let sessionStart = initialSessionStart;
     if (i > 0) {
@@ -241,6 +251,9 @@ try {
     }
   }
   console.log("PASS: " + mode + " cold + warm + cross-client warm, " + createdTasks + " saved definitions; zero SSH/trust/history/task-run/runtime-activity/outbox rows or remembered targets; no runtime sentinels in DB/logs/WebView profile");
+}
+try {
+  await verify();
 } finally {
   await browser?.close().catch(() => {});
   for (const child of children) if (child.exitCode === null && !child.killed) child.kill();

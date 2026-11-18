@@ -135,6 +135,10 @@ pub struct ApiResponse {
 pub struct TerminalOperationTiming {
     pub prepare_ms: u128,
     pub input_ms: u128,
+    #[serde(default)]
+    pub input_wire_bytes: usize,
+    #[serde(default)]
+    pub input_burst: bool,
     pub input_ack_count: usize,
     pub input_ack_wait_ms: u128,
     pub execution_and_output_ms: u128,

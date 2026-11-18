@@ -2,6 +2,7 @@
 //! This is an internal service capability, not an arbitrary-command adapter.
 use super::*;
 use tokio_util::sync::CancellationToken;
+use unfour_core::terminal_curl_contract::TerminalCurlRequest;
 
 #[cfg(feature = "ssh-native")]
 mod driver;
@@ -24,6 +25,25 @@ pub struct TerminalOperationResult {
 pub struct TemporaryTerminalOperation {
     #[cfg(feature = "ssh-native")]
     lease: terminal::TerminalLease,
+}
+
+#[derive(Clone, Copy)]
+enum Operation<'a> {
+    Command(&'a str),
+    Curl(&'a TerminalCurlRequest),
+    #[cfg(feature = "ssh-native")]
+    Probe(&'a TerminalCurlRequest),
+}
+
+impl Operation<'_> {
+    fn payload(&self) -> &str {
+        match self {
+            Self::Command(command) => command,
+            Self::Curl(request) => &request.config,
+            #[cfg(feature = "ssh-native")]
+            Self::Probe(sample) => &sample.config,
+        }
+    }
 }
 
 impl SshService {
@@ -56,14 +76,32 @@ impl SshService {
             {
                 return Err(failure("SSH_TERMINAL_BUSY"));
             }
-            terminal::claim(self, entry, workspace, handle)
-                .map(|lease| TemporaryTerminalOperation { lease })
-                .map_err(operation_error)
+            let lease = terminal::claim(self, entry, workspace, handle).map_err(operation_error)?;
+            if let Some(owner) = &mut entry.terminal {
+                owner.api_request = true;
+            }
+            Ok(TemporaryTerminalOperation { lease })
         }
     }
 }
 
 impl TemporaryTerminalOperation {
+    pub async fn run_curl(
+        self,
+        request: &TerminalCurlRequest,
+        timeout_ms: Option<u64>,
+        cancellation: CancellationToken,
+        max_output_bytes: usize,
+    ) -> AppResult<TerminalOperationResult> {
+        self.run_inner(
+            Operation::Curl(request),
+            timeout_ms,
+            cancellation,
+            max_output_bytes,
+        )
+        .await
+    }
+
     pub async fn run(
         self,
         command: &str,
@@ -71,6 +109,23 @@ impl TemporaryTerminalOperation {
         cancellation: CancellationToken,
         max_output_bytes: usize,
     ) -> AppResult<TerminalOperationResult> {
+        self.run_inner(
+            Operation::Command(command),
+            timeout_ms,
+            cancellation,
+            max_output_bytes,
+        )
+        .await
+    }
+
+    async fn run_inner(
+        self,
+        operation: Operation<'_>,
+        timeout_ms: Option<u64>,
+        cancellation: CancellationToken,
+        max_output_bytes: usize,
+    ) -> AppResult<TerminalOperationResult> {
+        let command = operation.payload();
         if command.is_empty() || command.contains('\0') || command.len() > 4 * 1024 * 1024 {
             return Err(failure("SSH_TERMINAL_INPUT_LIMIT"));
         }
@@ -85,7 +140,7 @@ impl TemporaryTerminalOperation {
         #[cfg(feature = "ssh-native")]
         driver::run(
             self.lease,
-            command,
+            operation,
             timeout_ms,
             cancellation,
             max_output_bytes,

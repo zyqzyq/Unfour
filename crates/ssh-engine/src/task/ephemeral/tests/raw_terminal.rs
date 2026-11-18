@@ -1,5 +1,7 @@
 use super::*;
 use tokio_util::sync::CancellationToken;
+#[path = "curl_frames.rs"]
+mod curl_frames;
 #[path = "raw_terminal_failures.rs"]
 mod failures;
 #[path = "raw_terminal_input.rs"]

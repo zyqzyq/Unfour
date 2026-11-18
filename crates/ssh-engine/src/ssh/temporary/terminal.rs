@@ -4,6 +4,7 @@ use super::*;
 use tokio::sync::{mpsc, watch, OwnedMutexGuard, OwnedSemaphorePermit, Semaphore};
 
 pub(super) struct TerminalOwner {
+    pub(super) api_request: bool,
     id: String,
     output: mpsc::UnboundedSender<TerminalChunk>,
     budget: Arc<Semaphore>,
@@ -23,6 +24,8 @@ pub(in crate::ssh) struct TerminalLease {
     gate: Option<OwnedMutexGuard<()>>,
     dirty: bool,
     completed: bool,
+    pub short_curl_setup: bool,
+    pub curl_context: Option<String>,
     pub writer: Arc<russh::ChannelWriteHalf<russh::client::Msg>>,
     pub parent: watch::Receiver<bool>,
     pub output: mpsc::UnboundedReceiver<TerminalChunk>,
@@ -67,6 +70,7 @@ impl SshService {
             input_available(entry)?;
             (entry.input_gate.clone(), entry.input_paused.subscribe())
         };
+        let observed = paused.clone();
         let guard = tokio::select! {
             biased;
             _ = async { let _ = paused.wait_for(|paused| *paused).await; } => return Err(failure("SSH_TASK_TERMINAL_BUSY")),
@@ -77,7 +81,14 @@ impl SshService {
             .0
             .lock()
             .map_err(|_| failure("TEMPORARY_UNAVAILABLE"))?;
-        input_available(queue.owned(workspace, handle)?)?;
+        // watch can coalesce true -> false while the waiter is descheduled.
+        // Reject keystrokes crossing even a fully completed claim.
+        if observed.has_changed().unwrap_or(true) {
+            return Err(failure("SSH_TASK_TERMINAL_BUSY"));
+        }
+        let entry = queue.owned(workspace, handle)?;
+        input_available(entry)?;
+        entry.curl_context = None;
         Ok(guard)
     }
 }
@@ -123,6 +134,7 @@ pub(super) fn claim(
     let (overflow, observed) = watch::channel(false);
     let id = Uuid::new_v4().simple().to_string();
     entry.terminal = Some(TerminalOwner {
+        api_request: false,
         id: id.clone(),
         output,
         budget: Arc::new(Semaphore::new(512 * 1024)),
@@ -138,6 +150,8 @@ pub(super) fn claim(
         gate: Some(gate),
         dirty: false,
         completed: false,
+        curl_context: entry.curl_context.take(),
+        short_curl_setup: entry.short_curl_setup,
         writer: native.writer.clone(),
         parent: cancel.subscribe(),
         output: receiver,
@@ -219,6 +233,8 @@ impl TerminalLease {
                 {
                     entry.summary.terminal_task_busy = false;
                     if restored || !self.dirty {
+                        entry.short_curl_setup = self.short_curl_setup;
+                        entry.curl_context = self.curl_context.take();
                         entry.terminal = None;
                         entry.input_paused.send_replace(false);
                     } else {

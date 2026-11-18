@@ -1,6 +1,6 @@
 use super::*;
 use std::fmt::Write;
-use unfour_core::terminal_curl_contract::CURL_SETUP;
+use unfour_core::terminal_curl_contract::TerminalCurlRequest;
 
 pub(super) fn prepare(
     mut input: ApiRequestInput,
@@ -123,18 +123,19 @@ pub(super) fn prepare(
     let executed = execution_snapshot::executed_input(&input, &request);
     runtime_secrets.extend(runtime_request_secret_values(&executed)?);
     let snapshot = execution_snapshot::snapshot(&executed, request.url(), &runtime_secrets)?;
-    let nonce = uuid::Uuid::new_v4().simple().to_string();
     let mut config = String::new();
-    let mut body_check = "";
+    let mut needs_data_raw = false;
     option(&mut config, "url", request.url().as_str())?;
-    let body_limit = if method == Method::HEAD {
+    let fixed_limit_bytes = if method == Method::HEAD {
         config.push_str("head\n");
         // curl checks the advertised resource size even for HEAD. There is
         // no downloaded body here; the driver and parser bound the headers.
-        String::new()
+        0
     } else {
         option(&mut config, "request", method.as_str())?;
-        format!(" --max-filesize {MAX_RESPONSE_BYTES}")
+        let start = config.len();
+        writeln!(config, "max-filesize = {MAX_RESPONSE_BYTES}").unwrap();
+        config.len() - start
     };
     for (key, value) in request.headers() {
         let value = value.to_str().map_err(|_| unsupported())?;
@@ -153,7 +154,7 @@ pub(super) fn prepare(
         // other bodies, but NEVER let data-binary interpret @ as a remote file.
         // Leading-@ text needs data-raw and a strict per-request CLI check.
         let body_option = if body.starts_with('@') {
-            body_check = "u_c --data-raw '{}' --version >/dev/null 2>&1 || exit 124; ";
+            needs_data_raw = true;
             "data-raw"
         } else {
             "data-binary"
@@ -164,29 +165,22 @@ pub(super) fn prepare(
             option(&mut config, "header", "Content-Type:")?;
         }
     }
+    // Keep the historical 512 KiB encoded-config boundary exactly. V3 counted
+    // a 136-byte write-out line (including its fixed-width UUID) and passed
+    // max-filesize and max-time outside the config.
+    if config.len() - fixed_limit_bytes + 136 > MAX_REQUEST_BYTES {
+        return Err(failure("SSH_TERMINAL_HTTP_REQUEST_TOO_LARGE"));
+    }
     // Fractional max-time arrived in 7.32. Round up for curl 7.29 while the
     // local terminal driver still enforces the exact millisecond deadline.
     let timeout_seconds = input.timeout_ms.unwrap().div_ceil(1000);
-    option(
-        &mut config,
-        "write-out",
-        &format!("\nUNFOUR_CURL_RESULT_{nonce}:%{{http_code}}:%{{size_download}}:%{{time_starttransfer}}:%{{time_total}}\n"),
-    )?;
-    if config.len() > MAX_REQUEST_BYTES {
-        return Err(failure("SSH_TERMINAL_HTTP_REQUEST_TOO_LARGE"));
-    }
-    // A large heredoc may be implemented using a temporary file by the remote
-    // shell. Use a verified shell builtin plus pipe instead. Shell quotes and
-    // curl config quotes are separate encodings; request values never become
-    // syntax or arguments of an external process. Fail before sending any
-    // payload to printf if the shell cannot establish it is a builtin.
-    let quoted = config.replace('\'', "'\\''");
-    let command = format!(
-        "{CURL_SETUP}{body_check}command printf '%s' '{quoted}' | u_c $h{body_limit} --max-time {timeout_seconds} --config - 2>/dev/null\n"
-    );
+    writeln!(config, "max-time = {timeout_seconds}").unwrap();
     Ok(PreparedTerminalCurl {
-        command,
-        nonce,
+        request: TerminalCurlRequest {
+            id: uuid::Uuid::new_v4(),
+            config,
+            needs_data_raw,
+        },
         executed,
         secrets: runtime_secrets,
         snapshot,

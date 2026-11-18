@@ -168,6 +168,10 @@ struct Entry {
     #[cfg(feature = "ssh-native")]
     terminal: Option<terminal::TerminalOwner>,
     #[cfg(feature = "ssh-native")]
+    curl_context: Option<String>,
+    #[cfg(feature = "ssh-native")]
+    short_curl_setup: bool,
+    #[cfg(feature = "ssh-native")]
     login_prompt: super::login_prompt::LoginPrompt,
     #[cfg(feature = "ssh-native")]
     input_gate: Arc<tokio::sync::Mutex<()>>,
@@ -345,6 +349,10 @@ impl SshService {
                 task_runs: Default::default(),
                 #[cfg(feature = "ssh-native")]
                 terminal: None,
+                #[cfg(feature = "ssh-native")]
+                curl_context: None,
+                #[cfg(feature = "ssh-native")]
+                short_curl_setup: false,
                 #[cfg(feature = "ssh-native")]
                 login_prompt: Default::default(),
                 #[cfg(feature = "ssh-native")]

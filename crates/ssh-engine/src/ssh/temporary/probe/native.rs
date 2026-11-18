@@ -175,6 +175,13 @@ impl SshService {
             {
                 return Err(failure("TEMPORARY_PROBE_BUSY"));
             }
+            if entry
+                .terminal
+                .as_ref()
+                .is_some_and(|owner| owner.api_request && entry.summary.terminal_task_busy)
+            {
+                return Err(failure("SSH_TASK_TERMINAL_BUSY"));
+            }
             let terminal_lease = if matches!(
                 kind,
                 TemporaryProbeKind::Terminal
@@ -188,9 +195,13 @@ impl SshService {
                 {
                     return Err(failure("SSH_TASK_TERMINAL_BUSY"));
                 }
-                Some(crate::ssh::temporary::terminal::claim(
-                    self, entry, workspace, handle,
-                )?)
+                let mut lease =
+                    crate::ssh::temporary::terminal::claim(self, entry, workspace, handle)?;
+                lease.curl_context = None;
+                if kind == TemporaryProbeKind::Curl {
+                    lease.short_curl_setup = false;
+                }
+                Some(lease)
             } else {
                 None
             };

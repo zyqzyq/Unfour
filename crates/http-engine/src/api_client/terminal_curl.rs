@@ -17,18 +17,13 @@ const DEFAULT_TERMINAL_TIMEOUT_MS: u64 = 30_000;
 
 /// Contains request credentials in memory. Intentionally has no Debug or serde.
 pub struct PreparedTerminalCurl {
-    command: String,
-    nonce: String,
+    pub request: unfour_core::terminal_curl_contract::TerminalCurlRequest,
     executed: ApiRequestInput,
     secrets: Vec<String>,
     snapshot: unfour_core::models::ApiExecutedRequestSnapshot,
 }
 
 impl PreparedTerminalCurl {
-    pub fn command(&self) -> &str {
-        &self.command
-    }
-
     /// Bound raw decoded bytes, independently of the terminal's wire encoding.
     pub fn max_output_bytes(&self) -> usize {
         MAX_OUTPUT_BYTES

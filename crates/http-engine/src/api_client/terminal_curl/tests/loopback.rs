@@ -55,9 +55,18 @@ fn real_curl_chunked_trailers_and_large_resource_size() {
             }
         });
         let output = Command::new(&shell)
-            .args(["-c", prepared.command()])
-            .output()
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
             .unwrap();
+        let mut child = output;
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(prepared.request.shell_fixture().as_bytes())
+            .unwrap();
+        let output = child.wait_with_output().unwrap();
         assert_eq!(
             output.status.code(),
             Some(expected_exit),

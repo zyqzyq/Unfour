@@ -127,11 +127,13 @@ describe("ResponseTabs", () => {
   });
 
   it("shows terminal phases alongside the remote curl measurements in Timing", () => {
-    const terminalTiming = { prepareMs: 11, inputMs: 502, inputAckCount: 7, inputAckWaitMs: 499,
+    const terminalTiming = { prepareMs: 11, inputMs: 502, inputWireBytes: 1041, inputBurst: true, inputAckCount: 1, inputAckWaitMs: 499,
       executionAndOutputMs: 244, curlTotalMs: 201, curlStartTransferMs: 198, restoreMs: 13 };
     render(withI18n(<ResponseTabs onOpenAuthSettings={vi.fn()} onResponseTabChange={vi.fn()} onRetry={vi.fn()}
       tab={baseTab({ response: response({ terminalTiming }), responseTab: "timing" })} />));
-    expect(screen.getByText("Input ACK count").nextElementSibling).toHaveTextContent("7");
+    expect(screen.getByText("Input ACK count").nextElementSibling).toHaveTextContent("1");
+    expect(screen.getByText("Request frame size").nextElementSibling).toHaveTextContent("1041 B");
+    expect(screen.getByText("Upload mode").nextElementSibling).toHaveTextContent("Verified frame");
     expect(screen.getByText("Time waiting for input ACKs").nextElementSibling).toHaveTextContent("499 ms");
     expect(screen.getByText("curl HTTP transfer").nextElementSibling).toHaveTextContent("201 ms");
     expect(screen.getByText("curl time to first byte").nextElementSibling).toHaveTextContent("198 ms");
