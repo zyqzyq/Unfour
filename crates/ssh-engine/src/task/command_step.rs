@@ -26,19 +26,13 @@ impl NativeTaskDriver {
                     exit_code: None,
                 }
             })?;
-        let command = if config.working_directory.trim().is_empty() {
-            config.command
-        } else {
-            format!(
-                "cd -- {} && {}",
-                shell_quote(config.working_directory.trim()),
-                config.command
-            )
-        };
-        let command = validate_task_command(&command).map_err(|error| TaskStepError::Failed {
-            message: error.to_string(),
-            exit_code: None,
-        })?;
+        let command =
+            task_command(&config.command, &config.working_directory).map_err(|error| {
+                TaskStepError::Failed {
+                    message: error.to_string(),
+                    exit_code: None,
+                }
+            })?;
         let mut channel = self.open_task_channel().await?;
         // One execution deadline covers both the bounded client send queue and
         // the remote response. Channel acquisition has its own transport bound.
@@ -271,8 +265,24 @@ fn command_step_outcome(
     }
 }
 
-fn shell_quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "'\\''"))
+pub(super) fn task_command(command: &str, directory: &str) -> super::AppResult<String> {
+    let command = super::validate_task_command(command)?;
+    super::validate_working_directory_chars(directory)?;
+    let directory = directory.trim();
+    if directory.is_empty() {
+        return Ok(command);
+    }
+    // Bound the resolved path separately so quoting and the cd guard do not
+    // consume the script's 4096-character budget.
+    if directory.chars().count() > super::MAX_TASK_COMMAND_CHARS {
+        return Err(super::AppError::Validation(
+            "Command workingDirectory must be 4096 characters or fewer".into(),
+        ));
+    }
+    let quoted = directory.replace('\'', "'\\''");
+    // Both drivers execute in a child shell. Exit that shell before any part
+    // of the step (including later lines or an OR-list) can run in the wrong cwd.
+    Ok(format!("cd -- '{quoted}' || exit $?\n{command}"))
 }
 
 #[cfg(test)]

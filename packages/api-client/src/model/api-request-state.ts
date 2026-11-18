@@ -18,6 +18,32 @@ export function errorCode(error: unknown): string | null {
   return String((error as { code: unknown }).code);
 }
 
+const uncertainSendErrors = new Set([
+  "API_TIMEOUT",
+  "API_CANCELLED",
+  "NETWORK_ERROR",
+  "HTTP_ERROR",
+  "API_RESPONSE_TOO_LARGE",
+  "SSH_TERMINAL_TIMEOUT",
+  "SSH_TERMINAL_TRANSPORT_CLOSED",
+  "SSH_TERMINAL_OUTPUT_LIMIT",
+  "SSH_TERMINAL_PROTOCOL_ERROR",
+  "SSH_TERMINAL_INPUT_ACK_TIMEOUT",
+  "SSH_TERMINAL_BEGIN_TIMEOUT",
+  "SSH_TERMINAL_END_TIMEOUT",
+  "SSH_TERMINAL_HTTP_TIMEOUT",
+  "SSH_TERMINAL_HTTP_RESPONSE_TOO_LARGE",
+  "SSH_TERMINAL_HTTP_INVALID_RESPONSE",
+  "SSH_TERMINAL_HTTP_UNSUPPORTED_RESPONSE",
+  "SSH_TERMINAL_HTTP_TRANSFER_FAILED",
+]);
+
+// The backend reports tunnel setup errors before forwarding. Terminal cancellation
+// has its own visible warning, even when the response pane shows a diagnostic tab.
+export function shouldAppendOutcomeWarning(code: string | null | undefined) {
+  return uncertainSendErrors.has(code ?? "");
+}
+
 export function classifyRequestError(
   error: unknown,
 ): "cancelled" | "failed" | "network" | "timeout" {

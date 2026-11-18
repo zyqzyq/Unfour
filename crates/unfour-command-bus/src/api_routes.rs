@@ -173,7 +173,7 @@ impl CommandBus {
                 started,
             )
             .await
-            .map_err(|err| match (&err, proxy.remote_failure_code()) {
+            .map_err(|err| match (&err, proxy.failure_before_forwarding()) {
                 (AppError::ApiNetwork(_), Some(code)) => AppError::Validation(code.into()),
                 _ => err,
             })

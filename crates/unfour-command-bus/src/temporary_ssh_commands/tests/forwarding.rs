@@ -21,6 +21,71 @@ async fn fixture_server(
 }
 
 #[tokio::test]
+async fn tunnel_rejection_before_http_and_after_a_delivered_redirect_have_distinct_outcomes() {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+
+    let target = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let parent = Server {
+        forward_target: Some(target.local_addr().unwrap()),
+        ..Default::default()
+    };
+    let (addr, _, server) = fixture_server(parent).await;
+    let redirect = tokio::spawn(async move {
+        let (stream, _) = target.accept().await.unwrap();
+        let mut http = BufReader::new(stream);
+        let mut line = String::new();
+        http.read_line(&mut line).await.unwrap();
+        assert!(
+            line.starts_with("POST /apply"),
+            "unexpected fixture request line: {line:?}"
+        );
+        loop {
+            line.clear();
+            assert!(http.read_line(&mut line).await.unwrap() > 0);
+            if line == "\r\n" {
+                break;
+            }
+        }
+        http.get_mut().write_all(b"HTTP/1.1 303 See Other\r\nLocation: http://denied.invalid:2222/next\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await.unwrap();
+    });
+
+    let bus = CommandBus::ephemeral().await.unwrap();
+    let ws = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let request = TemporaryRequest::password(
+        "127.0.0.1".into(),
+        addr.port(),
+        "synthetic-ticket-user".into(),
+        "synthetic-password".into(),
+    )
+    .unwrap();
+    let handle = bus
+        .receive_temporary_ssh(&LaunchReceipt::default(), request)
+        .unwrap();
+    bus.claim_temporary_ssh(&ws, &handle).await.unwrap();
+    bus.start_temporary_ssh(&ws, &handle).unwrap();
+    wait_for(&bus, &ws, "connected").await;
+    for (host, expected) in [
+        ("denied.invalid", "SSH_TUNNEL_FORWARD_PROHIBITED"),
+        ("ssh-target.invalid", "NETWORK_ERROR"),
+    ] {
+        let input = serde_json::from_value(serde_json::json!({
+            "workspaceId": ws, "method": "POST", "url": format!("http://{host}:2222/apply"),
+            "headers": [], "query": [], "bodyKind": "none", "timeoutMs": 5000
+        }))
+        .unwrap();
+        let result = bus
+            .send_api_request_via("tunnel-redirect", input, None, None, None, Some(&handle))
+            .await
+            .unwrap();
+        assert_eq!(result.http_error_code.as_deref(), Some(expected), "{host}");
+        assert!(result.response.is_none());
+    }
+    redirect.await.unwrap();
+    bus.cancel_temporary_ssh(&ws, &handle).unwrap();
+    server.abort();
+}
+
+#[tokio::test]
 async fn temporary_forwarding_uses_one_parent_login_and_authenticates_the_ssh_target() {
     let bus = CommandBus::ephemeral().await.unwrap();
     let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;

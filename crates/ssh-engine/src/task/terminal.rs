@@ -82,6 +82,16 @@ impl TerminalTaskDriver {
             if self.restored {
                 return Err(shared::task_error("SSH_TASK_TERMINAL_NOT_READY"));
             }
+            if !self.prepared {
+                if self
+                    .lease
+                    .at_login_prompt()
+                    .map_err(|_| shared::task_error("SSH_TASK_TRANSPORT_CLOSED"))?
+                {
+                    return Err(shared::task_error("SSH_TASK_INTERACTIVE_LOGIN_PROMPT"));
+                }
+                self.lease.mark_dirty();
+            }
             self.lease
                 .writer
                 .data_bytes(chunk.to_vec())
@@ -105,7 +115,6 @@ impl TerminalTaskDriver {
         if self.prepared {
             return Ok(());
         }
-        self.lease.mark_dirty();
         self.send(protocol::BOOTSTRAP.as_bytes()).await?;
         let mut observation = super::command_step::stream::StreamBuffer::new();
         loop {
@@ -251,16 +260,7 @@ impl TaskStepDriver for TerminalTaskDriver {
         }
         let config = parse_command_config(step.config_version, &step.config_json)
             .map_err(|_| shared::task_error("SSH_TASK_TERMINAL_NOT_READY"))?;
-        let command = if config.working_directory.trim().is_empty() {
-            config.command
-        } else {
-            format!(
-                "cd -- '{}' && {}",
-                config.working_directory.trim().replace('\'', "'\\''"),
-                config.command
-            )
-        };
-        let command = validate_task_command(&command)
+        let command = command_step::task_command(&config.command, &config.working_directory)
             .map_err(|_| shared::task_error("SSH_TASK_TERMINAL_NOT_READY"))?;
         let mut stopped = cancel.clone();
         let mut parent = self.lease.parent.clone();

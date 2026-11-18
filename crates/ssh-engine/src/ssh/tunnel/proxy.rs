@@ -4,7 +4,10 @@ use super::{failure, AppResult, TunnelConnector};
 use std::{
     io,
     net::{Ipv4Addr, Ipv6Addr, SocketAddr},
-    sync::{Arc, OnceLock},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, OnceLock,
+    },
     time::Duration,
 };
 use tokio::{
@@ -18,11 +21,17 @@ use zeroize::Zeroizing;
 const USER: &str = "unfour";
 const MAX_PENDING_CLIENTS: usize = 32;
 
+#[derive(Default)]
+struct ProxyProgress {
+    failure: OnceLock<&'static str>,
+    opened: AtomicBool,
+}
+
 pub struct TunnelProxyLease {
     address: SocketAddr,
     password: Arc<Zeroizing<String>>,
     task: JoinHandle<()>,
-    remote_failure: Arc<OnceLock<&'static str>>,
+    progress: Arc<ProxyProgress>,
 }
 
 impl TunnelProxyLease {
@@ -37,19 +46,14 @@ impl TunnelProxyLease {
             .local_addr()
             .map_err(|_| failure("SSH_TUNNEL_PROXY_FAILED"))?;
         let password = Arc::new(Zeroizing::new(Uuid::new_v4().simple().to_string()));
-        let remote_failure = Arc::new(OnceLock::new());
-        let server = serve(
-            listener,
-            connector,
-            password.clone(),
-            remote_failure.clone(),
-        );
-        let failure = remote_failure.clone();
+        let progress = Arc::new(ProxyProgress::default());
+        let server = serve(listener, connector, password.clone(), progress.clone());
+        let status = progress.clone();
         let task = tokio::spawn(async move {
             if let Some(parent) = parent {
                 tokio::select! {
                     biased;
-                    _ = parent.closed() => { let _ = failure.set("SSH_TUNNEL_TEMPORARY_UNAVAILABLE"); }
+                    _ = parent.closed() => { let _ = status.failure.set("SSH_TUNNEL_TEMPORARY_UNAVAILABLE"); }
                     _ = server => {}
                 }
             } else {
@@ -60,7 +64,7 @@ impl TunnelProxyLease {
             address,
             password,
             task,
-            remote_failure,
+            progress,
         })
     }
     pub fn address(&self) -> SocketAddr {
@@ -72,8 +76,14 @@ impl TunnelProxyLease {
     pub fn password(&self) -> &str {
         self.password.as_str()
     }
+    /// A failed redirect or a closed parent can follow an already delivered request.
+    pub fn failure_before_forwarding(&self) -> Option<&'static str> {
+        let code = self.remote_failure_code()?;
+        (!self.progress.opened.load(Ordering::Acquire)).then_some(code)
+    }
+
     pub fn remote_failure_code(&self) -> Option<&'static str> {
-        self.remote_failure.get().copied()
+        self.progress.failure.get().copied()
     }
 }
 
@@ -89,7 +99,7 @@ async fn serve(
     listener: TcpListener,
     connector: Arc<dyn TunnelConnector>,
     password: Arc<Zeroizing<String>>,
-    remote_failure: Arc<OnceLock<&'static str>>,
+    progress: Arc<ProxyProgress>,
 ) {
     let mut relays = JoinSet::new();
     loop {
@@ -98,8 +108,8 @@ async fn serve(
                 let Ok((socket, _)) = result else { break };
                 let connector = connector.clone();
                 let password = password.clone();
-                let failure = remote_failure.clone();
-                relays.spawn(async move { let _ = relay(socket, &*connector, password.as_str(), &failure).await; });
+                let status = progress.clone();
+                relays.spawn(async move { let _ = relay(socket, &*connector, password.as_str(), &status).await; });
             }
             _ = relays.join_next(), if !relays.is_empty() => {}
         }
@@ -171,17 +181,18 @@ async fn relay(
     mut socket: TcpStream,
     connector: &dyn TunnelConnector,
     password: &str,
-    remote_failure: &OnceLock<&'static str>,
+    progress: &ProxyProgress,
 ) -> io::Result<()> {
     let (host, port) =
         tokio::time::timeout(Duration::from_secs(5), target(&mut socket, password)).await??;
     let mut channel = match connector.connect(&host, port).await {
         Ok(channel) => channel,
         Err(error) => {
-            let _ = remote_failure.set(error.code());
+            let _ = progress.failure.set(error.code());
             return reply(&mut socket, 4).await;
         }
     };
+    progress.opened.store(true, Ordering::Release);
     reply(&mut socket, 0).await?;
     tokio::io::copy_bidirectional(&mut socket, &mut channel).await?;
     Ok(())

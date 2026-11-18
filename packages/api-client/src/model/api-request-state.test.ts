@@ -1,9 +1,9 @@
 import type { ApiResponse } from "@unfour/command-client";
 import { createTranslator } from "@unfour/ui";
-import { terminalApiOutcomeUnknown } from "./terminal-api";
 import { describe, expect, it } from "vitest";
 import {
   classifyRequestError,
+  shouldAppendOutcomeWarning,
   deriveApiRequestState,
   formatError,
   formatResponseBody,
@@ -33,7 +33,7 @@ describe("classifyRequestError", () => {
       expect(message).not.toContain(code);
       expect(classifyRequestError({ code, message })).toBe("timeout");
     }
-    expect(terminalApiOutcomeUnknown(code)).toBe(["INPUT_ACK", "BEGIN", "END"].includes(phase));
+    expect(shouldAppendOutcomeWarning(code)).toBe(["INPUT_ACK", "BEGIN", "END"].includes(phase));
   });
   it.each([
     ["SSH_TUNNEL_TARGET_CONNECT_FAILED", "network"],

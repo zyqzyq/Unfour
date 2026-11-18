@@ -93,6 +93,16 @@ impl<'a> Driver<'a> {
                 return Err("SSH_TERMINAL_NOT_READY");
             }
             self.deadline.check()?;
+            if !self.child_ready {
+                if self
+                    .lease
+                    .at_login_prompt()
+                    .map_err(|_| "SSH_TERMINAL_TRANSPORT_CLOSED")?
+                {
+                    return Err("SSH_TERMINAL_LOGIN_REQUIRED");
+                }
+                self.lease.mark_dirty();
+            }
             tokio::time::timeout_at(
                 self.deadline.at(),
                 self.lease.writer.data_bytes(chunk.to_vec()),
@@ -137,7 +147,6 @@ impl<'a> Driver<'a> {
     }
 
     async fn prepare(&mut self) -> Result<protocol::InputEncoding, &'static str> {
-        self.lease.mark_dirty();
         self.send(protocol::BOOTSTRAP.as_bytes()).await?;
         let mut observation = crate::ssh::task::TaskOutputBuffer::new();
         loop {

@@ -1,17 +1,8 @@
 use super::*;
+use crate::ssh::login_prompt::{EscapeState, PROMPTS};
 
 const MAX_OUTPUT_BYTES: usize = 64 * 1024;
 const PROMPT_SCAN_BYTES: usize = 4 * 1024;
-
-#[derive(Default)]
-enum EscapeState {
-    #[default]
-    Text,
-    Escape,
-    Csi,
-    Osc,
-    OscEscape,
-}
 
 /// Retain an incomplete line until it can be redacted as one unit. Only fixed
 /// diagnostic codes may bypass that rule; arbitrary partial text never does.
@@ -52,31 +43,19 @@ impl StreamBuffer {
         self.truncated = take < data.len();
         for &byte in &data[..take] {
             self.total += 1;
-            match (&self.escape, byte) {
-                (EscapeState::Text, 0x1b) => self.escape = EscapeState::Escape,
-                (EscapeState::Escape, b'[') => self.escape = EscapeState::Csi,
-                (EscapeState::Escape, b']') => self.escape = EscapeState::Osc,
-                (EscapeState::Escape, _) => self.escape = EscapeState::Text,
-                (EscapeState::Csi, 0x40..=0x7e) => self.escape = EscapeState::Text,
-                (EscapeState::Csi, _) => {}
-                (EscapeState::Osc, 0x07) | (EscapeState::OscEscape, b'\\') => {
-                    self.escape = EscapeState::Text;
-                }
-                (EscapeState::Osc | EscapeState::OscEscape, 0x1b) => {
-                    self.escape = EscapeState::OscEscape;
-                }
-                (EscapeState::Osc | EscapeState::OscEscape, _) => {
-                    self.escape = EscapeState::Osc;
-                }
-                (EscapeState::Text, b'\n') => {
+            if !self.escape.visible(byte) {
+                continue;
+            }
+            match byte {
+                b'\n' => {
                     self.login_prompt |= self.pending_is_prompt();
                     self.pending.push(byte);
                     self.flush(stream, emit);
                 }
-                (EscapeState::Text, b'\r' | b'\t' | 0x20..=0x7e | 0x80..=0xff) => {
+                b'\r' | b'\t' | 0x20..=0x7e | 0x80..=0xff => {
                     self.pending.push(byte);
                 }
-                (EscapeState::Text, _) => {}
+                _ => {}
             }
         }
         if self.truncated {
@@ -95,10 +74,7 @@ impl StreamBuffer {
             .to_ascii_lowercase();
         // Require a whole short line, not an occurrence in a log/command.
         // Even a match is only an observation, never an execution verdict.
-        matches!(
-            prompt.as_str(),
-            "login:" | "username:" | "user name:" | "password:" | "passphrase:"
-        )
+        PROMPTS.contains(&prompt.as_bytes())
     }
 
     pub(in crate::ssh) fn has_login_prompt(&self) -> bool {

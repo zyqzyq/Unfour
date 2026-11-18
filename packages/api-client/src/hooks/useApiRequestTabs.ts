@@ -19,8 +19,8 @@ import {
   type KeyValue,
   type TemporarySshRoute,
 } from "@unfour/command-client";
-import { errorCode, formatError } from "../model/api-request-state";
-import { isTerminalApiError, terminalApiOutcomeUnknown, terminalApiSendError } from "../model/terminal-api";
+import { errorCode, formatError, shouldAppendOutcomeWarning } from "../model/api-request-state";
+import { isTerminalApiError, terminalApiSendError } from "../model/terminal-api";
 import { effectiveApiRoute, environmentRouteMutationKey, useApiRoutes } from "./useApiRoutes";
 import { useTerminalApiConfirmation } from "./useTerminalApiConfirmation";
 import { historyReplayError, localizeReplayError } from "../model/history-replay";
@@ -99,7 +99,7 @@ export function useApiRequestTabs(workspaceId: string) {
         execution = { ...execution, httpError: t(`network.errors.${execution.httpErrorCode}`, t("api.route.failed")) };
         refreshRouteContext(workspaceId);
       }
-      if (!execution.response && (["API_TIMEOUT", "API_CANCELLED", "NETWORK_ERROR", "HTTP_ERROR", "API_RESPONSE_TOO_LARGE"].includes(execution.httpErrorCode ?? "") || execution.httpErrorCode?.startsWith("SSH_TUNNEL_") || terminalApiOutcomeUnknown(execution.httpErrorCode))) {
+      if (!execution.response && shouldAppendOutcomeWarning(execution.httpErrorCode)) {
         execution = { ...execution, httpError: `${execution.httpError ?? ""} ${t("feedback.apiOutcomeUncertain")}`.trim() };
       }
       if (execution.postResponse.error?.code === "API_POST_RESPONSE_FINALIZATION_FAILED") {
@@ -134,7 +134,7 @@ export function useApiRequestTabs(workspaceId: string) {
         message = t(`network.errors.${code}`, t("api.route.failed"));
         refreshRouteContext(workspaceId);
       }
-      if (terminalApiOutcomeUnknown(code)) message = `${message} ${t("feedback.apiOutcomeUncertain")}`;
+      if (shouldAppendOutcomeWarning(code)) message = `${message} ${t("feedback.apiOutcomeUncertain")}`;
       if (current) store.failTabSend(workspaceId, current.id, message, code);
       if (variables.temporaryHandle) void queryClient.invalidateQueries({ queryKey: ["api-live-sessions", workspaceId] });
     },

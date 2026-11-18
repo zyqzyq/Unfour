@@ -42,6 +42,8 @@ mod local_bundle;
 pub use connection_domain::SshConnectionCleanup;
 mod diagnostic_execution;
 mod file_operations;
+#[cfg(feature = "ssh-native")]
+mod login_prompt;
 mod native_auth;
 mod native_supervisor;
 mod native_transport;

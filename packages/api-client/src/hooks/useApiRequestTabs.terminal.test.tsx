@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { act, cleanup, render, renderHook, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { listTemporaryRoutes, sendApiRequest, type RequestExecutionResult } from "@unfour/command-client";
+import { ApiTerminalExecutionNotice } from "../components/ApiTerminalExecutionNotice";
 import { useApiRequestTabs } from "./useApiRequestTabs";
 import { resetApiRequestTabStore } from "../model/api-request-tab-state";
 
@@ -102,6 +103,40 @@ it("localizes fixed transfer errors and marks the remote result uncertain", asyn
   expect(result.current.activeTab?.sendError).toContain("timed out");
   expect(result.current.activeTab?.sendError).not.toContain("untrusted-remote-message");
   expect(result.current.activeTab?.sendError).toContain("Remote effects may have occurred");
+});
+
+describe.each(["result", "rejection"])("send failure via %s", (path) => {
+  it.each([
+    ["SSH_TUNNEL_FORWARD_PROHIBITED", false],
+    ["SSH_TUNNEL_INVALID_TARGET", false],
+    ["NETWORK_ERROR", true],
+    ["SSH_TERMINAL_CANCELLED", false], // The dedicated terminal notice owns this warning.
+  ] as const)("sets the appropriate warning for %s", async (code, uncertainInError) => {
+    if (path === "result") {
+      vi.mocked(sendApiRequest).mockResolvedValue({ ...execution, response: null, httpErrorCode: code, httpError: "send failed" });
+    } else {
+      vi.mocked(sendApiRequest).mockRejectedValue({ code, message: "send failed" });
+    }
+    const { result } = await setup();
+    act(() => result.current.updateDraft("new:1", { terminalConfirmed: true }));
+    await act(async () => result.current.sendTab(result.current.activeTab!));
+    await waitFor(() => expect(result.current.activeTab?.sendErrorCode).toBe(code));
+    expect(result.current.activeTab?.sendError?.includes("Remote effects may have occurred")).toBe(uncertainInError);
+    expect(sendApiRequest).toHaveBeenCalledTimes(1);
+  });
+});
+
+it.each([false, true])("renders the cancellation warning once when recovery is %s", async (recoveryRequired) => {
+  vi.mocked(sendApiRequest).mockRejectedValue({ code: "SSH_TERMINAL_CANCELLED", message: "cancelled" });
+  const { result, client } = await setup();
+  act(() => result.current.updateDraft("new:1", { terminalConfirmed: true }));
+  await act(async () => result.current.sendTab(result.current.activeTab!));
+  await waitFor(() => expect(result.current.activeTab?.sendErrorCode).toBe("SSH_TERMINAL_CANCELLED"));
+  act(() => client.setQueryData(["api-live-sessions", "w"], [{ ...session, terminalRecoveryRequired: recoveryRequired }]));
+  await waitFor(() => expect(result.current.routing.temporary.data?.[0]?.terminalRecoveryRequired).toBe(recoveryRequired));
+  render(<ApiTerminalExecutionNotice active tab={result.current.activeTab!} routing={result.current.routing} onUpdate={vi.fn()} />);
+  expect(screen.getAllByText(/Remote effects may have occurred/)).toHaveLength(1);
+  expect(screen.queryAllByRole("alert")).toHaveLength(recoveryRequired ? 2 : 0);
 });
 
 it.each(["result", "rejection"])("retains uncertain remote effects after an input acknowledgement timeout via %s without replay", async (path) => {

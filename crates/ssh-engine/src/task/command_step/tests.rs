@@ -59,9 +59,54 @@ async fn continuous_output_cannot_starve_a_ready_interrupt() {
 }
 
 #[test]
-fn quotes_working_directories_for_posix_shells() {
-    assert_eq!(shell_quote("/tmp/a b"), "'/tmp/a b'");
-    assert_eq!(shell_quote("/tmp/user's"), "'/tmp/user'\\''s'");
+fn cwd_failure_exits_the_step_before_the_entire_script() {
+    let lines = "printf first || printf fallback\nprintf second";
+    assert_eq!(task_command(lines, "   ").unwrap(), lines);
+    assert_eq!(
+        task_command(lines, " /tmp/user's dir ").unwrap(),
+        format!("cd -- '/tmp/user'\\''s dir' || exit $?\n{lines}")
+    );
+}
+
+#[test]
+fn working_directory_guard_preserves_the_script_budget_and_validates_resolved_inputs() {
+    let limit = super::super::MAX_TASK_COMMAND_CHARS;
+    let command = "x".repeat(limit);
+    assert!(task_command(&command, "/tmp/user's dir")
+        .unwrap()
+        .ends_with(&command));
+    assert!(task_command(&"x".repeat(limit + 1), "tmp").is_err());
+    assert!(task_command("pwd", &"d".repeat(limit + 1)).is_err());
+    assert!(task_command("pwd", "/tmp\nunexpected").is_err());
+    assert!(task_command("  ", "tmp").is_err());
+}
+
+#[test]
+#[cfg_attr(
+    windows,
+    ignore = "requires a POSIX shell; set UNFOUR_TEST_SH to its executable"
+)]
+fn multiline_step_runs_only_in_its_requested_directory() {
+    let shell = std::env::var_os("UNFOUR_TEST_SH").unwrap_or_else(|| "sh".into());
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir(root.path().join("user's dir")).unwrap();
+    let script = "printf 'first\\n' || printf fallback\nprintf 'second\\n'\npwd\nexit 7";
+    for (directory, valid) in [("user's dir", true), ("missing", false)] {
+        let result = std::process::Command::new(&shell)
+            .current_dir(root.path())
+            .arg("-c")
+            .arg(task_command(script, directory).unwrap())
+            .output()
+            .unwrap();
+        if valid {
+            assert_eq!(result.status.code(), Some(7));
+            let output = String::from_utf8(result.stdout).unwrap();
+            assert!(output.starts_with("first\nsecond\n") && output.ends_with("/user's dir\n"));
+        } else {
+            assert!(!result.status.success());
+            assert!(result.stdout.is_empty());
+        }
+    }
 }
 
 #[test]

@@ -19,6 +19,7 @@ const CONFIG_FIELDS: &[(&str, &[&str])] = &[
     ("download", &["remotePath", "localPath", "overwrite"]),
 ];
 const CONFIG_VERSION_V1: i64 = 1;
+pub(super) const MAX_TASK_COMMAND_CHARS: usize = 4096;
 
 pub(super) fn detected_inputs(steps: &[SshTaskStep]) -> AppResult<Vec<String>> {
     let mut variables = Vec::new();
@@ -161,13 +162,7 @@ pub(super) fn normalized_step_config(
         "command" => {
             let parsed = parse_command_config(config_version, config)?;
             validate_task_command(&parsed.command)?;
-            if !parsed.working_directory.is_empty()
-                && parsed.working_directory.chars().any(char::is_control)
-            {
-                return Err(AppError::Validation(
-                    "Command workingDirectory cannot contain control characters".to_string(),
-                ));
-            }
+            validate_working_directory_chars(&parsed.working_directory)?;
             if !(1..=3_600).contains(&parsed.timeout_seconds) {
                 return Err(AppError::Validation(
                     "Command timeoutSeconds must be between 1 and 3600".to_string(),
@@ -231,7 +226,7 @@ pub(super) fn validate_task_command(command: &str) -> AppResult<String> {
             "Command step requires a command".to_string(),
         ));
     }
-    if trimmed.chars().count() > 4096 {
+    if trimmed.chars().count() > MAX_TASK_COMMAND_CHARS {
         return Err(AppError::Validation(
             "ssh task command must be 4096 characters or fewer".to_string(),
         ));
@@ -246,6 +241,15 @@ pub(super) fn validate_task_command(command: &str) -> AppResult<String> {
         ));
     }
     Ok(trimmed.to_string())
+}
+
+pub(super) fn validate_working_directory_chars(directory: &str) -> AppResult<()> {
+    if directory.chars().any(char::is_control) {
+        return Err(AppError::Validation(
+            "Command workingDirectory cannot contain control characters".into(),
+        ));
+    }
+    Ok(())
 }
 
 pub(super) fn parse_command_config(

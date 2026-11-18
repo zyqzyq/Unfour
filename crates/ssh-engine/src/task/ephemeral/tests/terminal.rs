@@ -313,6 +313,69 @@ async fn terminal_cancel_before_ready_never_writes_to_unconfirmed_parent() {
 }
 
 #[tokio::test]
+async fn displayed_password_prompt_rejects_task_and_api_before_any_automatic_input() {
+    let f = terminal_fixture().await;
+    // This fixture echoes manual input. Drain the echoed prompt exactly as the UI does.
+    manual(&f, "Pass").await.unwrap();
+    manual(&f, "word: ").await.unwrap();
+    manual(&f, "***").await.unwrap();
+    let mut displayed = String::new();
+    until(|| {
+        for event in f.service.temporary_output(&f.workspace, &f.handle).unwrap() {
+            displayed.push_str(&event.data);
+        }
+        displayed.ends_with("Password: ***")
+    })
+    .await;
+    let before = f.state.lock().unwrap().terminal_wire.clone();
+
+    let task = input(&f, vec![command("private-command")]).await;
+    let run = f
+        .service
+        .run_temporary_task_with_mode(task.clone(), &f.handle, "terminal")
+        .await
+        .unwrap();
+    let run = finished(&f, &run).await;
+    assert_eq!(
+        run.error_message.as_deref(),
+        Some("SSH_TASK_INTERACTIVE_LOGIN_PROMPT")
+    );
+    let api = f
+        .service
+        .claim_temporary_terminal_operation(&f.workspace, &f.handle)
+        .unwrap();
+    let error = api
+        .run(
+            "private-command",
+            None,
+            tokio_util::sync::CancellationToken::new(),
+            1024,
+        )
+        .await
+        .err()
+        .unwrap();
+    assert_eq!(error.code(), "SSH_TERMINAL_LOGIN_REQUIRED");
+    assert_eq!(f.state.lock().unwrap().terminal_wire, before);
+    let summary = &f.service.list_temporary(&f.workspace).unwrap()[0];
+    assert!(!summary.terminal_recovery_required && !summary.terminal_task_busy);
+
+    manual(&f, "\r\n$ ").await.unwrap();
+    until(|| {
+        !f.service
+            .temporary_output(&f.workspace, &f.handle)
+            .unwrap()
+            .is_empty()
+    })
+    .await;
+    let run = f
+        .service
+        .run_temporary_task_with_mode(task, &f.handle, "terminal")
+        .await
+        .unwrap();
+    assert_eq!(finished(&f, &run).await.status, "success");
+}
+
+#[tokio::test]
 async fn terminal_login_prompt_never_receives_user_payload_or_leaks_bootstrap() {
     let f = terminal_fixture().await;
     f.state.lock().unwrap().terminal_login_prompt = true;

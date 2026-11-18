@@ -148,14 +148,15 @@ pub(super) fn claim(
 /// Returning true also suppresses display after overflow or quarantine. A
 /// dropped consumer must never expose encoded commands/protocol to the PTY UI.
 pub(super) fn route(entry: &mut Entry, message: &russh::ChannelMsg) -> bool {
-    let Some(owner) = &entry.terminal else {
-        return false;
-    };
     let bytes: &[u8] = match message {
         russh::ChannelMsg::Data { data } | russh::ChannelMsg::ExtendedData { data, .. } => {
             data.as_ref()
         }
-        _ => return true,
+        _ => return entry.terminal.is_some(),
+    };
+    entry.login_prompt.observe(bytes);
+    let Some(owner) = &entry.terminal else {
+        return false;
     };
     for chunk in bytes.chunks(16 * 1024) {
         let Ok(permit) = owner
@@ -182,6 +183,21 @@ pub(super) fn route(entry: &mut Entry, message: &russh::ChannelMsg) -> bool {
 }
 
 impl TerminalLease {
+    /// The UI may already have drained the PTY text. The native reader records
+    /// the current prompt under this same lock, including after lease acquisition.
+    pub(in crate::ssh) fn at_login_prompt(&self) -> AppResult<bool> {
+        let mut queue = self
+            .service
+            .temporary
+            .0
+            .lock()
+            .map_err(|_| failure("TEMPORARY_UNAVAILABLE"))?;
+        Ok(queue
+            .owned(&self.workspace, &self.handle)?
+            .login_prompt
+            .active())
+    }
+
     pub(in crate::ssh) fn mark_dirty(&mut self) {
         self.dirty = true;
     }
