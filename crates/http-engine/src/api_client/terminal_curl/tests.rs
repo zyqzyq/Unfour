@@ -1,5 +1,7 @@
 use super::*;
 
+mod loopback;
+
 fn input() -> ApiRequestInput {
     serde_json::from_value(serde_json::json!({
         "workspaceId": "workspace-a", "method": "POST", "url": "http://example.test/v1/embeddings",
@@ -38,8 +40,19 @@ fn terminal_timeout_is_bounded_and_shared_with_remote_curl() {
 }
 
 fn wire(prepared: &PreparedTerminalCurl, status: u16, headers: &str, body: &[u8]) -> Vec<u8> {
+    wire_with_trailers(prepared, status, headers, body, &[])
+}
+
+fn wire_with_trailers(
+    prepared: &PreparedTerminalCurl,
+    status: u16,
+    headers: &str,
+    body: &[u8],
+    trailers: &[u8],
+) -> Vec<u8> {
     let mut out = format!("HTTP/1.1 {status} Test\r\n{headers}\r\n").into_bytes();
     out.extend_from_slice(body);
+    out.extend_from_slice(trailers);
     out.extend_from_slice(
         format!(
             "\nUNFOUR_CURL_RESULT_{}:{status}:{}:0.123456:0.200\n",
@@ -198,6 +211,43 @@ fn incomplete_or_uncorrelated_response_never_becomes_success() {
 }
 
 #[test]
+fn only_complete_chunked_trailer_fields_fit_after_the_declared_body() {
+    let prepared = prepared();
+    let chunked = "Transfer-Encoding: chunked\r\n";
+    let with_tail =
+        |headers: &str, tail: &[u8]| wire_with_trailers(&prepared, 200, headers, b"{}", tail);
+    let valid = with_tail(chunked, b"X-Result: ok\r\nX-Other: 2\r\n");
+    let response = response::parse(&prepared, &valid, 0).unwrap();
+    assert_eq!(response.body, "{}");
+    assert_eq!(response.headers.len(), 1);
+    for (headers, tail) in [
+        ("", b"X-Result: ok\r\n".as_slice()),
+        (chunked, b"X-Result: incomplete"),
+        (chunked, b"invalid field: x\r\n"),
+        (chunked, b"X-Result: x\x00\r\n"),
+        (chunked, b"X-Result: ok\r\n\r\nunsolicited\r\n"),
+    ] {
+        assert_eq!(
+            code(
+                response::parse(&prepared, &with_tail(headers, tail), 0)
+                    .err()
+                    .unwrap()
+            ),
+            "SSH_TERMINAL_HTTP_INVALID_RESPONSE"
+        );
+    }
+    let large = format!("X-Pad: {}\r\n", "x".repeat(MAX_HEADER_BYTES - 16));
+    assert_eq!(
+        code(
+            response::parse(&prepared, &with_tail(chunked, large.as_bytes()), 0)
+                .err()
+                .unwrap()
+        ),
+        "SSH_TERMINAL_HTTP_RESPONSE_TOO_LARGE"
+    );
+}
+
+#[test]
 fn supported_scope_is_validated_before_terminal_use() {
     let mut cases = Vec::new();
     let mut value = input();
@@ -329,6 +379,15 @@ fn head_and_empty_custom_headers_have_explicit_semantics() {
     )
     .unwrap();
     assert!(response.body.is_empty());
+    let large_headers = format!("X-Pad: {}\r\n", "x".repeat(MAX_HEADER_BYTES));
+    assert_eq!(
+        code(
+            response::parse(&prepared, &wire(&prepared, 200, &large_headers, b""), 0)
+                .err()
+                .unwrap()
+        ),
+        "SSH_TERMINAL_HTTP_RESPONSE_TOO_LARGE"
+    );
 }
 
 #[tokio::test]

@@ -42,12 +42,20 @@ pub(super) fn parse(
     }
     let status: u16 = status.parse().map_err(|_| invalid_response())?;
     let size: usize = size.parse().map_err(|_| invalid_response())?;
-    let (parsed_status, headers, body) = parse_headers(&stdout[..at])?;
-    if status != parsed_status || size != body.len() {
+    let (parsed_status, headers, payload) = parse_headers(&stdout[..at])?;
+    let (body, trailers) = payload
+        .split_at_checked(size)
+        .ok_or_else(invalid_response)?;
+    let no_body = prepared.executed.method == "HEAD" || matches!(status, 204 | 304);
+    if status != parsed_status || (no_body && !payload.is_empty()) {
         return Err(invalid_response());
     }
-    if body.len() > MAX_RESPONSE_BYTES {
+    // All interim/final headers and trailers share the same metadata budget.
+    if size > MAX_RESPONSE_BYTES || at - size > MAX_HEADER_BYTES {
         return Err(failure("SSH_TERMINAL_HTTP_RESPONSE_TOO_LARGE"));
+    }
+    if !trailers.is_empty() {
+        validate_trailers(&headers, trailers)?;
     }
     for header in headers.iter().filter(|_| !body.is_empty()) {
         let value = header.value.to_ascii_lowercase();
@@ -132,24 +140,47 @@ fn parse_headers(mut bytes: &[u8]) -> AppResult<(u16, Vec<KeyValue>, &[u8])> {
         if !(100..600).contains(&status) || status == 101 {
             return Err(invalid_response());
         }
-        let mut headers = Vec::new();
-        for line in lines {
-            let (key, value) = line.split_once(':').ok_or_else(invalid_response)?;
-            let key = HeaderName::from_bytes(key.as_bytes()).map_err(|_| invalid_response())?;
-            let value = value.trim_matches([' ', '\t']);
-            HeaderValue::from_str(value).map_err(|_| invalid_response())?;
-            headers.push(KeyValue {
-                key: key.to_string(),
-                value: value.into(),
-                enabled: true,
-            });
-        }
+        let headers = lines.map(parse_field).collect::<AppResult<_>>()?;
         bytes = &bytes[end + 4..];
         if status >= 200 {
             return Ok((status, headers, bytes));
         }
     }
     Err(invalid_response())
+}
+
+fn parse_field(line: &str) -> AppResult<KeyValue> {
+    let (key, value) = line.split_once(':').ok_or_else(invalid_response)?;
+    let key = HeaderName::from_bytes(key.as_bytes()).map_err(|_| invalid_response())?;
+    let value = value.trim_matches([' ', '\t']);
+    HeaderValue::from_str(value).map_err(|_| invalid_response())?;
+    Ok(KeyValue {
+        key: key.to_string(),
+        value: value.into(),
+        enabled: true,
+    })
+}
+
+// With --include, some curl versions append the trailer field lines after
+// the decoded chunk data. size_download counts only that data. Keep trailers
+// separate from the response header list (e.g. a late Content-Type).
+fn validate_trailers(headers: &[KeyValue], bytes: &[u8]) -> AppResult<()> {
+    let final_coding = headers
+        .iter()
+        .rev()
+        .find(|header| header.key == "transfer-encoding")
+        .and_then(|header| header.value.rsplit(',').next());
+    if !final_coding.is_some_and(|value| value.trim().eq_ignore_ascii_case("chunked")) {
+        return Err(invalid_response());
+    }
+    let fields = std::str::from_utf8(bytes)
+        .ok()
+        .and_then(|text| text.strip_suffix("\r\n"))
+        .ok_or_else(invalid_response)?;
+    for line in fields.split("\r\n") {
+        parse_field(line)?;
+    }
+    Ok(())
 }
 
 fn curl_failure_code(code: i32) -> &'static str {

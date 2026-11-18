@@ -81,6 +81,7 @@ fn working_directory_guard_preserves_the_script_budget_and_validates_resolved_in
     assert!(task_command("  ", "tmp").is_err());
 }
 
+#[cfg(feature = "ssh-native")]
 #[test]
 #[cfg_attr(
     windows,
@@ -90,7 +91,7 @@ fn multiline_step_runs_only_in_its_requested_directory() {
     let shell = std::env::var_os("UNFOUR_TEST_SH").unwrap_or_else(|| "sh".into());
     let root = tempfile::tempdir().unwrap();
     std::fs::create_dir(root.path().join("user's dir")).unwrap();
-    let script = "printf 'first\\n' || printf fallback\nprintf 'second\\n'\npwd\nexit 7";
+    let script = "printf 'first\\n' || printf fallback; printf 'second\\n'\npwd\nexit 7";
     for (directory, valid) in [("user's dir", true), ("missing", false)] {
         let result = std::process::Command::new(&shell)
             .current_dir(root.path())

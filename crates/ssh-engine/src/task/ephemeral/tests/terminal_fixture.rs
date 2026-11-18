@@ -58,13 +58,18 @@ impl Terminal {
         session: &mut Session,
         state: &Arc<Mutex<State>>,
     ) -> Result<(), russh::Error> {
+        if line.starts_with(b" sh -c '")
+            && state.lock().unwrap().terminal_login_prompt == Some("SPLIT_STARTUP")
+        {
+            // The UI already consumed "Pass" before the exclusive terminal claim.
+            return session.data(id, b"word: ".to_vec());
+        }
         // Echo all inputs, including payload, to verify that echo cannot act as
         // a control frame or leak into ordinary terminal output.
         session.data(id, [line, b"\r\n"].concat())?;
         if line.starts_with(b" sh -c '") {
-            if state.lock().unwrap().terminal_login_prompt {
-                session.data(id, b"\x1b]0;private-login-title\x07lo".to_vec())?;
-                session.data(id, b"gin: ".to_vec())?;
+            if state.lock().unwrap().terminal_login_prompt == Some("STARTUP") {
+                login_prompt(id, session)?;
             } else {
                 self.bootstrapped = true;
                 self.raw = line
@@ -89,6 +94,9 @@ impl Terminal {
             let nonce = String::from_utf8(line.to_vec()).unwrap();
             self.bootstrapped = false;
             self.session = Some(nonce.clone());
+            if state.lock().unwrap().terminal_login_prompt == Some("READY") {
+                return login_prompt(id, session);
+            }
             if !self.raw && state.lock().unwrap().terminal_task_stall == Some("READY") {
                 return Ok(());
             }
@@ -268,7 +276,12 @@ impl Terminal {
                     if command.contains("UNFOUR_TERMINAL_PROBE") {
                         session.data(id, b"UNFOUR_TERMINAL_PROBE\r\n".to_vec())?;
                     } else {
-                        let output = format!("output:{command}\n").into_bytes();
+                        let output = state
+                            .lock()
+                            .unwrap()
+                            .terminal_task_stdout
+                            .clone()
+                            .unwrap_or_else(|| format!("output:{command}\n").into_bytes());
                         for chunk in output.chunks(3) {
                             session.data(id, chunk.to_vec())?;
                         }
@@ -399,6 +412,11 @@ impl Terminal {
         }
         self.restore(id, session)
     }
+}
+
+fn login_prompt(id: ChannelId, session: &mut Session) -> Result<(), russh::Error> {
+    session.data(id, b"\x1b]0;private-login-title\x07lo".to_vec())?;
+    session.data(id, b"gin: ".to_vec())
 }
 fn input_ack(
     id: ChannelId,

@@ -53,10 +53,10 @@ function CapabilityDialogScope({ workspaceId, handle, label, connected, terminal
   const errorHandler = useRef(handleError);
   useEffect(() => { errorHandler.current = handleError; }, [handleError]);
   useEffect(() => {
-    if (!terminalBusy && !terminalRecoveryRequired) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- Another terminal owner invalidates the user's idle-shell confirmation.
+    if (connected && !terminalBusy && !terminalRecoveryRequired) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Confirmation belongs to one available live terminal.
     setTerminalReady(false);
-  }, [terminalBusy, terminalRecoveryRequired]);
+  }, [connected, terminalBusy, terminalRecoveryRequired]);
 
   function openDialog() {
     setLoading(true); setStarting(false); setStopping(false); setFailed(false);

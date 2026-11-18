@@ -1,17 +1,16 @@
 //! Loopback SOCKS5 bridge for HTTP clients. A lease owns the listener, password
 //! and relays. No HTTP headers or TLS records are inspected by the bridge.
-use super::{failure, AppResult, TunnelConnector};
+use super::{failure, AppResult, BoxedTunnelStream, TunnelConnector};
 use std::{
     io,
     net::{Ipv4Addr, Ipv6Addr, SocketAddr},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, OnceLock,
-    },
+    pin::Pin,
+    sync::{Arc, Mutex, OnceLock},
+    task::{Context, Poll},
     time::Duration,
 };
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf},
     net::{TcpListener, TcpStream},
     task::{JoinHandle, JoinSet},
 };
@@ -24,7 +23,15 @@ const MAX_PENDING_CLIENTS: usize = 32;
 #[derive(Default)]
 struct ProxyProgress {
     failure: OnceLock<&'static str>,
-    opened: AtomicBool,
+    forwarding: Mutex<Forwarding>,
+}
+
+#[derive(Default, PartialEq)]
+enum Forwarding {
+    #[default]
+    AwaitingBytes,
+    BytesAccepted,
+    ClosedBeforeWrite,
 }
 
 pub struct TunnelProxyLease {
@@ -76,10 +83,15 @@ impl TunnelProxyLease {
     pub fn password(&self) -> &str {
         self.password.as_str()
     }
-    /// A failed redirect or a closed parent can follow an already delivered request.
-    pub fn failure_before_forwarding(&self) -> Option<&'static str> {
-        let code = self.remote_failure_code()?;
-        (!self.progress.opened.load(Ordering::Acquire)).then_some(code)
+    /// Seal pending relays and report whether any SSH channel accepted client bytes,
+    /// including on a previous redirect hop. A SOCKS handshake alone sends none.
+    pub fn finish_after_error(&self) -> bool {
+        let mut stage = self.progress.forwarding.lock().unwrap();
+        if *stage == Forwarding::BytesAccepted {
+            return true;
+        }
+        *stage = Forwarding::ClosedBeforeWrite;
+        false
     }
 
     pub fn remote_failure_code(&self) -> Option<&'static str> {
@@ -185,15 +197,68 @@ async fn relay(
 ) -> io::Result<()> {
     let (host, port) =
         tokio::time::timeout(Duration::from_secs(5), target(&mut socket, password)).await??;
-    let mut channel = match connector.connect(&host, port).await {
+    let channel = match connector.connect(&host, port).await {
         Ok(channel) => channel,
         Err(error) => {
             let _ = progress.failure.set(error.code());
             return reply(&mut socket, 4).await;
         }
     };
-    progress.opened.store(true, Ordering::Release);
     reply(&mut socket, 0).await?;
+    let mut channel = TrackedChannel {
+        channel,
+        progress,
+        forwarded: false,
+    };
     tokio::io::copy_bidirectional(&mut socket, &mut channel).await?;
     Ok(())
+}
+
+struct TrackedChannel<'a> {
+    channel: BoxedTunnelStream,
+    progress: &'a ProxyProgress,
+    forwarded: bool,
+}
+
+impl AsyncRead for TrackedChannel<'_> {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.channel).poll_read(cx, buf)
+    }
+}
+
+impl AsyncWrite for TrackedChannel<'_> {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        let relay = self.get_mut();
+        if relay.forwarded || buf.is_empty() {
+            return Pin::new(&mut relay.channel).poll_write(cx, buf);
+        }
+        // Serialize the first accepted payload with finish_after_error. Aborting a
+        // JoinHandle alone would allow a late first write after reporting "not sent".
+        let mut stage = relay.progress.forwarding.lock().unwrap();
+        if *stage == Forwarding::ClosedBeforeWrite {
+            return Poll::Ready(Err(io::ErrorKind::ConnectionAborted.into()));
+        }
+        let result = Pin::new(&mut relay.channel).poll_write(cx, buf);
+        if matches!(result, Poll::Ready(Ok(n)) if n > 0) {
+            *stage = Forwarding::BytesAccepted;
+            relay.forwarded = true;
+        }
+        result
+    }
+
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.channel).poll_flush(cx)
+    }
+
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.channel).poll_shutdown(cx)
+    }
 }

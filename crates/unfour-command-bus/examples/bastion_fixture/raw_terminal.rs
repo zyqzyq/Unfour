@@ -173,7 +173,7 @@ fn synthetic(command: &str) -> Option<(Vec<u8>, u8)> {
         return Some((b"UNFOUR_CURL_TOOLS".to_vec(), 0));
     }
     assert!(command.contains("http://terminal.fixture.invalid/"));
-    assert!(command.contains("u_c $h --max-time"));
+    assert!(command.contains("u_c $h --max-filesize 10485760 --max-time"));
     assert!(command.contains("request = \"POST\""));
     assert!(command.contains("content-type: application/json"));
     assert!(command.contains("authorization: Bearer "));

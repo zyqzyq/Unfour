@@ -84,6 +84,20 @@ export function useApiRequestTabs(workspaceId: string) {
     }
   }
 
+  function sendErrorMessage(workspace: string, code: string | null, raw: string, failure: unknown, hasResponse = false) {
+    let message = localizeReplayError(raw, t);
+    if (code === "API_RESPONSE_TOO_LARGE") message = t("api.response.tooLarge");
+    if (code === "API_CANCELLED") message = t("api.response.cancelledDescription");
+    if (code?.startsWith("SSH_TUNNEL_") || isTerminalApiError(code)) {
+      message = t(`network.errors.${code}`, t("api.route.failed"));
+      refreshRouteContext(workspace);
+    }
+    if (!hasResponse && shouldAppendOutcomeWarning(code, failure)) {
+      message = `${message} ${t("feedback.apiOutcomeUncertain")}`.trim();
+    }
+    return message;
+  }
+
   const sendMutation = useMutation({
     // This dispatches local IPC. Only the backend can assess the remote route.
     networkMode: "always",
@@ -93,14 +107,8 @@ export function useApiRequestTabs(workspaceId: string) {
         : temporaryHandle ? sendApiRequest(executionId, input, routing, temporaryHandle) : sendApiRequest(executionId, input, routing),
     onSuccess: (execution, variables) => {
       const workspaceId = variables.input.workspaceId;
-      if (execution.httpErrorCode === "API_RESPONSE_TOO_LARGE") execution = { ...execution, httpError: t("api.response.tooLarge") };
-      if (execution.httpError) execution = { ...execution, httpError: localizeReplayError(execution.httpError, t) };
-      if (execution.httpErrorCode?.startsWith("SSH_TUNNEL_") || isTerminalApiError(execution.httpErrorCode)) {
-        execution = { ...execution, httpError: t(`network.errors.${execution.httpErrorCode}`, t("api.route.failed")) };
-        refreshRouteContext(workspaceId);
-      }
-      if (!execution.response && shouldAppendOutcomeWarning(execution.httpErrorCode)) {
-        execution = { ...execution, httpError: `${execution.httpError ?? ""} ${t("feedback.apiOutcomeUncertain")}`.trim() };
+      if (execution.httpError || execution.httpErrorCode) {
+        execution = { ...execution, httpError: sendErrorMessage(workspaceId, execution.httpErrorCode, execution.httpError ?? "", execution, Boolean(execution.response)) };
       }
       if (execution.postResponse.error?.code === "API_POST_RESPONSE_FINALIZATION_FAILED") {
         execution = { ...execution, postResponse: { ...execution.postResponse, error: { ...execution.postResponse.error, message: t("feedback.apiPostResponseFailed") } } };
@@ -129,12 +137,7 @@ export function useApiRequestTabs(workspaceId: string) {
       const store = useApiRequestTabStore.getState();
       const current = store.byWorkspace[workspaceId]?.tabs.find((tab) => tab.executionId === variables.executionId);
       const code = errorCode(error);
-      let message = code === "API_RESPONSE_TOO_LARGE" ? t("api.response.tooLarge") : localizeReplayError(formatError(error), t);
-      if (code?.startsWith("SSH_TUNNEL_") || isTerminalApiError(code)) {
-        message = t(`network.errors.${code}`, t("api.route.failed"));
-        refreshRouteContext(workspaceId);
-      }
-      if (shouldAppendOutcomeWarning(code)) message = `${message} ${t("feedback.apiOutcomeUncertain")}`;
+      const message = sendErrorMessage(workspaceId, code, formatError(error), error);
       if (current) store.failTabSend(workspaceId, current.id, message, code);
       if (variables.temporaryHandle) void queryClient.invalidateQueries({ queryKey: ["api-live-sessions", workspaceId] });
     },

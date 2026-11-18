@@ -20,8 +20,8 @@ const transport: TemporaryProbeReport = {
 };
 beforeEach(() => { vi.resetAllMocks(); api.get.mockResolvedValue(null); api.start.mockResolvedValue(transport); api.app.mockResolvedValue(null); });
 afterEach(cleanup);
-function view(locale: "en" | "zh-CN" = "en", blocked?: "terminalBusy" | "terminalRecoveryRequired") {
-  return <I18nProvider initialLocale={locale}><TemporaryCapabilityDialog workspaceId="w" handle="h" connected label="Node secret"
+function view(locale: "en" | "zh-CN" = "en", blocked?: "terminalBusy" | "terminalRecoveryRequired" | "disconnected") {
+  return <I18nProvider initialLocale={locale}><TemporaryCapabilityDialog workspaceId="w" handle="h" connected={blocked !== "disconnected"} label="Node secret"
     terminalBusy={blocked === "terminalBusy"} terminalRecoveryRequired={blocked === "terminalRecoveryRequired"} /></I18nProvider>;
 }
 async function open(locale: "en" | "zh-CN" = "en") {
@@ -52,8 +52,8 @@ it.each(["en", "zh-CN"] as const)("defaults to transport and requires fresh expl
   expect(report.checks.some((check: { id: string }) => check.id.startsWith("curl-"))).toBe(false);
 });
 
-it.each(["transport", "curl", "terminal"] as const)("invalidates %s confirmation when another operation owns the terminal or recovery becomes required", async (kind) => {
-  for (const blocked of ["terminalBusy", "terminalRecoveryRequired"] as const) {
+it.each(["transport", "curl", "terminal"] as const)("invalidates %s confirmation when the terminal becomes unavailable", async (kind) => {
+  for (const blocked of ["terminalBusy", "terminalRecoveryRequired", "disconnected"] as const) {
     const mounted = render(view());
     const t = await open();
     fireEvent.change(screen.getByRole("combobox"), { target: { value: kind } });

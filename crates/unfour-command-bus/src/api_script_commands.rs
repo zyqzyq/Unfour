@@ -174,6 +174,7 @@ impl CommandBus {
                 response: None,
                 http_error: None,
                 http_error_code: None,
+                http_request_may_have_been_sent: None,
                 pre_request: pre.execution,
                 post_response: ScriptExecutionResult::skipped(),
                 warnings: Vec::new(),
@@ -248,6 +249,7 @@ impl CommandBus {
                 operation,
             )
             .await
+            .map_err(crate::api_routes::HttpSendFailure::from)
         } else {
             self.send_routed_http_via(
                 resolved_request.clone(),
@@ -261,12 +263,12 @@ impl CommandBus {
         };
         let mut response = match http_result {
             Ok(response) => response,
-            Err(error) => {
-                let error_code = error.code().to_string();
+            Err(failure) => {
                 return Ok(RequestExecutionResult {
                     response: None,
-                    http_error: Some(error.to_string()),
-                    http_error_code: Some(error_code),
+                    http_error: Some(failure.error.to_string()),
+                    http_error_code: Some(failure.error.code().into()),
+                    http_request_may_have_been_sent: failure.request_may_have_been_sent,
                     pre_request: pre.execution,
                     post_response: ScriptExecutionResult::skipped(),
                     warnings: Vec::new(),
@@ -376,6 +378,7 @@ impl CommandBus {
             response: Some(response),
             http_error: None,
             http_error_code: None,
+            http_request_may_have_been_sent: None,
             pre_request: pre.execution,
             post_response: post,
             warnings,
@@ -474,6 +477,7 @@ fn cancelled_execution(
         response: None,
         http_error: Some("API request cancelled: cancelled by user".to_string()),
         http_error_code: Some("API_CANCELLED".to_string()),
+        http_request_may_have_been_sent: Some(false),
         pre_request,
         post_response,
         warnings: Vec::new(),

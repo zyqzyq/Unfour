@@ -50,7 +50,10 @@ pub(super) struct LoginPrompt {
     active: bool,
 }
 impl LoginPrompt {
-    pub(super) fn observe(&mut self, bytes: &[u8]) {
+    /// The handshake must stop on a prompt even if later text in this read
+    /// replaces it. The idle reader only needs the final state from active().
+    pub(super) fn observe(&mut self, bytes: &[u8]) -> bool {
+        let mut saw_prompt = false;
         for &byte in bytes {
             if !self.escape.visible(byte) {
                 continue;
@@ -69,6 +72,7 @@ impl LoginPrompt {
                     }) {
                         self.prefix = &word[..=next];
                         self.active = self.prefix.len() == word.len();
+                        saw_prompt |= self.active;
                         // A username echo or masked password still belongs to
                         // the same prompt until the terminal starts a new line.
                         self.skip_line = self.active;
@@ -81,6 +85,7 @@ impl LoginPrompt {
                 _ => {}
             }
         }
+        saw_prompt
     }
 
     pub(super) fn active(&self) -> bool {
@@ -106,5 +111,7 @@ mod tests {
         prompt.observe(b"\r\nlog");
         prompt.observe(b"in: ");
         assert!(prompt.active());
+        assert!(prompt.observe(b"\r\npassword:\r\nAnother line\r\n"));
+        assert!(!prompt.active());
     }
 }

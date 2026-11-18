@@ -377,39 +377,49 @@ async fn displayed_password_prompt_rejects_task_and_api_before_any_automatic_inp
 
 #[tokio::test]
 async fn terminal_login_prompt_never_receives_user_payload_or_leaks_bootstrap() {
-    let f = terminal_fixture().await;
-    f.state.lock().unwrap().terminal_login_prompt = true;
-    let input = input(&f, vec![command("private-command")]).await;
-    let run = f
-        .service
-        .run_temporary_task_with_mode(input, &f.handle, "terminal")
-        .await
-        .unwrap();
-    let run = finished(&f, &run).await;
-    assert_eq!(
-        run.error_message.as_deref(),
-        Some("SSH_TASK_INTERACTIVE_LOGIN_PROMPT")
-    );
-    let log = f
-        .service
-        .read_task_run_log(f.workspace.clone(), run.id)
-        .await
-        .unwrap();
-    assert!(
-        !log.contains("private-login-title")
-            && !log.contains("private-command")
-            && !log.contains("sh -c")
-    );
-    assert!(f.service.list_temporary(&f.workspace).unwrap()[0].terminal_recovery_required);
-    assert!(f
-        .service
-        .temporary_output(&f.workspace, &f.handle)
-        .unwrap()
-        .is_empty());
-    let state = f.state.lock().unwrap();
-    assert!(state.terminal_commands.is_empty());
-    assert!(!state.terminal_wire.contains(&3));
-    assert!(!String::from_utf8_lossy(&state.terminal_wire).contains("private-command"));
+    for stage in ["STARTUP", "SPLIT_STARTUP", "READY"] {
+        let f = terminal_fixture().await;
+        login_prompt_at(&f, stage).await;
+        let input = input(&f, vec![command("private-command")]).await;
+        let run = f
+            .service
+            .run_temporary_task_with_mode(input, &f.handle, "terminal")
+            .await
+            .unwrap();
+        let run = finished(&f, &run).await;
+        assert_eq!(
+            run.error_message.as_deref(),
+            Some("SSH_TASK_INTERACTIVE_LOGIN_PROMPT")
+        );
+        let log = f
+            .service
+            .read_task_run_log(f.workspace.clone(), run.id)
+            .await
+            .unwrap();
+        assert!(
+            !log.contains("private-login-title")
+                && !log.contains("private-command")
+                && !log.contains("sh -c")
+        );
+        assert!(f.service.list_temporary(&f.workspace).unwrap()[0].terminal_recovery_required);
+        assert!(f
+            .service
+            .temporary_output(&f.workspace, &f.handle)
+            .unwrap()
+            .is_empty());
+        let state = f.state.lock().unwrap();
+        assert!(state.terminal_commands.is_empty());
+        assert!(!state.terminal_wire.contains(&3));
+        let lines = std::str::from_utf8(&state.terminal_wire)
+            .unwrap()
+            .lines()
+            .collect::<Vec<_>>();
+        assert_eq!(lines.len(), if stage == "READY" { 2 } else { 1 });
+        assert!(!lines[0].contains("private-command"));
+        if stage == "READY" {
+            assert!(uuid::Uuid::parse_str(lines[1]).is_ok());
+        }
+    }
 }
 
 #[tokio::test]

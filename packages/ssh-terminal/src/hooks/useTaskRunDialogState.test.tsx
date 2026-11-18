@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
-import { act, cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SshTaskDetail, SshTaskRun, WorkspaceEnvironment, WorkspaceVariable } from "@unfour/command-client";
@@ -51,7 +51,8 @@ function setup(onAccepted = vi.fn()) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false, gcTime: Infinity } } });
   clients.push(client);
   const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
-  return renderHook(({ workspaceId }) => useTaskRunDialogState({ workspaceId, handleError: vi.fn(), onStarted: vi.fn(), onAccepted }), { wrapper, initialProps: { workspaceId: "w" } });
+  const hook = renderHook(({ workspaceId }) => useTaskRunDialogState({ workspaceId, handleError: vi.fn(), onStarted: vi.fn(), onAccepted }), { wrapper, initialProps: { workspaceId: "w" } });
+  return { ...hook, client };
 }
 
 describe("temporary Task targets", () => {
@@ -103,6 +104,32 @@ describe("temporary Task targets", () => {
     expect(result.current.runTemporaryHandle).toBe("live");
     expect(result.current.runTerminalReady).toBe(false);
     await act(async () => { finish([variable]); await pending; });
+    expect(result.current.runTerminalReady).toBe(false);
+  });
+  it("requires a new idle confirmation when the dispatch-time check found a busy terminal", async () => {
+    vi.mocked(listTemporaryRoutes).mockResolvedValue([target]);
+    const { result } = setup();
+    await act(async () => { await result.current.prepareRun("task"); });
+    act(() => { result.current.setRunTemporaryHandle("live"); result.current.setRunTerminalReady(true); });
+    vi.mocked(listTemporaryRoutes).mockResolvedValueOnce([{ ...target, terminalTaskBusy: true }]);
+    await act(async () => { await expect(result.current.runMutation.mutateAsync()).rejects.toThrow(/busy|in use/i); });
+    expect(result.current.runTerminalReady).toBe(false);
+    await act(async () => { await expect(result.current.runMutation.mutateAsync()).rejects.toThrow(/Confirm that the terminal/); });
+    expect(runTemporarySshTask).not.toHaveBeenCalled();
+  });
+  it("clears confirmation when refreshing the list fails even if the cache retains the target", async () => {
+    vi.mocked(listTemporaryRoutes).mockResolvedValue([target]);
+    const { result, client } = setup();
+    await act(async () => { await result.current.prepareRun("task"); });
+    await waitFor(() => expect(result.current.runTemporarySessions).toEqual([target]));
+    act(() => { result.current.setRunTemporaryHandle("live"); result.current.setRunTerminalReady(true); });
+    vi.mocked(listTemporaryRoutes).mockRejectedValue(new Error("list unavailable"));
+    const refresh = () => client.refetchQueries({ queryKey: ["ssh-task-temporary-targets", "w"] });
+    await act(async () => { await refresh(); });
+    await waitFor(() => expect(result.current.runTerminalReady).toBe(false));
+    vi.mocked(listTemporaryRoutes).mockResolvedValue([target]);
+    await act(async () => { await refresh(); });
+    await waitFor(() => expect(result.current.runTemporarySessions).toEqual([target]));
     expect(result.current.runTerminalReady).toBe(false);
   });
   it("observes an accepted run even if its dialog closed while the adapter was pending", async () => {

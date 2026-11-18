@@ -67,6 +67,17 @@ impl TerminalTaskDriver {
         self.fragments.extend(parts);
     }
 
+    fn check_login_prompt(&self) -> Result<(), TaskStepError> {
+        if self
+            .lease
+            .at_login_prompt()
+            .map_err(|_| shared::task_error("SSH_TASK_TRANSPORT_CLOSED"))?
+        {
+            return Err(shared::task_error("SSH_TASK_INTERACTIVE_LOGIN_PROMPT"));
+        }
+        Ok(())
+    }
+
     async fn send(&mut self, bytes: &[u8]) -> Result<(), TaskStepError> {
         for chunk in bytes.chunks(512) {
             // A restored marker can be queued immediately after a valid ACK.
@@ -83,13 +94,7 @@ impl TerminalTaskDriver {
                 return Err(shared::task_error("SSH_TASK_TERMINAL_NOT_READY"));
             }
             if !self.prepared {
-                if self
-                    .lease
-                    .at_login_prompt()
-                    .map_err(|_| shared::task_error("SSH_TASK_TRANSPORT_CLOSED"))?
-                {
-                    return Err(shared::task_error("SSH_TASK_INTERACTIVE_LOGIN_PROMPT"));
-                }
+                self.check_login_prompt()?;
                 self.lease.mark_dirty();
             }
             self.lease
@@ -116,24 +121,29 @@ impl TerminalTaskDriver {
             return Ok(());
         }
         self.send(protocol::BOOTSTRAP.as_bytes()).await?;
-        let mut observation = super::command_step::stream::StreamBuffer::new();
+        let mut prompt = crate::ssh::login_prompt::LoginPrompt::default();
+        let ready = format!("{}:READY", self.session);
+        let mut startup = false;
         loop {
-            match self.next().await? {
-                Fragment::Frame(frame) if frame == protocol::STARTUP => break,
+            let fragment = self.next().await?;
+            self.check_login_prompt()?;
+            match fragment {
+                Fragment::Frame(frame) if !startup && frame == protocol::STARTUP => {
+                    self.send(format!("{}\n", self.session).as_bytes()).await?;
+                    startup = true;
+                }
+                Fragment::Frame(frame) if startup && frame == ready => {
+                    self.prepared = true;
+                    return Ok(());
+                }
                 Fragment::Data(data) => {
-                    // Bootstrap/login bytes never enter task or terminal output.
-                    observation.push(&data, "stdout", &mut |_| {});
-                    if observation.has_login_prompt() {
+                    if prompt.observe(&data) {
                         return Err(shared::task_error("SSH_TASK_INTERACTIVE_LOGIN_PROMPT"));
                     }
                 }
                 _ => {}
             }
         }
-        self.send(format!("{}\n", self.session).as_bytes()).await?;
-        self.frame(&format!("{}:READY", self.session)).await?;
-        self.prepared = true;
-        Ok(())
     }
 
     async fn command(

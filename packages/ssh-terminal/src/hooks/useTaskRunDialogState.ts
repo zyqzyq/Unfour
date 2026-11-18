@@ -48,10 +48,10 @@ export function useTaskRunDialogState({ workspaceId, handleError, onStarted, onA
     // eslint-disable-next-line react-hooks/set-state-in-effect -- A terminal owner/recovery transition invalidates idle-shell confirmation.
     setState((current) => {
       if (!current?.terminalReady || !current.temporaryHandle) return current;
-      const target = temporary.data?.find((entry) => entry.handle === current.temporaryHandle);
+      const target = temporary.isSuccess && temporary.data.find((entry) => entry.handle === current.temporaryHandle);
       return !target || target.terminalTaskBusy || target.terminalRecoveryRequired ? { ...current, terminalReady: false } : current;
     });
-  }, [temporary.data]);
+  }, [temporary.data, temporary.isSuccess]);
   useEffect(() => {
     mounted.current = scope;
     generation.current += 1;
@@ -78,6 +78,9 @@ export function useTaskRunDialogState({ workspaceId, handleError, onStarted, onA
       const selected = state;
       if (selected.temporaryHandle && selected.temporaryExecutionMode === "terminal") {
         if (!selected.terminalReady) return Promise.reject(new Error(t("ssh.tasks.run.terminalReadyRequired")));
+        // Consume confirmation before rechecking the live session. A failed start
+        // can leave the dialog open after an ownership or connection change.
+        setState((current) => current === selected ? { ...current, terminalReady: false } : current);
         if (selected.detail.steps.some((step) => step.enabled && step.stepType !== "command")) return Promise.reject(new Error(t("ssh.tasks.run.errors.SSH_TASK_TERMINAL_COMMAND_ONLY")));
       }
       const version = generation.current;

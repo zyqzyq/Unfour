@@ -38,9 +38,12 @@ const uncertainSendErrors = new Set([
   "SSH_TERMINAL_HTTP_TRANSFER_FAILED",
 ]);
 
-// The backend reports tunnel setup errors before forwarding. Terminal cancellation
-// has its own visible warning, even when the response pane shows a diagnostic tab.
-export function shouldAppendOutcomeWarning(code: string | null | undefined) {
+export function shouldAppendOutcomeWarning(code: string | null | undefined, failure?: unknown) {
+  // Terminal cancellation has its own persistent notice, including on diagnostic tabs.
+  if (code === "SSH_TERMINAL_CANCELLED") return false;
+  if (failure && typeof failure === "object" && "httpRequestMayHaveBeenSent" in failure &&
+    typeof failure.httpRequestMayHaveBeenSent === "boolean") return failure.httpRequestMayHaveBeenSent;
+  // Transports without an explicit forwarding stage retain their existing classification.
   return uncertainSendErrors.has(code ?? "");
 }
 

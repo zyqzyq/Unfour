@@ -11,6 +11,7 @@ use std::{
 };
 mod fixture;
 mod raw_terminal;
+mod task_scripts;
 mod terminal;
 use fixture::*;
 

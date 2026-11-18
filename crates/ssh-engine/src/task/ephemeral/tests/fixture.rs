@@ -20,6 +20,7 @@ pub(super) struct State {
     pub(super) terminal_ignore_restore: bool,
     pub(super) terminal_task_drop_line: Option<usize>,
     pub(super) terminal_task_stall: Option<&'static str>,
+    pub(super) terminal_task_stdout: Option<Vec<u8>>,
     pub(super) terminal_raw_missing_tool: bool,
     pub(super) terminal_raw_printf_external: bool,
     pub(super) terminal_octal: bool,
@@ -46,7 +47,7 @@ pub(super) struct State {
     pub(super) terminal_raw_restore_gate: Option<Arc<tokio::sync::Semaphore>>,
     pub(super) terminal_raw_restores_waiting: usize,
     pub(super) terminal_raw_restores_sent: usize,
-    pub(super) terminal_login_prompt: bool,
+    pub(super) terminal_login_prompt: Option<&'static str>,
 }
 struct Server {
     pub(super) state: Arc<Mutex<State>>,
@@ -255,6 +256,30 @@ pub(super) async fn fixture_with_window(window_size: u32) -> Fixture {
         _dir: dir,
     }
 }
+
+pub(super) async fn login_prompt_at(f: &Fixture, stage: &'static str) {
+    if stage == "SPLIT_STARTUP" {
+        f.service
+            .temporary_input(SshSessionInput {
+                workspace_id: f.workspace.clone(),
+                session_id: f.handle.clone(),
+                data: "Pass".into(),
+            })
+            .await
+            .unwrap();
+        let mut displayed = String::new();
+        until(|| {
+            for event in f.service.temporary_output(&f.workspace, &f.handle).unwrap() {
+                displayed.push_str(&event.data);
+            }
+            displayed.ends_with("Pass")
+        })
+        .await;
+        f.state.lock().unwrap().terminal_wire.clear();
+    }
+    f.state.lock().unwrap().terminal_login_prompt = Some(stage);
+}
+
 pub(super) async fn until(mut check: impl FnMut() -> bool) {
     tokio::time::timeout(Duration::from_secs(8), async {
         while !check() {

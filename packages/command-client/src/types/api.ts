@@ -215,6 +215,7 @@ export type RequestExecutionResult = {
   response: ApiResponse | null;
   httpError: string | null;
   httpErrorCode: string | null;
+  httpRequestMayHaveBeenSent?: boolean;
   preRequest: ScriptExecutionResult;
   postResponse: ScriptExecutionResult;
   /** Non-fatal completion warnings; absent in older responses. */

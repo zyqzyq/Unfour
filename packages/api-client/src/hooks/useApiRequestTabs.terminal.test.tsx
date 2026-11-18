@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { listTemporaryRoutes, sendApiRequest, type RequestExecutionResult } from "@unfour/command-client";
 import { ApiTerminalExecutionNotice } from "../components/ApiTerminalExecutionNotice";
+import { ResponseTabs } from "../components/ResponseTabs";
 import { useApiRequestTabs } from "./useApiRequestTabs";
 import { resetApiRequestTabStore } from "../model/api-request-tab-state";
 
@@ -24,14 +25,14 @@ const execution: RequestExecutionResult = {
 };
 beforeEach(() => { vi.mocked(listTemporaryRoutes).mockResolvedValue([session]); vi.mocked(sendApiRequest).mockResolvedValue(execution); });
 afterEach(() => { cleanup(); resetApiRequestTabStore(); vi.clearAllMocks(); });
-async function setup() {
+async function setup(temporaryExecutionMode: "tcp" | "terminalCurl" = "terminalCurl") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   const hook = renderHook(() => useApiRequestTabs("w"), {
     wrapper: ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
   });
   act(() => hook.result.current.updateDraft("new:1", {
     url: "http://fixture.invalid/embeddings", method: "POST", bodyMode: "raw", rawBodyType: "json", body: '{"input":"北京"}',
-    temporaryHandle: session.handle, temporaryExecutionMode: "terminalCurl",
+    temporaryHandle: session.handle, temporaryExecutionMode,
   }));
   await waitFor(() => expect(hook.result.current.routing.ready).toBe(true));
   return { ...hook, client };
@@ -107,36 +108,64 @@ it("localizes fixed transfer errors and marks the remote result uncertain", asyn
 
 describe.each(["result", "rejection"])("send failure via %s", (path) => {
   it.each([
-    ["SSH_TUNNEL_FORWARD_PROHIBITED", false],
-    ["SSH_TUNNEL_INVALID_TARGET", false],
-    ["NETWORK_ERROR", true],
-    ["SSH_TERMINAL_CANCELLED", false], // The dedicated terminal notice owns this warning.
-  ] as const)("sets the appropriate warning for %s", async (code, uncertainInError) => {
+    ["SSH_TUNNEL_FORWARD_PROHIBITED", false, false],
+    ["SSH_TUNNEL_INVALID_TARGET", false, false],
+    ["NETWORK_ERROR", true, true],
+    ["HTTP_ERROR", true, true],
+    ["API_TIMEOUT", false, false],
+    ["API_TIMEOUT", true, true],
+    ["API_CANCELLED", false, false],
+    ["API_CANCELLED", true, true],
+    ["SSH_TUNNEL_TRANSPORT_CLOSED", true, true],
+    ["SSH_TERMINAL_CANCELLED", undefined, false], // The dedicated terminal notice owns this warning.
+  ] as const)("sets the warning for %s with forwarding stage %s", async (code, httpRequestMayHaveBeenSent, uncertainInError) => {
     if (path === "result") {
-      vi.mocked(sendApiRequest).mockResolvedValue({ ...execution, response: null, httpErrorCode: code, httpError: "send failed" });
+      vi.mocked(sendApiRequest).mockResolvedValue({ ...execution, response: null, httpErrorCode: code, httpError: "send failed", httpRequestMayHaveBeenSent });
     } else {
-      vi.mocked(sendApiRequest).mockRejectedValue({ code, message: "send failed" });
+      vi.mocked(sendApiRequest).mockRejectedValue({ code, message: "send failed", httpRequestMayHaveBeenSent });
     }
-    const { result } = await setup();
-    act(() => result.current.updateDraft("new:1", { terminalConfirmed: true }));
+    const terminal = code === "SSH_TERMINAL_CANCELLED";
+    const { result } = await setup(terminal ? "terminalCurl" : "tcp");
+    if (terminal) act(() => result.current.updateDraft("new:1", { terminalConfirmed: true }));
     await act(async () => result.current.sendTab(result.current.activeTab!));
     await waitFor(() => expect(result.current.activeTab?.sendErrorCode).toBe(code));
     expect(result.current.activeTab?.sendError?.includes("Remote effects may have occurred")).toBe(uncertainInError);
+    if (code === "API_CANCELLED") {
+      const tab = result.current.activeTab!;
+      const view = (responseTab: "body" | "request") => <ResponseTabs tab={{ ...tab, responseTab }}
+        onRetry={vi.fn()} onOpenAuthSettings={vi.fn()} onResponseTabChange={vi.fn()} />;
+      const { rerender } = render(view("body"));
+      expect(screen.queryAllByText(/Remote effects may have occurred/)).toHaveLength(uncertainInError ? 1 : 0);
+      rerender(view("request"));
+      expect(screen.queryAllByText(/Remote effects may have occurred/)).toHaveLength(uncertainInError ? 1 : 0);
+    }
     expect(sendApiRequest).toHaveBeenCalledTimes(1);
   });
 });
 
-it.each([false, true])("renders the cancellation warning once when recovery is %s", async (recoveryRequired) => {
-  vi.mocked(sendApiRequest).mockRejectedValue({ code: "SSH_TERMINAL_CANCELLED", message: "cancelled" });
+it.each([
+  ["result", false], ["result", true], ["rejection", false], ["rejection", true],
+] as const)("renders one cancellation warning via %s when recovery is %s", async (path, recoveryRequired) => {
+  const code = "SSH_TERMINAL_CANCELLED";
+  if (path === "result") {
+    vi.mocked(sendApiRequest).mockResolvedValue({ ...execution, response: null, httpErrorCode: code, httpError: "cancelled" });
+  } else {
+    vi.mocked(sendApiRequest).mockRejectedValue({ code, message: "cancelled" });
+  }
   const { result, client } = await setup();
   act(() => result.current.updateDraft("new:1", { terminalConfirmed: true }));
   await act(async () => result.current.sendTab(result.current.activeTab!));
   await waitFor(() => expect(result.current.activeTab?.sendErrorCode).toBe("SSH_TERMINAL_CANCELLED"));
   act(() => client.setQueryData(["api-live-sessions", "w"], [{ ...session, terminalRecoveryRequired: recoveryRequired }]));
   await waitFor(() => expect(result.current.routing.temporary.data?.[0]?.terminalRecoveryRequired).toBe(recoveryRequired));
-  render(<ApiTerminalExecutionNotice active tab={result.current.activeTab!} routing={result.current.routing} onUpdate={vi.fn()} />);
+  const tab = result.current.activeTab!;
+  render(<>
+    <ApiTerminalExecutionNotice active tab={tab} routing={result.current.routing} onUpdate={vi.fn()} />
+    <ResponseTabs tab={tab} onRetry={vi.fn()} onOpenAuthSettings={vi.fn()} onResponseTabChange={vi.fn()} />
+  </>);
+  expect(screen.getByText("Request cancelled")).toBeInTheDocument();
   expect(screen.getAllByText(/Remote effects may have occurred/)).toHaveLength(1);
-  expect(screen.queryAllByRole("alert")).toHaveLength(recoveryRequired ? 2 : 0);
+  expect(screen.queryAllByText(/Reconnect through the bastion/)).toHaveLength(recoveryRequired ? 1 : 0);
 });
 
 it.each(["result", "rejection"])("retains uncertain remote effects after an input acknowledgement timeout via %s without replay", async (path) => {
@@ -155,6 +184,15 @@ it.each(["result", "rejection"])("retains uncertain remote effects after an inpu
   expect(result.current.activeTab?.sendError).not.toContain("untrusted-remote-detail");
   expect(result.current.activeTab?.response).toBeNull();
   expect(result.current.activeTab?.draft.terminalConfirmed).toBe(false);
+  act(() => client.setQueryData(["api-live-sessions", "w"], [{ ...session, terminalRecoveryRequired: true }]));
+  await waitFor(() => expect(result.current.routing.temporary.data?.[0]?.terminalRecoveryRequired).toBe(true));
+  const tab = result.current.activeTab!;
+  render(<>
+    <ApiTerminalExecutionNotice active tab={tab} routing={result.current.routing} onUpdate={vi.fn()} />
+    <ResponseTabs tab={tab} onRetry={vi.fn()} onOpenAuthSettings={vi.fn()} onResponseTabChange={vi.fn()} />
+  </>);
+  expect(screen.getAllByText(/Remote effects may have occurred/)).toHaveLength(1);
+  expect(screen.getAllByText(/Reconnect through the bastion/)).toHaveLength(1);
   act(() => client.setQueryData(["api-live-sessions", "w"], [session]));
   await act(async () => result.current.sendTab(result.current.activeTab!));
   expect(sendApiRequest).toHaveBeenCalledTimes(1);

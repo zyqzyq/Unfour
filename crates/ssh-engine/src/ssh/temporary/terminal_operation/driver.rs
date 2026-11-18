@@ -74,6 +74,17 @@ impl<'a> Driver<'a> {
         Ok(())
     }
 
+    fn check_login_prompt(&self) -> Result<(), &'static str> {
+        if self
+            .lease
+            .at_login_prompt()
+            .map_err(|_| "SSH_TERMINAL_TRANSPORT_CLOSED")?
+        {
+            return Err("SSH_TERMINAL_LOGIN_REQUIRED");
+        }
+        Ok(())
+    }
+
     async fn send(&mut self, bytes: &[u8]) -> Result<(), &'static str> {
         for chunk in bytes.chunks(512) {
             self.deadline.check()?;
@@ -94,13 +105,7 @@ impl<'a> Driver<'a> {
             }
             self.deadline.check()?;
             if !self.child_ready {
-                if self
-                    .lease
-                    .at_login_prompt()
-                    .map_err(|_| "SSH_TERMINAL_TRANSPORT_CLOSED")?
-                {
-                    return Err("SSH_TERMINAL_LOGIN_REQUIRED");
-                }
+                self.check_login_prompt()?;
                 self.lease.mark_dirty();
             }
             tokio::time::timeout_at(
@@ -146,47 +151,54 @@ impl<'a> Driver<'a> {
         }
     }
 
-    async fn prepare(&mut self) -> Result<protocol::InputEncoding, &'static str> {
-        self.send(protocol::BOOTSTRAP.as_bytes()).await?;
-        let mut observation = crate::ssh::task::TaskOutputBuffer::new();
+    async fn handshake_frame(
+        &mut self,
+        prompt: &mut crate::ssh::login_prompt::LoginPrompt,
+    ) -> Result<String, &'static str> {
         loop {
-            match self.next().await? {
-                Fragment::Frame(frame) if frame == protocol::STARTUP => break,
+            let fragment = self.next().await?;
+            // The native reader also saw any prompt prefix from before the claim.
+            self.check_login_prompt()?;
+            match fragment {
+                Fragment::Frame(frame) => return Ok(frame),
                 Fragment::Data(bytes) => {
-                    observation.observe(&bytes);
-                    if observation.has_login_prompt() {
+                    if prompt.observe(&bytes) {
                         return Err("SSH_TERMINAL_LOGIN_REQUIRED");
                     }
                 }
-                _ => {}
             }
         }
+    }
+
+    async fn prepare(&mut self) -> Result<protocol::InputEncoding, &'static str> {
+        self.send(protocol::BOOTSTRAP.as_bytes()).await?;
+        let mut prompt = crate::ssh::login_prompt::LoginPrompt::default();
+        while self.handshake_frame(&mut prompt).await? != protocol::STARTUP {}
         self.deadline.enter(Stage::Ready);
         self.send(format!("{}\n", self.session).as_bytes()).await?;
         loop {
-            if let Fragment::Frame(frame) = self.next().await? {
-                if let Some(capabilities) = frame.strip_prefix(&format!("{}:", self.session)) {
-                    let encoding = match capabilities {
-                        protocol::READY_CAPABILITIES => Some(protocol::InputEncoding::Base64),
-                        protocol::OCTAL_CAPABILITIES => Some(protocol::InputEncoding::Octal),
-                        _ => None,
-                    };
-                    if let Some(encoding) = encoding {
-                        self.child_ready = true;
-                        return Ok(encoding);
-                    }
+            let frame = self.handshake_frame(&mut prompt).await?;
+            if let Some(capabilities) = frame.strip_prefix(&format!("{}:", self.session)) {
+                let encoding = match capabilities {
+                    protocol::READY_CAPABILITIES => Some(protocol::InputEncoding::Base64),
+                    protocol::OCTAL_CAPABILITIES => Some(protocol::InputEncoding::Octal),
+                    _ => None,
+                };
+                if let Some(encoding) = encoding {
+                    self.child_ready = true;
+                    return Ok(encoding);
                 }
-                if frame.starts_with(&format!("{}:READY", self.session)) {
-                    return Err("SSH_TERMINAL_PROTOCOL_ERROR");
-                }
-                for (suffix, error) in [
-                    ("BASE64_MISSING", "SSH_TERMINAL_BASE64_MISSING"),
-                    ("PRINTF_UNSUPPORTED", "SSH_TERMINAL_PRINTF_UNSUPPORTED"),
-                ] {
-                    if frame == format!("{}:{suffix}", self.session) {
-                        self.child_exiting = true;
-                        return Err(error);
-                    }
+            }
+            if frame.starts_with(&format!("{}:READY", self.session)) {
+                return Err("SSH_TERMINAL_PROTOCOL_ERROR");
+            }
+            for (suffix, error) in [
+                ("BASE64_MISSING", "SSH_TERMINAL_BASE64_MISSING"),
+                ("PRINTF_UNSUPPORTED", "SSH_TERMINAL_PRINTF_UNSUPPORTED"),
+            ] {
+                if frame == format!("{}:{suffix}", self.session) {
+                    self.child_exiting = true;
+                    return Err(error);
                 }
             }
         }

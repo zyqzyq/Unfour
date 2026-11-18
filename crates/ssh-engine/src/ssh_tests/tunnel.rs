@@ -293,11 +293,26 @@ async fn tunnel_uses_pinned_host_saved_key_and_lease_scoped_remote_dns_channels(
         .unwrap();
     wrong_password.read_exact(&mut response).await.unwrap();
     assert_eq!(response, [1, 1]);
+    // Even after a successful SOCKS CONNECT, no business bytes have crossed.
+    // A late write racing the caller's timeout must never change that verdict.
+    let empty_lease = tunnel.http_proxy().await.unwrap();
+    let mut late = forward(&empty_lease).await;
+    assert!(!empty_lease.finish_after_error());
+    late.write_all(b"late").await.unwrap();
+    let mut echo = [0; 4];
+    assert!(!matches!(
+        timeout(Duration::from_secs(2), late.read(&mut echo))
+            .await
+            .unwrap(),
+        Ok(1..)
+    ));
+    assert!(!empty_lease.finish_after_error());
+
     let mut socket = forward(&lease).await;
     socket.write_all(b"data").await.unwrap();
-    let mut echo = [0; 4];
     socket.read_exact(&mut echo).await.unwrap();
     assert_eq!(echo, *b"data");
+    assert!(lease.finish_after_error());
     drop(lease);
     // Either orderly EOF or a socket reset is a completed teardown.
     assert!(!matches!(

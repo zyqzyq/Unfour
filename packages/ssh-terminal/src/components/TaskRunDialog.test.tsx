@@ -40,6 +40,9 @@ describe("TaskRunDialog", () => {
     expect(props.onTerminalReadyChange).toHaveBeenCalledWith(true);
     mounted.rerender(<TaskRunDialog {...props} terminalReady temporarySessions={[target]} />);
     expect(run()).toBeEnabled();
+    mounted.rerender(<TaskRunDialog {...props} temporarySessions={[]} />);
+    expect(screen.getByRole("checkbox", { name: t("ssh.tasks.run.terminalReady") })).toBeDisabled();
+    expect(run()).toBeDisabled();
     mounted.rerender(<TaskRunDialog {...props} terminalReady temporarySessions={[{ ...target, terminalTaskBusy: true }]} />);
     expect(run()).toBeDisabled();
     mounted.rerender(<TaskRunDialog {...props} terminalReady temporarySessions={[{ ...target, terminalRecoveryRequired: true }]} />);

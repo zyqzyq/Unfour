@@ -127,11 +127,15 @@ pub(super) fn prepare(
     let mut config = String::new();
     let mut body_check = "";
     option(&mut config, "url", request.url().as_str())?;
-    if method == Method::HEAD {
+    let body_limit = if method == Method::HEAD {
         config.push_str("head\n");
+        // curl checks the advertised resource size even for HEAD. There is
+        // no downloaded body here; the driver and parser bound the headers.
+        String::new()
     } else {
         option(&mut config, "request", method.as_str())?;
-    }
+        format!(" --max-filesize {MAX_RESPONSE_BYTES}")
+    };
     for (key, value) in request.headers() {
         let value = value.to_str().map_err(|_| unsupported())?;
         // curl's semicolon syntax sends an explicitly empty header. The colon
@@ -178,7 +182,7 @@ pub(super) fn prepare(
     // payload to printf if the shell cannot establish it is a builtin.
     let quoted = config.replace('\'', "'\\''");
     let command = format!(
-        "{CURL_SETUP}{body_check}command printf '%s' '{quoted}' | u_c $h --max-time {timeout_seconds} --config - 2>/dev/null\n"
+        "{CURL_SETUP}{body_check}command printf '%s' '{quoted}' | u_c $h{body_limit} --max-time {timeout_seconds} --config - 2>/dev/null\n"
     );
     Ok(PreparedTerminalCurl {
         command,

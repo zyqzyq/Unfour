@@ -1,13 +1,14 @@
 import type { TemporaryTaskExecutionMode } from "@unfour/command-client";
 import { Select, useI18n } from "@unfour/ui";
 
-export function TemporaryTaskExecutionControls({ mode, ready, busy, recoveryRequired, commandOnly, pending, onModeChange, onReadyChange }: {
+export function TemporaryTaskExecutionControls({ mode, ready, busy, recoveryRequired, commandOnly, pending, targetAvailable, onModeChange, onReadyChange }: {
   mode: TemporaryTaskExecutionMode;
   ready: boolean;
   busy: boolean;
   recoveryRequired: boolean;
   commandOnly: boolean;
   pending: boolean;
+  targetAvailable: boolean;
   onModeChange?: (mode: TemporaryTaskExecutionMode) => void;
   onReadyChange?: (ready: boolean) => void;
 }) {
@@ -22,7 +23,7 @@ export function TemporaryTaskExecutionControls({ mode, ready, busy, recoveryRequ
     </label>
     <p className="text-[var(--u-color-text-muted)]">{t(mode === "terminal" ? "ssh.tasks.run.terminalHelp" : "ssh.tasks.run.execHelp")}</p>
     {mode === "terminal" && <label className="flex items-start gap-2">
-      <input type="checkbox" className="mt-0.5" checked={ready} disabled={pending || busy || recoveryRequired || !commandOnly} onChange={(event) => onReadyChange?.(event.target.checked)} />
+      <input type="checkbox" className="mt-0.5" checked={ready} disabled={!targetAvailable || pending || busy || recoveryRequired || !commandOnly} onChange={(event) => onReadyChange?.(event.target.checked)} />
       <span>{t("ssh.tasks.run.terminalReady")}</span>
     </label>}
     {mode === "terminal" && !commandOnly && <p role="alert" className="text-[var(--u-color-warning)]">{t("ssh.tasks.run.errors.SSH_TASK_TERMINAL_COMMAND_ONLY")}</p>}

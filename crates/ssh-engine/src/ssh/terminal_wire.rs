@@ -61,32 +61,42 @@ pub(super) struct Parser {
 }
 impl Parser {
     pub(super) fn push(&mut self, bytes: &[u8]) -> Vec<Fragment> {
+        const MAX_PENDING_FRAME_BYTES: usize = 512;
         self.pending.extend_from_slice(bytes);
         let mut out = Vec::new();
-        loop {
-            let Some(start) = self.pending.iter().position(|b| *b == 0x1e) else {
-                if !self.pending.is_empty() {
-                    out.push(Fragment::Data(std::mem::take(&mut self.pending)));
-                }
-                break;
-            };
-            if start > 0 {
-                out.push(Fragment::Data(self.pending.drain(..start).collect()));
-            }
-            match self.pending.iter().position(|b| *b == 0x1f) {
-                Some(end) if end <= 512 => {
-                    let bytes: Vec<_> = self.pending.drain(..=end).collect();
-                    match std::str::from_utf8(&bytes[1..end]) {
-                        Ok(value) => out.push(Fragment::Frame(value.into())),
-                        Err(_) => out.push(Fragment::Data(bytes)),
+        let mut data_start = 0;
+        let mut frame_start = None;
+        for (i, byte) in self.pending.iter().enumerate() {
+            match byte {
+                // A frame cannot contain RS. A newer RS makes the preceding
+                // unterminated candidate ordinary output, even across packets.
+                0x1e => frame_start = Some(i),
+                0x1f => {
+                    let Some(start) = frame_start
+                        .take()
+                        .filter(|start| i - start <= MAX_PENDING_FRAME_BYTES)
+                    else {
+                        continue;
+                    };
+                    let Ok(frame) = std::str::from_utf8(&self.pending[start + 1..i]) else {
+                        continue;
+                    };
+                    if data_start < start {
+                        out.push(Fragment::Data(self.pending[data_start..start].to_vec()));
                     }
+                    out.push(Fragment::Frame(frame.to_owned()));
+                    data_start = i + 1;
                 }
-                _ if self.pending.len() > 512 => {
-                    out.push(Fragment::Data(self.pending.drain(..1).collect()))
-                }
-                _ => break,
+                _ => {}
             }
         }
+        let keep_from = frame_start
+            .filter(|start| self.pending.len() - start <= MAX_PENDING_FRAME_BYTES)
+            .unwrap_or(self.pending.len());
+        if data_start < keep_from {
+            out.push(Fragment::Data(self.pending[data_start..keep_from].to_vec()));
+        }
+        self.pending.drain(..keep_from);
         out
     }
 }
@@ -161,6 +171,31 @@ mod tests {
         let mut parser = Parser::default();
         parser.push(&[0x1e; 20_000]);
         assert!(parser.pending.len() <= 512);
+    }
+
+    #[test]
+    fn stray_record_separators_preserve_output_and_resynchronize_on_the_next_frame() {
+        let raw = b"before\x1e\x1e{\"ok\":true}\n\xff";
+        for code in [0, 23] {
+            let status = format!("n:STATUS:{code}");
+            let tail = format!("\x1e{status}\x1f\x1en:END\x1f\x1es:RESTORED\x1f");
+            let wire = [raw.as_slice(), tail.as_bytes()].concat();
+            for split in 0..=wire.len() {
+                let mut parser = Parser::default();
+                let mut parts = parser.push(&wire[..split]);
+                parts.extend(parser.push(&wire[split..]));
+                let mut data = Vec::new();
+                let mut frames = Vec::new();
+                for part in parts {
+                    match part {
+                        Fragment::Data(bytes) => data.extend(bytes),
+                        Fragment::Frame(frame) => frames.push(frame),
+                    }
+                }
+                assert_eq!(data, raw);
+                assert_eq!(frames, [status.as_str(), "n:END", "s:RESTORED"]);
+            }
+        }
     }
     #[test]
     fn full_input_ack_is_preserved_across_every_fragment_boundary() {

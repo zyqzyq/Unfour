@@ -8,6 +8,20 @@ use unfour_core::{
 };
 use unfour_http_engine::local_routes;
 
+pub(super) struct HttpSendFailure {
+    pub error: AppError,
+    pub request_may_have_been_sent: Option<bool>,
+}
+
+impl From<AppError> for HttpSendFailure {
+    fn from(error: AppError) -> Self {
+        Self {
+            error,
+            request_may_have_been_sent: None,
+        }
+    }
+}
+
 impl CommandBus {
     pub async fn api_routes(
         &self,
@@ -103,6 +117,7 @@ impl CommandBus {
             None,
         )
         .await
+        .map_err(|failure| failure.error)
     }
 
     pub(super) async fn send_routed_http_via(
@@ -113,12 +128,13 @@ impl CommandBus {
         route: &ApiRoute,
         expected_ssh_revision: Option<i64>,
         temporary_handle: Option<&str>,
-    ) -> AppResult<ApiResponse> {
+    ) -> Result<ApiResponse, HttpSendFailure> {
         if temporary_handle.is_none() && *route == ApiRoute::Direct {
             return self
                 .api_client
                 .send_cancellable_with_secrets(input, cancellation, secrets)
-                .await;
+                .await
+                .map_err(Into::into);
         }
         let connect = async {
             if let Some(handle) = temporary_handle {
@@ -154,14 +170,14 @@ impl CommandBus {
         let started = std::time::Instant::now();
         let proxy = tokio::select! {
             biased;
-            _ = cancellation.cancelled() => return Err(AppError::ApiCancelled("cancelled by user".into())),
+            _ = cancellation.cancelled() => Err(AppError::ApiCancelled("cancelled by user".into())),
             result = async {
                 match budget {
                     Some(limit) => tokio::time::timeout(limit, connect).await.map_err(|_| AppError::Validation("SSH_TUNNEL_TIMEOUT".into()))?,
                     None => connect.await,
                 }
-            } => result?,
-        };
+            } => result,
+        }.map_err(|error| HttpSendFailure { error, request_may_have_been_sent: Some(false) })?;
         self.api_client
             .send_via_ssh_proxy(
                 input,
@@ -173,9 +189,18 @@ impl CommandBus {
                 started,
             )
             .await
-            .map_err(|err| match (&err, proxy.failure_before_forwarding()) {
-                (AppError::ApiNetwork(_), Some(code)) => AppError::Validation(code.into()),
-                _ => err,
+            .map_err(|error| {
+                let forwarded = proxy.finish_after_error();
+                let error = match (&error, forwarded, proxy.remote_failure_code()) {
+                    (AppError::ApiNetwork(_), false, Some(code)) => {
+                        AppError::Validation(code.into())
+                    }
+                    _ => error,
+                };
+                HttpSendFailure {
+                    error,
+                    request_may_have_been_sent: Some(forwarded),
+                }
             })
     }
 }

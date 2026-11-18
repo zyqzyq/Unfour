@@ -142,7 +142,7 @@ export function TaskRunDialog({
             </label>
             {temporaryLoading && !temporarySessions.length && <p role="status" className="text-[12px] text-[var(--u-color-text-muted)]">{t("ssh.tasks.run.loadingTemporary")}</p>}
             {temporaryHandle && <p role="note" className="text-[12px] text-[var(--u-color-text-muted)]">{t("ssh.tasks.run.temporaryHelp")}</p>}
-            {temporaryHandle && <TemporaryTaskExecutionControls mode={temporaryExecutionMode} ready={terminalReady} busy={Boolean(temporary?.terminalTaskBusy)} recoveryRequired={Boolean(temporary?.terminalRecoveryRequired)} commandOnly={commandOnly} pending={pending}
+            {temporaryHandle && <TemporaryTaskExecutionControls mode={temporaryExecutionMode} ready={terminalReady} busy={Boolean(temporary?.terminalTaskBusy)} recoveryRequired={Boolean(temporary?.terminalRecoveryRequired)} commandOnly={commandOnly} pending={pending} targetAvailable={Boolean(temporary)}
               onModeChange={onTemporaryExecutionModeChange} onReadyChange={onTerminalReadyChange} />}
 
             <label className="flex flex-col gap-1">

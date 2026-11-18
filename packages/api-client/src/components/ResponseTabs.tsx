@@ -107,6 +107,7 @@ export function ResponseTabs({
       <ResponseSendNotice tab={tab} canRetry={canRetry} onRetry={onRetry} />
       <div className="min-h-0 flex-1 select-text overflow-hidden bg-[var(--u-color-canvas)]">
         <ExecutionProgress
+          cancelledMessage={tab.sendErrorCode === "API_CANCELLED" ? tab.sendError : null}
           isScriptTab={isScriptTab}
           responseState={responseState}
           responseTab={tab.responseTab}
@@ -208,10 +209,12 @@ export function ResponseTabs({
 }
 
 function ExecutionProgress({
+  cancelledMessage,
   isScriptTab,
   responseState,
   responseTab,
 }: {
+  cancelledMessage: string | null;
   isScriptTab: boolean;
   responseState: ReturnType<typeof deriveTabResponseState>;
   responseTab: ResponseTab;
@@ -219,12 +222,13 @@ function ExecutionProgress({
   const { t } = useI18n();
   if (responseState === "sending") return <SendingState />;
   if (responseState === "cancelling") return <SendingState cancelling />;
-  if (responseState !== "cancelled" || responseTab === "request" || isScriptTab) {
-    return null;
+  if (responseState !== "cancelled") return null;
+  if (responseTab === "request" || isScriptTab) {
+    return cancelledMessage && <p role="status" className="px-3 py-2 text-xs">{cancelledMessage}</p>;
   }
   return (
     <ResponsePaneState
-      description={t("api.response.cancelledDescription")}
+      description={cancelledMessage ?? t("api.response.cancelledDescription")}
       icon={<Ban size={24} />}
       title={t("api.response.cancelledTitle")}
       tone="empty"

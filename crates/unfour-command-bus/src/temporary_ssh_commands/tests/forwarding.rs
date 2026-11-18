@@ -21,7 +21,7 @@ async fn fixture_server(
 }
 
 #[tokio::test]
-async fn tunnel_rejection_before_http_and_after_a_delivered_redirect_have_distinct_outcomes() {
+async fn tunnel_errors_report_whether_http_could_have_been_sent() {
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
     let target = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -29,24 +29,34 @@ async fn tunnel_rejection_before_http_and_after_a_delivered_redirect_have_distin
         forward_target: Some(target.local_addr().unwrap()),
         ..Default::default()
     };
+    let release_open = parent.pending_open.clone();
     let (addr, _, server) = fixture_server(parent).await;
-    let redirect = tokio::spawn(async move {
-        let (stream, _) = target.accept().await.unwrap();
-        let mut http = BufReader::new(stream);
-        let mut line = String::new();
-        http.read_line(&mut line).await.unwrap();
-        assert!(
-            line.starts_with("POST /apply"),
-            "unexpected fixture request line: {line:?}"
-        );
-        loop {
-            line.clear();
-            assert!(http.read_line(&mut line).await.unwrap() > 0);
-            if line == "\r\n" {
-                break;
+    let (finish_response, hold_response) = tokio::sync::oneshot::channel::<()>();
+    let http_target = tokio::spawn(async move {
+        let read_request = async || {
+            let (stream, _) = target.accept().await.unwrap();
+            let mut http = BufReader::new(stream);
+            let mut line = String::new();
+            http.read_line(&mut line).await.unwrap();
+            assert!(
+                line.starts_with("POST /apply"),
+                "unexpected fixture request line: {line:?}"
+            );
+            loop {
+                line.clear();
+                assert!(http.read_line(&mut line).await.unwrap() > 0);
+                if line == "\r\n" {
+                    break;
+                }
             }
-        }
-        http.get_mut().write_all(b"HTTP/1.1 303 See Other\r\nLocation: http://denied.invalid:2222/next\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await.unwrap();
+            http
+        };
+        read_request().await.get_mut().write_all(b"HTTP/1.1 303 See Other\r\nLocation: http://denied.invalid:2222/next\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await.unwrap();
+        // This POST was received too; closing without a status line loses its result.
+        drop(read_request().await);
+        // The POST reached the target, but the target never sends a response.
+        let _stalled = read_request().await;
+        let _ = hold_response.await;
     });
 
     let bus = CommandBus::ephemeral().await.unwrap();
@@ -64,23 +74,51 @@ async fn tunnel_rejection_before_http_and_after_a_delivered_redirect_have_distin
     bus.claim_temporary_ssh(&ws, &handle).await.unwrap();
     bus.start_temporary_ssh(&ws, &handle).unwrap();
     wait_for(&bus, &ws, "connected").await;
-    for (host, expected) in [
-        ("denied.invalid", "SSH_TUNNEL_FORWARD_PROHIBITED"),
-        ("ssh-target.invalid", "NETWORK_ERROR"),
+    for (target, budget, expected, forwarded) in [
+        (
+            "ssh-target.invalid:0",
+            5000,
+            "SSH_TUNNEL_INVALID_TARGET",
+            false,
+        ),
+        (
+            "denied.invalid:2222",
+            5000,
+            "SSH_TUNNEL_FORWARD_PROHIBITED",
+            false,
+        ),
+        ("ssh-target.invalid:2222", 5000, "NETWORK_ERROR", true),
+        ("ssh-target.invalid:2222", 5000, "HTTP_ERROR", true),
+        ("ssh-target.invalid:2222", 1000, "API_TIMEOUT", true),
+        ("slow.fixture.invalid:2222", 1000, "API_TIMEOUT", false),
     ] {
         let input = serde_json::from_value(serde_json::json!({
-            "workspaceId": ws, "method": "POST", "url": format!("http://{host}:2222/apply"),
-            "headers": [], "query": [], "bodyKind": "none", "timeoutMs": 5000
+            "workspaceId": ws, "method": "POST", "url": format!("http://{target}/apply"),
+            "headers": [], "query": [], "bodyKind": "none", "timeoutMs": budget
         }))
         .unwrap();
         let result = bus
             .send_api_request_via("tunnel-redirect", input, None, None, None, Some(&handle))
             .await
             .unwrap();
-        assert_eq!(result.http_error_code.as_deref(), Some(expected), "{host}");
+        assert_eq!(
+            result.http_error_code.as_deref(),
+            Some(expected),
+            "{target}"
+        );
+        assert_eq!(
+            result.http_request_may_have_been_sent,
+            Some(forwarded),
+            "{target}"
+        );
         assert!(result.response.is_none());
     }
-    redirect.await.unwrap();
+    release_open.notify_one();
+    let _ = finish_response.send(());
+    tokio::time::timeout(Duration::from_secs(5), http_target)
+        .await
+        .unwrap()
+        .unwrap();
     bus.cancel_temporary_ssh(&ws, &handle).unwrap();
     server.abort();
 }

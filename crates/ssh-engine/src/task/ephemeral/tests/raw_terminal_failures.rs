@@ -1,6 +1,40 @@
 use super::*;
 
 #[tokio::test]
+async fn login_prompt_during_api_handshake_stops_before_request_or_recovery_input() {
+    for stage in ["STARTUP", "SPLIT_STARTUP", "READY"] {
+        let f = raw_fixture().await;
+        login_prompt_at(&f, stage).await;
+        let error = f
+            .service
+            .claim_temporary_terminal_operation(&f.workspace, &f.handle)
+            .unwrap()
+            .run(
+                "private-request",
+                Some(5_000),
+                CancellationToken::new(),
+                1024,
+            )
+            .await
+            .err()
+            .unwrap();
+        assert_eq!(error.code(), "SSH_TERMINAL_LOGIN_REQUIRED");
+        assert!(f.service.list_temporary(&f.workspace).unwrap()[0].terminal_recovery_required);
+        let state = f.state.lock().unwrap();
+        let lines = std::str::from_utf8(&state.terminal_wire)
+            .unwrap()
+            .lines()
+            .collect::<Vec<_>>();
+        assert_eq!(lines.len(), if stage == "READY" { 2 } else { 1 });
+        assert!(!state.terminal_wire.contains(&3));
+        assert!(state.terminal_commands.is_empty());
+        if stage == "READY" {
+            assert!(uuid::Uuid::parse_str(lines[1]).is_ok());
+        }
+    }
+}
+
+#[tokio::test]
 async fn missing_prerequisite_restores_without_interrupt_or_payload_and_parent_is_reusable() {
     for (printf, expected) in [
         (false, "SSH_TERMINAL_BASE64_MISSING"),

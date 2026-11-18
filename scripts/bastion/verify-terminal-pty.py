@@ -156,8 +156,10 @@ for mode in ['success', 'cancel', 'cancel-noflsh']:
         session = 'qa-' + uuid.uuid4().hex
         terminal.write((session + '\r').encode())
         wait(lambda: frame(session + ':READY') in content(protocol), 'random handshake missing')
+        json_record = r"""printf '\036{"ok":true}\n'"""
         commands = [("printf 'UNFOUR_PTY_SECRET_42\\n'; printf 'stderr\\n' >&2; exit 23", 23),
                     ("printf 'foreground\\n'; (sleep 0.2; printf 'background-tail\\n') &", 0)]
+        commands.extend((f'{json_record}; exit {rc}', rc) for rc in (0, 23))
         if cancel:
             commands = [("stty -a </dev/tty; printf 'WAITING\\n'; sleep 30", None)]
         sent_lines = []
@@ -184,6 +186,10 @@ for mode in ['success', 'cancel', 'cancel-noflsh']:
             else:
                 wait(lambda: frame(step + ':END') in content(protocol), 'step did not drain/finish')
                 assert frame(step + f':STATUS:{exit_code}') in content(protocol)
+                if command.startswith(json_record):
+                    expected = (frame(step + ':BEGIN') + b'\x1e{"ok":true}\n'
+                                + frame(step + f':STATUS:{exit_code}') + frame(step + ':END'))
+                    assert expected in content(protocol), 'RS-prefixed JSON and correlated result out of order'
                 if 'background' in command:
                     data = content(protocol)
                     assert data.index(b'background-tail') < data.index(frame(step + ':END'))

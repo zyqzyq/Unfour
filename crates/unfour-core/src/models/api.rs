@@ -328,6 +328,9 @@ pub struct RequestExecutionResult {
     pub http_error: Option<String>,
     #[serde(default)]
     pub http_error_code: Option<String>,
+    /// Set on failures when the transport knows whether HTTP could have been sent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub http_request_may_have_been_sent: Option<bool>,
     pub pre_request: ScriptExecutionResult,
     pub post_response: ScriptExecutionResult,
     /// Non-fatal completion warnings. HTTP, script, and cancellation outcomes stay authoritative.
