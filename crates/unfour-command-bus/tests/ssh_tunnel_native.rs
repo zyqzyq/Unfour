@@ -355,7 +355,7 @@ async fn environment_http_route_reaches_both_redirect_hosts_via_the_jump() {
         .send_api_request_in_environment(input.clone(), Some(environment.id.clone()))
         .await
         .unwrap_err();
-    assert_eq!(rejected.code(), "SSH_TUNNEL_TARGET_UNREACHABLE");
+    assert_eq!(rejected.code(), "SSH_TUNNEL_FORWARD_PROHIBITED");
 
     input.url = "http://flow.invalid/health".into();
     let saved = f.bus.save_api_request(input).await.unwrap();
