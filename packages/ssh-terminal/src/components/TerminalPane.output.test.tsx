@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SshSessionEvent } from "@unfour/command-client";
 import { sanitizeTerminalWriteChunk } from "../model/terminal-write-sanitizer";
 import {
@@ -47,6 +47,26 @@ function historyEntry(id: string, command: string) {
     redacted: false,
     executedAt: "2026-06-23T00:00:00.000Z",
   };
+}
+
+function suggestionKey(key: string, init: KeyboardEventInit = {}) {
+  const event = new KeyboardEvent("keydown", {
+    bubbles: true,
+    cancelable: true,
+    key,
+    ...init,
+  });
+  return { event, stopPropagation: vi.spyOn(event, "stopPropagation") };
+}
+
+function expectSuggestionKeyConsumed(key: ReturnType<typeof suggestionKey>) {
+  expect(key.event.defaultPrevented).toBe(true);
+  expect(key.stopPropagation).toHaveBeenCalledOnce();
+}
+
+function expectSuggestionKeyPassedThrough(key: ReturnType<typeof suggestionKey>) {
+  expect(key.event.defaultPrevented).toBe(false);
+  expect(key.stopPropagation).not.toHaveBeenCalled();
 }
 
 beforeEach(resetTerminalMocks);
@@ -161,17 +181,21 @@ describe("TerminalPane history suggestions", () => {
     });
 
     const handler = terminalState.customKeyHandlers[0];
+    const arrowDown = suggestionKey("ArrowDown");
     act(() => {
-      expect(handler?.(new KeyboardEvent("keydown", { key: "ArrowDown" }))).toBe(false);
+      expect(handler?.(arrowDown.event)).toBe(false);
     });
+    expectSuggestionKeyConsumed(arrowDown);
     await waitFor(() =>
       expect(screen.getAllByRole("option")[1]?.getAttribute("aria-selected")).toBe("true"),
     );
 
     sendInputMock.mockClear();
+    const tab = suggestionKey("Tab");
     act(() => {
-      expect(handler?.(new KeyboardEvent("keydown", { key: "Tab" }))).toBe(false);
+      expect(handler?.(tab.event)).toBe(false);
     });
+    expectSuggestionKeyConsumed(tab);
     // A prefix match only sends the missing suffix — no control characters.
     await waitFor(() =>
       expect(sendInputMock).toHaveBeenCalledWith({
@@ -238,9 +262,11 @@ describe("TerminalPane history suggestions", () => {
 
     sendInputMock.mockClear();
     const handler = terminalState.customKeyHandlers[0];
+    const tab = suggestionKey("Tab");
     act(() => {
-      expect(handler?.(new KeyboardEvent("keydown", { key: "Tab" }))).toBe(false);
+      expect(handler?.(tab.event)).toBe(false);
     });
+    expectSuggestionKeyConsumed(tab);
     await waitFor(() =>
       expect(sendInputMock).toHaveBeenCalledWith({
         workspaceId: "ws-1",
@@ -272,9 +298,11 @@ describe("TerminalPane history suggestions", () => {
     await screen.findByRole("listbox");
 
     const handler = terminalState.customKeyHandlers[0];
+    const escape = suggestionKey("Escape");
     act(() => {
-      expect(handler?.(new KeyboardEvent("keydown", { key: "Escape" }))).toBe(false);
+      expect(handler?.(escape.event)).toBe(false);
     });
+    expectSuggestionKeyConsumed(escape);
     await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
 
     // Still suppressed while the same line keeps being edited.
@@ -352,9 +380,17 @@ describe("TerminalPane native input boundaries", () => {
 
     const handler = terminalState.customKeyHandlers[0];
     sendInputMock.mockClear();
-    // Native shell history stays reachable at an empty prompt.
-    expect(handler?.(new KeyboardEvent("keydown", { key: "ArrowUp" }))).toBe(true);
-    expect(handler?.(new KeyboardEvent("keydown", { key: "ArrowDown" }))).toBe(true);
+    // Native shell history stays reachable at an empty prompt. Tab is not
+    // cancelled here, so xterm can still deliver it to the remote shell.
+    const arrowUp = suggestionKey("ArrowUp");
+    const arrowDown = suggestionKey("ArrowDown");
+    const tab = suggestionKey("Tab");
+    expect(handler?.(arrowUp.event)).toBe(true);
+    expect(handler?.(arrowDown.event)).toBe(true);
+    expect(handler?.(tab.event)).toBe(true);
+    expectSuggestionKeyPassedThrough(arrowUp);
+    expectSuggestionKeyPassedThrough(arrowDown);
+    expectSuggestionKeyPassedThrough(tab);
     expect(sendInputMock).not.toHaveBeenCalled();
   });
 
@@ -380,6 +416,49 @@ describe("TerminalPane native input boundaries", () => {
     expect(screen.queryByRole("listbox")).toBeNull();
     const handler = terminalState.customKeyHandlers[0];
     expect(handler?.(new KeyboardEvent("keydown", { key: "ArrowUp" }))).toBe(true);
+  });
+
+  it("leaves Enter and modified Tab to the shell while suggestions are open", async () => {
+    listHistoryMock.mockResolvedValue([
+      historyEntry("history-1", "git status"),
+      historyEntry("history-2", "git push origin main"),
+    ]);
+
+    render(
+      <TerminalPane
+        active
+        events={[shellPromptEvent]}
+        inputDisabled={false}
+        readOnly={false}
+        session={session}
+      />,
+    );
+    await waitFor(() =>
+      expect(terminalState.writes.some((chunk) => chunk.includes("dev@host"))).toBe(true),
+    );
+    act(() => {
+      terminalState.dataHandlers[0]?.("gi");
+    });
+    await screen.findByRole("listbox");
+
+    const handler = terminalState.customKeyHandlers[0];
+    sendInputMock.mockClear();
+    const shiftTab = suggestionKey("Tab", { shiftKey: true });
+    const ctrlTab = suggestionKey("Tab", { ctrlKey: true });
+    const enter = suggestionKey("Enter");
+    act(() => {
+      expect(handler?.(shiftTab.event)).toBe(true);
+      expect(handler?.(ctrlTab.event)).toBe(true);
+    });
+    expect(screen.getByRole("listbox")).toBeTruthy();
+    act(() => {
+      expect(handler?.(enter.event)).toBe(true);
+    });
+    expectSuggestionKeyPassedThrough(shiftTab);
+    expectSuggestionKeyPassedThrough(ctrlTab);
+    expectSuggestionKeyPassedThrough(enter);
+    expect(sendInputMock).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
   });
 
   it("never intercepts keys while composing with an IME", async () => {

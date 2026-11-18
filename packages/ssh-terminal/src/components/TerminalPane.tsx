@@ -270,8 +270,8 @@ export function TerminalPane({
     });
 
     // The handler only owns keys while the suggestion popup is visible. With
-    // the popup closed every key — including Up/Down — flows to the remote
-    // PTY, preserving native shell and REPL history navigation.
+    // the popup closed every key — including Up/Down and Tab — flows to the
+    // remote PTY, preserving native shell and REPL history navigation.
     terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
       if (event.type !== "keydown") return true;
       const current = suggestionsRef.current;
@@ -287,6 +287,7 @@ export function TerminalPane({
         return true;
       }
       if ((event.key === "ArrowUp" || event.key === "ArrowDown") && !event.shiftKey) {
+        consumeTerminalSuggestionKey(event);
         const count = current.items.length;
         const step = event.key === "ArrowUp" ? -1 : 1;
         applySuggestions({
@@ -296,10 +297,14 @@ export function TerminalPane({
         return false;
       }
       if (event.key === "Tab" && !event.shiftKey) {
+        // Cancel before inserting. xterm will not do it, and the browser
+        // moves focus only after this listener returns.
+        consumeTerminalSuggestionKey(event);
         acceptSuggestion(current.items[current.selected]);
         return false;
       }
       if (event.key === "Escape") {
+        consumeTerminalSuggestionKey(event);
         suppressSuggestions();
         return false;
       }
@@ -593,6 +598,16 @@ function fitAndSyncTerminalSize(
     lastSizeRef.current = nextSize;
     notifyResize(nextSize.cols, nextSize.rows);
   }
+}
+
+// xterm 6 treats a false custom-key result as "do not handle" and leaves the
+// DOM event alive. Tab would then leave `.xterm-helper-textarea`, and the
+// next Enter or Space would activate whichever control received focus.
+// Arrows and Escape can likewise scroll the page or reach shell shortcuts.
+// Cancelling here is limited to a key the suggestion popup actually consumed.
+function consumeTerminalSuggestionKey(event: KeyboardEvent) {
+  event.preventDefault();
+  event.stopPropagation();
 }
 
 function ensureNewline(value: string) {
