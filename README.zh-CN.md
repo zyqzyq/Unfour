@@ -10,35 +10,23 @@ Unfour 在一个桌面应用中提供 API 测试、SSH、数据库工具、本�
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![CI](https://github.com/zyqzyq/Unfour/actions/workflows/ci.yml/badge.svg)](https://github.com/zyqzyq/Unfour/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/zyqzyq/Unfour?include_prereleases&sort=semver)](https://github.com/zyqzyq/Unfour/releases)
+[![Release](https://img.shields.io/github/v/release/zyqzyq/Unfour)](https://github.com/zyqzyq/Unfour/releases/latest)
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB.svg)](https://tauri.app)
 
 ![Unfour 总览](docs/screenshots/app-overview.png)
 
 </div>
 
-> [!WARNING]
-> Windows NSIS 安装包尚未签名，可能触发 SmartScreen 或其他操作系统安全警告。
-> 请使用 GitHub Release 中的 `SHA256SUMS.txt` 校验下载文件。
-
-**最新稳定版** · [v0.14.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.14.0)，
-发布于 2026-11-09 · [变更记录](CHANGELOG.md#0140---2026-11-09) ·
-[发布说明](docs/release/v0.14.0-release-notes.md)
-
-**准备中** · v0.15.0 · [未发布变更](CHANGELOG.md#unreleased) ·
-[发布说明草案](docs/release/v0.15.0-release-notes.md)
-
 ## 下载
 
-请从 [GitHub Releases](https://github.com/zyqzyq/Unfour/releases/latest) 下载最新的 Unfour 正式版本。
+[下载最新稳定版](https://github.com/zyqzyq/Unfour/releases/latest) ·
+[变更记录](CHANGELOG.md)
 
-- Windows 是主分发路径：NSIS `.exe` 安装包。该安装包尚未签名，可能触发
-  SmartScreen。
-- macOS 提供 Apple Silicon 与 Intel 包；v0.9.0 已记录真机安装运行验证，但未 Apple 签名、未公证；
-  Gatekeeper 可能拦截。
-- Linux 目前只发布 x86_64（x64）AppImage，定位为 Experimental（实验性），
-  当前面向 Ubuntu 22.04+。v0.14.0 使用 Ubuntu 22.04 构建，原生运行仍待验证。
-  `.deb` 和 `.rpm` 暂不正式支持，也不会公开发布。
+- Windows x64 是主要分发平台。NSIS `.exe` 安装包尚未签名，可能触发 SmartScreen
+  或其他操作系统安全警告。
+- macOS 提供 Apple Silicon（arm64）和 Intel（x64）的 `.dmg` 安装包。
+  安装包未签名、未公证，Gatekeeper 可能拦截。
+- Linux 为 Experimental（实验性），面向 Ubuntu 22.04+，仅发布 x86_64（x64）AppImage。
 - 使用 Release 中的 `SHA256SUMS.txt` 校验下载的安装包。
 
 ## Unfour 是什么？
@@ -130,27 +118,9 @@ Cloud Sync 的远端变更在本地提交后，会刷新已打开模块及工作
 加载／刷新失败重试。Database MCP 调用将权限与执行绑定到同一次工作区快照；
 guarded 模式的 UPDATE/DELETE 确认使用解析后的最外层 WHERE 判断。
 
-## v0.15.0 即将推出
-
-- **Windows 堡垒机临时会话。** 从 JumpServer／齐治 AccessClient 发出的受支持 Xshell 或
-  SecureCRT 启动参数打开临时终端。到达目标机器的空闲 POSIX shell 后，显式选择并确认
-  该终端，运行仅含命令步骤的 SSH Task 或通过远端 curl 发送 API 请求。通过终端 curl
-  能力检测后，符合条件的小请求可减少传输往返。本版暂不提供堡垒机专用 SFTP／WinSCP、
-  `rz`／ZMODEM 或临时会话的 Flow／K3s 部署。
-  [堡垒机配置与执行模式](docs/user/USER_GUIDE.md#temporary-bastion-sessions-v0150)
-- **经 SSH 路由访问内网服务。** 为 API、Redis 或网络 SQL 数据库选择已保存的 SSH
-  跳板。堡垒机允许 TCP 转发时，也可在当前窗口选择已连接的临时会话。
-  [SSH 路由](docs/user/USER_GUIDE.md#ssh-routes-for-private-services-v0150)
-- **Redis 与 SQL 结果。** 在 Database 查阅 Redis 单实例中的键与 TTL，按连接在本机启用
-  写入并确认变更，也可在 Flow 和 MCP 使用只读检查。SQL 已返回的行可分页、选择、
-  复制和导出，无需重新执行查询。[Redis 配置](docs/user/USER_GUIDE.md#redis-workbench-v0150)
-- **接续工作。** 若上次选中的是已保存 API 请求，重启后会按保存内容打开这一条。
-  接受 SSH 历史补全后可继续在终端输入。MCP 工具输出会遮盖秘密环境变量。
-
 ## 截图
 
-以下截图于 2026-11-09 使用 Windows 上的 Unfour 0.14.0，连接专用 Demo Lab
-实际执行后采集。窗口原生尺寸为 1920 × 1032，展示虚构演示数据，不是界面模型图。
+截图采自 Windows 上的 Unfour v0.14.0，使用 Demo Lab 中的合成演示数据。
 
 **应用总览 — API 集合与三条固定基线订单**
 
@@ -237,12 +207,6 @@ pnpm run test:rust      # cargo test --workspace
 
 完整的包与模块（crate）映射请参阅 `docs/architecture/project-structure.md`。
 
-## 发布状态
-
-v0.14.0 已正式发布。分发结果及待完成的原生安装和真实服务检查见
-[v0.14.0 验证记录](docs/testing/release-verification.md#v0140-final-release-verification-record)。
-v0.15.0 的剩余验收见[发布检查清单](docs/release/release-checklist.md#v0150-preparation-status)。
-
 ## 文档
 
 按问题查阅对应文档。本 README 可以单独阅读；下表是进一步说明的权威来源。
@@ -255,13 +219,13 @@ v0.15.0 的剩余验收见[发布检查清单](docs/release/release-checklist.md
 | 工具接受什么参数、返回什么结果？ | [MCP 工具](docs/mcp/tools.md) |
 | 如何构建 MCP 服务？ | [Codex 开发配置](docs/mcp/codex-setup.md) |
 | 已发布什么，哪些只是计划？ | [路线图](docs/roadmap.md) |
-| 哪些发布检查已通过？ | [发布验证](docs/testing/release-verification.md) |
+| 发布说明在哪里？ | [GitHub 发布说明](https://github.com/zyqzyq/Unfour/releases) |
+| 如何验证发布？ | [发布验证](docs/testing/release-verification.md)、[发布检查清单](docs/release/release-checklist.md) |
 | 仓库如何划分？ | [包边界](docs/architecture/package-boundaries.md)、[项目结构](docs/architecture/project-structure.md) |
 | 密钥与本地数据如何存储？ | [数据存储](docs/architecture/data-storage.md)、[安全模型](docs/architecture/security-model.md) |
 | Flow 与工作区交换如何工作？ | [Flow V1](docs/architecture/flow-v1.md)、[工作区包](docs/architecture/workspace-bundle.md) |
 
 `AGENTS.md` 与 `docs/agents/START_HERE.md` 面向在本仓库中工作的编码 Agent。
-`docs/release/release-checklist.md` 是公开发布检查清单。
 `docs/architecture/diagnostics.md` 说明本地日志与诊断包。
 
 ## 参与贡献

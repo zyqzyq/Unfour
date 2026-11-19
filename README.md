@@ -10,40 +10,24 @@ Unfour brings API testing, SSH, database tools, local Flow runbooks, and MCP-ass
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![CI](https://github.com/zyqzyq/Unfour/actions/workflows/ci.yml/badge.svg)](https://github.com/zyqzyq/Unfour/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/zyqzyq/Unfour?include_prereleases&sort=semver)](https://github.com/zyqzyq/Unfour/releases)
+[![Release](https://img.shields.io/github/v/release/zyqzyq/Unfour)](https://github.com/zyqzyq/Unfour/releases/latest)
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB.svg)](https://tauri.app)
 
 ![Unfour overview](docs/screenshots/app-overview.png)
 
 </div>
 
-> [!WARNING]
-> Windows NSIS installers are unsigned and may trigger SmartScreen or other
-> operating-system security warnings. Use `SHA256SUMS.txt` from the GitHub
-> Release to verify downloaded files.
-
-**Latest stable download** ·
-[v0.14.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.14.0), released
-2026-11-09 · [Changelog](CHANGELOG.md#0140---2026-11-09) ·
-[Release Notes](docs/release/v0.14.0-release-notes.md)
-
-**In preparation** · v0.15.0 · [Unreleased changes](CHANGELOG.md#unreleased) ·
-[Draft Release Notes](docs/release/v0.15.0-release-notes.md)
-
 ## Download
 
-Download the [latest Unfour release](https://github.com/zyqzyq/Unfour/releases/latest)
-from GitHub Releases.
+[Download the latest stable release](https://github.com/zyqzyq/Unfour/releases/latest) ·
+[Changelog](CHANGELOG.md)
 
-- Windows is the primary distribution path: NSIS `.exe` installer. It is
-  unsigned and may trigger SmartScreen.
-- macOS has Apple Silicon and Intel packages; real-device install/run
-  verification was recorded for v0.9.0. They are not Apple-signed or notarized;
-  Gatekeeper may block them.
-- Linux publishes an x86_64 (x64) AppImage only. It is Experimental and currently
-  targets Ubuntu 22.04+. The v0.14.0 build used Ubuntu 22.04, with native
-  runtime checks still open.
-  `.deb` and `.rpm` packages are not formally supported or published.
+- Windows x64 is the primary distribution. The NSIS `.exe` installer is unsigned
+  and may trigger SmartScreen or other operating-system security warnings.
+- macOS offers `.dmg` installers for Apple Silicon (arm64) and Intel (x64).
+  The installers are unsigned and unnotarized, so Gatekeeper may block them.
+- Linux is Experimental and targets Ubuntu 22.04+. The x86_64 (x64) AppImage
+  is the only published Linux package.
 - Verify downloaded installers with the release `SHA256SUMS.txt` asset.
 
 ## What Is Unfour?
@@ -164,34 +148,9 @@ with shared English/Chinese feedback and retry for loading/refresh failures.
 Database MCP calls bind policy and execution to one workspace per call; guarded
 UPDATE/DELETE confirmation checks the parsed outer WHERE.
 
-## What's coming in v0.15.0
-
-- **Windows bastion sessions.** Open a temporary terminal from supported
-  Xshell or SecureCRT launch arguments from JumpServer/QizhiTech AccessClient.
-  On an idle, logged-in POSIX shell, explicitly select and confirm the
-  terminal for command-only SSH Tasks or API requests through remote curl.
-  Run the terminal curl capability check to enable faster transfers for eligible
-  small requests. Bastion-specific SFTP/WinSCP, `rz`/ZMODEM and temporary-session
-  Flow or K3s deployment are outside this release.
-  [Bastion setup and modes](docs/user/USER_GUIDE.md#temporary-bastion-sessions-v0150)
-- **SSH routes to private services.** Select a saved jump host for API,
-  Redis or network SQL. A live bastion can also serve as a window-local
-  TCP route if its server permits forwarding.
-  [SSH routes](docs/user/USER_GUIDE.md#ssh-routes-for-private-services-v0150)
-- **Redis and query results.** Browse standalone Redis keys and TTLs in
-  Database, opt into confirmed local writes, or use read-only checks in Flow
-  and MCP. Page, select, copy and export returned SQL rows without rerunning
-  the query. [Redis setup](docs/user/USER_GUIDE.md#redis-workbench-v0150)
-- **Resume work.** If a saved API request was selected, restart into that
-  request using its saved definition. Accept an SSH history suggestion and
-  keep typing in the terminal. MCP masks secret environment variables in tool
-  output.
-
 ## Screenshots
 
-Captured from Unfour 0.14.0 on Windows against the dedicated Demo Lab on
-2026-11-09, at a native window size of 1920 × 1032. These are real execution
-results with synthetic demo data, not mockups.
+Captured in Unfour v0.14.0 on Windows using synthetic data in the Demo Lab.
 
 **App overview — API collection and the three baseline orders**
 
@@ -283,14 +242,6 @@ with `UNFOUR_RELEASE_CHANNEL=stable` and an exact `UNFOUR_BUILD_COMMIT`.
 See `docs/architecture/project-structure.md` for the full package and crate
 map.
 
-## Release Status
-
-v0.14.0 is published. See the
-[v0.14.0 verification record](docs/testing/release-verification.md#v0140-final-release-verification-record)
-for distribution results and open native and live-service checks.
-The [release checklist](docs/release/release-checklist.md#v0150-preparation-status)
-tracks the remaining v0.15.0 acceptance.
-
 ## Documentation
 
 Read the document that owns the question. The README stays usable on its own;
@@ -304,15 +255,15 @@ the links below are the detailed sources.
 | What does a tool accept and return? | [MCP tools](docs/mcp/tools.md) |
 | How do I build the MCP server? | [Codex setup](docs/mcp/codex-setup.md) |
 | What shipped, and what is only planned? | [Roadmap](docs/roadmap.md) |
-| Which release checks passed? | [Release verification](docs/testing/release-verification.md) |
+| Where are the release notes? | [GitHub release notes](https://github.com/zyqzyq/Unfour/releases) |
+| How are releases verified? | [Release verification](docs/testing/release-verification.md), [release checklist](docs/release/release-checklist.md) |
 | How is the repository split? | [Package boundaries](docs/architecture/package-boundaries.md), [project structure](docs/architecture/project-structure.md) |
 | How are secrets and local data stored? | [Data storage](docs/architecture/data-storage.md), [security model](docs/architecture/security-model.md) |
 | How do Flow and Workspace exchange work? | [Flow V1](docs/architecture/flow-v1.md), [Workspace bundle](docs/architecture/workspace-bundle.md) |
 
 `AGENTS.md` and `docs/agents/START_HERE.md` are for coding agents working in
-this repository. `docs/release/release-checklist.md` is the public release
-checklist. `docs/architecture/diagnostics.md` covers local logs and diagnostic
-bundles.
+this repository. `docs/architecture/diagnostics.md` covers local logs and
+diagnostic bundles.
 
 ## Contributing
 
