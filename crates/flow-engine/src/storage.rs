@@ -136,6 +136,13 @@ impl FlowService {
         }
         Ok(())
     }
+
+    pub(crate) fn omit_attempt_input(&self, attempt: &mut FlowAttempt) {
+        // Keep scrubbing these values elsewhere in the run after removing their source.
+        let mut secrets = Vec::new();
+        collect_secrets(&std::mem::take(&mut attempt.input), &mut secrets);
+        self.persistence.extend(secrets);
+    }
 }
 fn decode_run(row: &str) -> AppResult<FlowRun> {
     let mut run: FlowRun = serde_json::from_str(row)?;

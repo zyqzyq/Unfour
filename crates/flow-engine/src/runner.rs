@@ -31,6 +31,7 @@ enum Observed {
 
 /// How long an interrupted step may finish work that has already started.
 const INTERRUPT_GRACE: Duration = Duration::from_secs(2);
+const HISTORY_LIMIT_BYTES: usize = 4 * 1024 * 1024;
 
 impl FlowService {
     pub(crate) async fn execute_run(
@@ -120,7 +121,7 @@ impl FlowService {
             run.steps[index].next_check_at = None;
             let outcome = outcome.and_then(|(output, next)| {
                 run.steps[index].output = Some(output.clone());
-                if serde_json::to_vec(&run.steps)?.len() > 4_194_304 {
+                if serde_json::to_vec(&run.steps)?.len() > HISTORY_LIMIT_BYTES {
                     run.steps[index].output = None;
                     return Err(invalid("FLOW_HISTORY_LIMIT"));
                 }
@@ -141,8 +142,8 @@ impl FlowService {
                         run.steps[index].output = Some(output.clone());
                         run.steps[index].attempts.last_mut().unwrap().output = Some(output);
                         run.steps[index].status = FlowStepRunStatus::Succeeded;
-                        if serde_json::to_vec(&run.steps)?.len() > 4_194_304 {
-                            run.steps[index].attempts.last_mut().unwrap().input = Value::Null;
+                        if serde_json::to_vec(&run.steps)?.len() > HISTORY_LIMIT_BYTES {
+                            self.omit_attempt_input(run.steps[index].attempts.last_mut().unwrap());
                         }
                     }
                     // Stop scheduling effects, without rewriting a confirmed
@@ -188,7 +189,7 @@ impl FlowService {
                         .and_then(|a| a.output.clone())
                     {
                         run.steps[index].output = Some(details);
-                        if serde_json::to_vec(&run.steps)?.len() > 4_194_304 {
+                        if serde_json::to_vec(&run.steps)?.len() > HISTORY_LIMIT_BYTES {
                             run.steps[index].output = None;
                         }
                     }
@@ -196,6 +197,11 @@ impl FlowService {
                         if attempt.output.is_none() && attempt.error.is_none() {
                             attempt.error = Some(code.clone());
                             attempt.duration_ms = started.elapsed().as_millis() as u64;
+                        }
+                    }
+                    if serde_json::to_vec(&run.steps)?.len() > HISTORY_LIMIT_BYTES {
+                        if let Some(attempt) = run.steps[index].attempts.last_mut() {
+                            self.omit_attempt_input(attempt);
                         }
                     }
                     run.status = run_status;
@@ -308,9 +314,9 @@ impl FlowService {
     ) -> AppResult<AppResult<Value>> {
         let mut resolved = action.clone();
         resolved.arguments = resolve(&action.arguments, context)?;
-        let number = run.steps[index].attempts.len() as u32 + 1;
+        let attempt_index = run.steps[index].attempts.len();
         run.steps[index].attempts.push(FlowAttempt {
-            number,
+            number: attempt_index as u32 + 1,
             input: if action.capability == FlowCapability::Redis {
                 json!({})
             } else {
@@ -320,6 +326,12 @@ impl FlowService {
             error: None,
             duration_ms: 0,
         });
+        // Journal the attempt before dispatch. A deadline or cancellation can
+        // stop it before the result handler has a chance to compact history.
+        let input_omitted = serde_json::to_vec(&run.steps)?.len() > HISTORY_LIMIT_BYTES;
+        if input_omitted {
+            self.omit_attempt_input(&mut run.steps[index].attempts[attempt_index]);
+        }
         self.persist_run(run).await.map_err(history_write_error)?;
         if cancel.is_cancelled() {
             return Err(invalid("FLOW_CANCELLED"));
@@ -335,10 +347,7 @@ impl FlowService {
                 &self.persistence,
             )
             .await;
-        let record = run.steps[index]
-            .attempts
-            .last_mut()
-            .expect("attempt exists");
+        let record = &mut run.steps[index].attempts[attempt_index];
         record.duration_ms = started.elapsed().as_millis() as u64;
         match &output {
             Ok(value) => {
@@ -359,11 +368,8 @@ impl FlowService {
                 }
             }
         }
-        if serde_json::to_vec(&run.steps)?.len() > 4_194_304 {
-            let record = run.steps[index]
-                .attempts
-                .last_mut()
-                .expect("attempt exists");
+        if input_omitted || serde_json::to_vec(&run.steps)?.len() > HISTORY_LIMIT_BYTES {
+            let record = &mut run.steps[index].attempts[attempt_index];
             record.output = None;
             if is_action && output.is_ok() {
                 record.output = Some(omitted_output("FLOW_HISTORY_LIMIT"));
@@ -374,12 +380,8 @@ impl FlowService {
             }
             // Keep the remote outcome even when its diagnostics cannot fit.
             // Drop resolved arguments only if they still exceed the history budget.
-            if serde_json::to_vec(&run.steps)?.len() > 4_194_304 {
-                run.steps[index]
-                    .attempts
-                    .last_mut()
-                    .expect("attempt exists")
-                    .input = Value::Null;
+            if !input_omitted && serde_json::to_vec(&run.steps)?.len() > HISTORY_LIMIT_BYTES {
+                self.omit_attempt_input(&mut run.steps[index].attempts[attempt_index]);
             }
         }
         if let Err(error) = self.persist_run(run).await {
