@@ -57,8 +57,8 @@ describe("collection mock routing and lifecycle", () => {
     await expect(mockInvoke("api_request_update", { workspaceId: "w1", requestId: saved.id, expectedRevision: 0, input: {
       workspaceId: "w1", collectionId: owner.id, method: "GET", url: "https://stale.invalid", headers: [], query: [], bodyKind: "none",
     } })).rejects.toMatchObject({ code: "ROW_CONFLICT" });
-    expect(owner.name).toBe("Collection");
-    expect(child.name).toBe("Folder");
+    expect(mockStore.collections[0].name).toBe("Collection");
+    expect(mockStore.collectionFolders[0].name).toBe("Folder");
     expect(mockStore.savedRequests[0].url).toBe("https://example.invalid");
   });
   it("preserves browser cancellation results and unknown-command fallthrough", async () => {
@@ -72,7 +72,7 @@ describe("collection mock routing and lifecycle", () => {
     expect(handleApiCollectionMock("toString")).toBe(UNHANDLED);
   });
 
-  it("keeps active-workspace defaults, trimmed names, sorted lists and in-place rename", async () => {
+  it("keeps active-workspace defaults, trimmed names, sorted lists and persisted renames", async () => {
     const a = await mockInvoke<ApiCollection>("api_collection_create");
     const b = await collection("  Alpha  ");
     await collection("Foreign", "w2");
@@ -80,10 +80,11 @@ describe("collection mock routing and lifecycle", () => {
     expect(b.name).toBe("Alpha");
     await expect(mockInvoke("api_collection_list")).resolves.toEqual([b, a]);
     vi.setSystemTime(new Date(updatedAt));
-    expect(await mockInvoke("api_collection_rename", { collectionId: a.id, name: " " })).toBe(a);
-    expect(a).toMatchObject({ name: "New Collection", createdAt, updatedAt });
-    await mockInvoke("api_collection_rename", { collectionId: a.id, name: "  Renamed  " });
-    expect(a.name).toBe("Renamed");
+    await expect(mockInvoke("api_collection_rename", { collectionId: a.id, name: " " }))
+      .resolves.toEqual({ ...a, updatedAt });
+    await expect(mockInvoke("api_collection_rename", { collectionId: a.id, name: "  Renamed  " }))
+      .resolves.toEqual({ ...a, name: "Renamed", updatedAt });
+    await expect(mockInvoke("api_collection_list")).resolves.toEqual([b, { ...a, name: "Renamed", updatedAt }]);
     await expect(mockInvoke("api_collection_rename", { workspaceId: "w2", collectionId: a.id })).rejects.toThrow("api collection not found");
   });
 
@@ -108,7 +109,7 @@ describe("collection mock routing and lifecycle", () => {
 });
 
 describe("collection folder hierarchy", () => {
-  it("creates scoped siblings, updates collection time and preserves rename identity", async () => {
+  it("creates scoped siblings, updates collection time and preserves the renamed folder ID", async () => {
     const a = await collection();
     const root = await folder(a, null, " ");
     const second = await folder(a);
@@ -117,12 +118,12 @@ describe("collection folder hierarchy", () => {
     expect(root).toMatchObject({ name: "New Folder", sortOrder: 0, deletedAt: null });
     expect(second.sortOrder).toBe(1);
     expect(child).toMatchObject({ name: "Child", parentFolderId: root.id, sortOrder: 0, createdAt: updatedAt });
-    expect(a.updatedAt).toBe(updatedAt);
-    expect(await mockInvoke("api_collection_folder_rename", { folderId: root.id, name: " " })).toBe(root);
-    expect(root).toMatchObject({ name: "New Folder", createdAt, updatedAt });
-    await mockInvoke("api_collection_folder_rename", { folderId: root.id, name: "  Parent  " });
-    expect(root.name).toBe("Parent");
-    await expect(mockInvoke("api_collection_folders_list", { collectionId: ` ${a.id} ` })).resolves.toEqual([root, second, child]);
+    expect(mockStore.collections[0].updatedAt).toBe(updatedAt);
+    await expect(mockInvoke("api_collection_folder_rename", { folderId: root.id, name: " " }))
+      .resolves.toEqual({ ...root, updatedAt });
+    const renamed = { ...root, name: "Parent", updatedAt };
+    await expect(mockInvoke("api_collection_folder_rename", { folderId: root.id, name: "  Parent  " })).resolves.toEqual(renamed);
+    await expect(mockInvoke("api_collection_folders_list", { collectionId: ` ${a.id} ` })).resolves.toEqual([renamed, second, child]);
     await expect(mockInvoke("api_collection_folder_create", { collectionId: "missing" })).rejects.toThrow("api collection not found");
     await expect(folder(a, "missing")).rejects.toThrow("api collection folder not found");
   });
@@ -164,12 +165,12 @@ describe("collection folder hierarchy", () => {
     const a = await collection();
     const root = await folder(a);
     const moving = await folder(a);
-    moving.sortOrder = 9;
+    mockStore.collectionFolders.find((row) => row.id === moving.id)!.sortOrder = 9;
     vi.setSystemTime(new Date(updatedAt));
-    expect(await mockInvoke("api_collection_folder_move", { folderId: moving.id, targetParentFolderId: ` ${root.id} ` })).toBe(moving);
-    expect(moving).toMatchObject({ parentFolderId: root.id, sortOrder: 10, updatedAt });
-    await mockInvoke("api_collection_folder_move", { folderId: moving.id, targetParentFolderId: " " });
-    expect(moving).toMatchObject({ parentFolderId: null, sortOrder: 11 });
+    await expect(mockInvoke("api_collection_folder_move", { folderId: moving.id, targetParentFolderId: ` ${root.id} ` }))
+      .resolves.toEqual({ ...moving, parentFolderId: root.id, sortOrder: 10, updatedAt });
+    await expect(mockInvoke("api_collection_folder_move", { folderId: moving.id, targetParentFolderId: " " }))
+      .resolves.toEqual({ ...moving, parentFolderId: null, sortOrder: 11, updatedAt });
   });
 });
 
@@ -179,14 +180,15 @@ describe("request organization and sibling ordering", () => {
     const b = await collection("Other");
     const parent = await folder(b);
     const moving = await request(a);
-    moving.sortOrder = 9;
-    const before = structuredClone(moving);
+    const stored = mockStore.savedRequests.find((row) => row.id === moving.id)!;
+    stored.sortOrder = 9;
+    const before = { ...moving, sortOrder: 9 };
     await expect(mockInvoke("api_request_move", { requestId: moving.id, collectionId: a.id, parentFolderId: parent.id })).rejects.toThrow("api collection folder not found");
     await expect(mockInvoke("api_request_move", { workspaceId: "w2", requestId: moving.id, collectionId: b.id })).rejects.toThrow("api request not found");
-    expect(moving).toEqual(before);
+    expect(stored).toEqual(before);
     vi.setSystemTime(new Date(updatedAt));
-    expect(await mockInvoke("api_request_move", { requestId: moving.id, collectionId: b.id, parentFolderId: ` ${parent.id} ` })).toBe(moving);
-    expect(moving).toEqual({ ...before, collectionId: b.id, parentFolderId: parent.id, sortOrder: 10, updatedAt });
+    await expect(mockInvoke("api_request_move", { requestId: moving.id, collectionId: b.id, parentFolderId: ` ${parent.id} ` }))
+      .resolves.toEqual({ ...before, collectionId: b.id, parentFolderId: parent.id, sortOrder: 10, updatedAt });
   });
 
   it.each(["folder", "request"] as const)("preserves partial/duplicate %s reorder and partial updates on a later invalid id", async (kind) => {
@@ -201,26 +203,29 @@ describe("request organization and sibling ordering", () => {
     const command = kind === "folder" ? "api_collection_folders_reorder" : "api_requests_reorder";
     const idsKey = kind === "folder" ? "folderIds" : "requestIds";
     const reorder = (ids: unknown) => mockInvoke(command, { collectionId: a.id, [idsKey]: ids });
+    const stored = kind === "folder" ? mockStore.collectionFolders : mockStore.savedRequests;
+    const firstRow = stored.find((row) => row.id === first.id)!;
+    const secondRow = stored.find((row) => row.id === second.id)!;
     vi.setSystemTime(new Date(updatedAt));
     await reorder([second.id, second.id, first.id]);
-    expect([first.sortOrder, second.sortOrder]).toEqual([2, 1]);
-    expect(first.updatedAt).toBe(updatedAt);
-    expect(child.updatedAt).toBe(createdAt);
-    const rows = structuredClone(kind === "folder" ? mockStore.collectionFolders : mockStore.savedRequests);
+    expect([firstRow.sortOrder, secondRow.sortOrder]).toEqual([2, 1]);
+    expect(firstRow.updatedAt).toBe(updatedAt);
+    expect(stored.find((row) => row.id === child.id)?.updatedAt).toBe(createdAt);
+    const rows = structuredClone(stored);
     await reorder(null);
     expect(kind === "folder" ? mockStore.collectionFolders : mockStore.savedRequests).toEqual(rows);
     const message = kind === "folder" ? "api collection folder not found" : "api request not found";
     for (const invalid of [child.id, other.id, foreign.id, "missing"]) {
-      first.sortOrder = 9;
+      firstRow.sortOrder = 9;
       await expect(reorder([first.id, invalid])).rejects.toThrow(message);
-      expect(first.sortOrder).toBe(0);
+      expect(firstRow.sortOrder).toBe(0);
     }
     const result = await reorder([second.id]);
     if (kind === "folder") {
-      expect(result).toEqual([first, second, parent, child]);
+      expect(result).toEqual([firstRow, secondRow, parent, child]);
     } else {
       // Request reorder returns all workspace requests in storage order.
-      expect(result).toEqual([other, child, second, first]);
+      expect(result).toEqual([other, child, secondRow, firstRow]);
     }
   });
 });

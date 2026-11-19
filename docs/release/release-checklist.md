@@ -2,7 +2,7 @@
 
 ## v0.15.0 preparation status
 
-**IN PREPARATION / RC NOT STARTED** as of 2026-11-19 (Asia/Shanghai).
+**IN PREPARATION / RC RERUN PENDING** as of 2026-11-19 (Asia/Shanghai).
 The latest published Standard stable release is [v0.14.0](#v0140-released-status).
 
 [Draft Release Notes](v0.15.0-release-notes.md) ·
@@ -12,8 +12,8 @@ The latest published Standard stable release is [v0.14.0](#v0140-released-status
 | Gate | Current disposition |
 | --- | --- |
 | Source version, release contract, docs and local build | See the dated preparation record |
-| Review, commit, push and CI on the reviewed complete SHA | PENDING. The entry source's CI reported a Flow history-size assertion failure. See the dated record. |
-| Standard Release Candidate with `ref=<full-reviewed-commit-SHA>` | NOT RUN |
+| Review, commit, push and CI on the reviewed complete SHA | PENDING for the E2E repair. |
+| Standard Release Candidate with `ref=<full-reviewed-commit-SHA>` | Baseline FAIL at Chromium E2E. The repaired worktree passed 84/84 locally. Rerun PENDING. [E2E repair and results](../testing/v0.15.0-release-preparation-2026-11-19.md#standard-rc-e2e-repair) |
 | Windows x64, macOS arm64/x64 and Linux x64 signed updater builds in one RC run | NOT RUN |
 | RC artifact identity, SHA-256, signatures, platform checks and focused feature acceptance | NOT VERIFIED |
 | Customer bastion launch, idle-shell Task/curl, TCP routes and real-service journeys on the RC | NOT VERIFIED |

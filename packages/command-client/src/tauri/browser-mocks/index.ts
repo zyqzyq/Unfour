@@ -35,9 +35,11 @@ export async function mockInvoke<T>(
 ): Promise<T> {
   if (args?.temporaryHandle != null) throw { code: "SSH_TUNNEL_TEMPORARY_UNAVAILABLE" };
   for (const handler of mockHandlers) {
-    const result = await handler<T>(command, args);
+    const value = handler<T>(command, args);
+    const result = value instanceof Promise ? await value : value;
     if (result !== UNHANDLED) {
-      return result;
+      // Mirror IPC value semantics before mutable mock records reach callers.
+      return structuredClone(result);
     }
   }
 

@@ -78,6 +78,7 @@ mockStore.sshCommandHistory.push(
   const pane = page.locator(".ssh-terminal-pane:visible").first();
   const input = pane.locator(".xterm-helper-textarea");
   const suggestions = page.getByRole("listbox", { name: "Command history suggestions" });
+  await expect(input).toBeFocused();
   await pane.click();
   await expect(input).toBeFocused();
   await expectShellChromeStable(page);

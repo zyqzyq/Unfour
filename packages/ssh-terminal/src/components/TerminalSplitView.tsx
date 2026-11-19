@@ -16,12 +16,14 @@ export type TerminalPaneModel = {
 };
 
 export function TerminalSplitView({
+  focusRequest,
   onRetry,
   primary,
   secondary,
   splitMode,
   surfaceActive = true,
 }: {
+  focusRequest: number;
   onRetry: (connectionId: string, sessionId: string) => void;
   primary: TerminalPaneModel;
   secondary: TerminalPaneModel | null;
@@ -34,6 +36,7 @@ export function TerminalSplitView({
   const primaryPane = (
     <PaneShell
       active={surfaceActive}
+      focusRequest={focusRequest}
       model={primary}
       onRetry={onRetry}
       paintActive={surfaceActive}
@@ -73,12 +76,14 @@ export function TerminalSplitView({
 
 function PaneShell({
   active,
+  focusRequest,
   model,
   onRetry,
   paintActive = true,
   readOnly,
 }: {
   active?: boolean;
+  focusRequest?: number;
   model: TerminalPaneModel;
   onRetry: (connectionId: string, sessionId: string) => void;
   /** False while Connections is hidden under Tasks. */
@@ -127,6 +132,7 @@ function PaneShell({
         <TerminalPane
           active={active}
           events={events}
+          focusRequest={focusRequest}
           inputDisabled={session.status !== "connected"}
           paintActive={paintActive}
           readOnly={readOnly}

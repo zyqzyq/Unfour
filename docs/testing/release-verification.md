@@ -1,8 +1,10 @@
 # Release Verification
 
-Current preparation is **v0.15.0 · IN PREPARATION / RC NOT STARTED**.
+Current preparation is **v0.15.0 · IN PREPARATION / RC RERUN PENDING**.
 See the [2026-11-19 preparation record](v0.15.0-release-preparation-2026-11-19.md)
-for source identity, local checks and remaining acceptance.
+for source identity and remaining acceptance, and the
+[Standard RC E2E repair](v0.15.0-release-preparation-2026-11-19.md#standard-rc-e2e-repair)
+for the failed run and local verification.
 
 The latest published release is **v0.14.0 Standard stable**, released
 **2026-11-09**. See the [release checklist](../release/release-checklist.md#v0140-released-status).

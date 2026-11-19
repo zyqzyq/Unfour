@@ -97,6 +97,7 @@ export function TerminalWorkspace({
 }) {
   const { t } = useI18n();
   const { setMode } = useTerminalSplit();
+  const [focusRequest, setFocusRequest] = useState(0);
   const hasSessions = sessions.length > 0;
   const secondaryTab =
     sessions.find(
@@ -182,7 +183,10 @@ export function TerminalWorkspace({
           activeBackground="terminal"
           activeId={activeSessionId ?? sessions[0]?.session.sessionId ?? ""}
           onClose={onCloseSession}
-          onSelect={onSelectSession}
+          onSelect={(sessionId) => {
+            onSelectSession(sessionId);
+            if (sessionId !== activeSessionId) setFocusRequest((request) => request + 1);
+          }}
           tabs={sessions.map((item) => ({
             contextMenu: tabContextMenu(item),
             id: item.session.sessionId,
@@ -214,6 +218,7 @@ export function TerminalWorkspace({
             </ErrorState>
           ) : primaryModel ? (
             <TerminalSplitView
+              focusRequest={focusRequest}
               onRetry={onRetry}
               primary={primaryModel}
               secondary={secondaryModel}

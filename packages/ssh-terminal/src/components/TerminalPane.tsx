@@ -25,6 +25,7 @@ export function TerminalPane({
   active,
   className,
   events,
+  focusRequest,
   inputDisabled,
   paintActive = true,
   readOnly,
@@ -34,6 +35,7 @@ export function TerminalPane({
   active?: boolean;
   className?: string;
   events: SshSessionEvent[];
+  focusRequest?: number;
   inputDisabled?: boolean;
   /** When false (Connections hidden under Tasks), skip xterm writes/refreshes. */
   paintActive?: boolean;
@@ -360,14 +362,32 @@ export function TerminalPane({
   useEffect(() => {
     if (active) {
       setTerminalSearchAddon(searchAddonRef.current);
-      const focusFrame = window.requestAnimationFrame(() => terminalRef.current?.focus());
-      return () => {
-        window.cancelAnimationFrame(focusFrame);
-        setTerminalSearchAddon(null);
-      };
+      return () => setTerminalSearchAddon(null);
     }
     return undefined;
   }, [active, setTerminalSearchAddon]);
+
+  useEffect(() => {
+    if (!active || !paintActive) return;
+
+    const focusedElement = document.activeElement;
+    const pendingFocus = new window.AbortController();
+    const cancelFocus = () => pendingFocus.abort();
+    const options = { capture: true, signal: pendingFocus.signal };
+    // A later interaction owns focus even if it leaves activeElement unchanged.
+    document.addEventListener("focusin", cancelFocus, options);
+    document.addEventListener("pointerdown", cancelFocus, options);
+    document.addEventListener("keydown", cancelFocus, options);
+    const focusFrame = window.requestAnimationFrame(() => {
+      const shouldFocus = !pendingFocus.signal.aborted && document.activeElement === focusedElement;
+      cancelFocus();
+      if (shouldFocus) terminalRef.current?.focus();
+    });
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      cancelFocus();
+    };
+  }, [active, focusRequest, paintActive]);
 
   // ------------------------------------------------------------------
   // Re-fit on active / session changes
@@ -386,9 +406,6 @@ export function TerminalPane({
           }
         });
         terminal.refresh(0, terminal.rows - 1);
-        if (active) {
-          terminal.focus();
-        }
       });
       return () => window.cancelAnimationFrame(fitFrame);
     }

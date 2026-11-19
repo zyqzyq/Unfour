@@ -27,11 +27,17 @@ test("test workspace/environment selection targets the next request and module s
   const nav = page.getByRole("navigation", { name: "Modules" });
   await expect(environment).toHaveText("Test A1");
   await url.fill("{{base_url}}/health");
+  const send = page.getByRole("button", { name: "Send", exact: true }).first();
+  const firstRequest = "https://ue.example.test/env-a1/health";
+  const switchedRequest = "https://ue.example.test/env-a2/health";
+  await send.click();
+  await expect.poll(() => requested).toEqual([firstRequest]);
+  await expect(page.getByText("200 OK", { exact: true })).toBeVisible();
   await environment.click();
   await page.getByRole("menuitem", { name: "Test A2", exact: true }).click();
   await expect(environment).toHaveText("Test A2");
-  await page.getByRole("button", { name: "Send", exact: true }).first().click();
-  await expect.poll(() => requested).toEqual(["https://ue.example.test/env-a2/health"]);
+  await send.click();
+  await expect.poll(() => requested).toEqual([firstRequest, switchedRequest]);
   await expect(page.getByText("200 OK", { exact: true })).toBeVisible();
 
   await nav.getByRole("button", { name: "Flow", exact: true }).click();
@@ -51,8 +57,8 @@ test("test workspace/environment selection targets the next request and module s
   await expect(environment).toHaveText("Test B");
   await expect(url).not.toHaveValue("{{base_url}}/health");
   await url.fill("{{base_url}}/health");
-  await page.getByRole("button", { name: "Send", exact: true }).first().click();
-  await expect.poll(() => requested).toEqual(["https://ue.example.test/env-a2/health", "https://ue.example.test/env-b/health"]);
+  await send.click();
+  await expect.poll(() => requested).toEqual([firstRequest, switchedRequest, "https://ue.example.test/env-b/health"]);
   await expect(page.getByText("200 OK", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /UE Test B/ }).click();
   await page.getByRole("menuitem", { name: /UE Test A/ }).click();

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { act, render, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   resetTerminalMocks,
   resizeMock,
@@ -12,6 +12,56 @@ import {
   temporaryResizeMock,
 } from "./terminal-pane-test-harness";
 import { TerminalPane } from "./TerminalPane";
+
+describe("TerminalPane focus", () => {
+  beforeEach(() => {
+    resetTerminalMocks();
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] });
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("focuses on activation and explicit session selection while a refit preserves search focus", () => {
+    const view = (current = session, focusRequest = 0) => <>
+      <input aria-label="Search" />
+      <TerminalPane active events={[]} focusRequest={focusRequest} session={current} />
+    </>;
+    const { rerender } = render(view());
+    act(() => vi.advanceTimersToNextFrame());
+    expect(terminalState.inputElement).toHaveFocus();
+
+    const search = screen.getByRole("textbox", { name: "Search" });
+    search.focus();
+    const refreshes = terminalState.refreshCalls;
+    const resized = { ...session, cols: 96, rows: 28 };
+    rerender(view(resized));
+    act(() => vi.advanceTimersToNextFrame());
+    expect(terminalState.refreshCalls).toBeGreaterThan(refreshes);
+    expect(search).toHaveFocus();
+
+    const other = { ...resized, sessionId: "session-2" };
+    rerender(view(other));
+    act(() => vi.advanceTimersToNextFrame());
+    expect(search).toHaveFocus();
+
+    rerender(view(session, 1));
+    act(() => vi.advanceTimersToNextFrame());
+    expect(terminalState.inputElement).toHaveFocus();
+  });
+
+  it("yields a pending activation focus to a later sidebar interaction", () => {
+    const view = (active: boolean) => <>
+      <button type="button">Toggle sidebar</button>
+      <TerminalPane active={active} paintActive={active} events={[]} session={session} />
+    </>;
+    const { rerender } = render(view(false));
+    const button = screen.getByRole("button", { name: "Toggle sidebar" });
+    button.focus();
+    rerender(view(true));
+    fireEvent.pointerDown(button);
+    act(() => vi.advanceTimersToNextFrame());
+    expect(button).toHaveFocus();
+  });
+});
 
 describe("TerminalPane", () => {
   beforeEach(resetTerminalMocks);

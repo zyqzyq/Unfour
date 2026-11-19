@@ -27,6 +27,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 vi.mock("@xterm/xterm", () => ({
   Terminal: vi.fn().mockImplementation(function TerminalMock() {
+    let input: HTMLTextAreaElement;
     return {
       get cols() {
         return terminalState.cols;
@@ -40,7 +41,7 @@ vi.mock("@xterm/xterm", () => ({
       }),
       buffer: { active: { type: "normal" } },
       dispose: vi.fn(),
-      focus: vi.fn(),
+      focus: vi.fn(() => input?.focus()),
       getSelection: vi.fn(() => terminalState.selection),
       hasSelection: vi.fn(() => Boolean(terminalState.selection)),
       loadAddon: vi.fn(),
@@ -53,7 +54,7 @@ vi.mock("@xterm/xterm", () => ({
         return { dispose: vi.fn() };
       }),
       open: vi.fn((element: HTMLElement) => {
-        const input = document.createElement("textarea");
+        input = document.createElement("textarea");
         element.appendChild(input);
         terminalState.inputElement = input;
         terminalState.openElement = element;

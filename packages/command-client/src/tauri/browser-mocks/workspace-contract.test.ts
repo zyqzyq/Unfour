@@ -63,14 +63,15 @@ describe("workspace command routing and lifecycle", () => {
     const workspace = await mockInvoke<Workspace>("workspace_create");
     expect(workspace).toMatchObject({ name: "New Workspace", environmentType: "dev", mcpPolicy: "auto", isDefault: false });
     expect(mockState.activeWorkspaceId).toBe(workspace.id);
-    expect(mockState.workspaces[0]).toBe(workspace);
+    expect(mockState.workspaces[0]).toEqual(workspace);
+    expect(mockState.workspaces[0]).not.toBe(workspace);
     const revision = workspace.revision;
     vi.setSystemTime(new Date(updatedAt));
     await mockInvoke("workspace_rename", { workspaceId: workspace.id, name: "Renamed" });
-    await mockInvoke("workspace_update_environment", { workspaceId: workspace.id, environmentType: "test" });
-    expect(workspace).toMatchObject({ name: "Renamed", environmentType: "test", revision, updatedAt });
-    await mockInvoke("workspace_update_mcp_policy", { workspaceId: workspace.id, mcpPolicy: "guarded" });
-    expect(workspace).toMatchObject({ mcpPolicy: "guarded", revision: revision + 1 });
+    await expect(mockInvoke("workspace_update_environment", { workspaceId: workspace.id, environmentType: "test" }))
+      .resolves.toMatchObject({ name: "Renamed", environmentType: "test", revision, updatedAt });
+    await expect(mockInvoke("workspace_update_mcp_policy", { workspaceId: workspace.id, mcpPolicy: "guarded" }))
+      .resolves.toMatchObject({ mcpPolicy: "guarded", revision: revision + 1 });
     await expect(mockInvoke("workspace_rename", { workspaceId: "missing" })).rejects.toThrow("workspace not found");
   });
 
@@ -93,14 +94,16 @@ describe("workspace command routing and lifecycle", () => {
     await expect(mockInvoke("workspace_layout_get")).resolves.toMatchObject({ workspaceId: "w1", sidebarCollapsed: true, updatedAt: createdAt });
     await mockInvoke("workspace_set_active", { workspaceId: "w2" });
     await expect(mockInvoke("workspace_layout_get")).resolves.toMatchObject({ workspaceId: "w2", sidebarCollapsed: false });
-    await expect(mockInvoke("workspace_list")).resolves.toBe(mockState);
+    const state = await mockInvoke("workspace_list");
+    expect(state).toEqual(mockState);
+    expect(state).not.toBe(mockState);
   });
 });
 
 describe("workspace variable record contracts", () => {
   it("rejects stale replacement baselines including child-only changes", async () => {
     const environment = await createEnvironment();
-    const expected = structuredClone(environment);
+    const expected = environment;
     await mockInvoke("workspace_environment_variable_create", { workspaceId: "w1", environmentId: environment.id, input });
     await expect(mockInvoke("workspace_environment_update", { workspaceId: "w1", environmentId: environment.id, name: "Stale", variables: [], expected })).rejects.toMatchObject({ code: "ROW_CONFLICT" });
     await mockInvoke("workspace_variable_create", { workspaceId: "w1", input });
@@ -113,7 +116,8 @@ describe("workspace variable record contracts", () => {
         updatedAt: createdAt, deletedAt: null, revision: 4 };
       const foreign = { ...existing, workspaceId: "w2", value: "foreign" };
       mockStore.workspaceVariables = [foreign, existing];
-      environment.variables = [{ ...existing, environmentId: environment.id }];
+      const storedEnvironment = mockStore.workspaceEnvironments[0];
+      storedEnvironment.variables = [{ ...existing, environmentId: environment.id }];
       vi.setSystemTime(new Date(updatedAt));
       const variables = [{ ...input, id: "new-id", key: "NEW" }, { ...input, id: existing.id, value: "changed", isSecret: true }];
       const result = await mockInvoke<WorkspaceVariable[] | WorkspaceEnvironment>(command, {
@@ -128,13 +132,14 @@ describe("workspace variable record contracts", () => {
       expect(foreign.value).toBe("foreign");
       expect(mockStore.workspaceVariables).toContain(foreign);
       if (command !== "workspace_variables_replace") {
-        expect(environment.variables.every((v) => v.environmentId === environment.id)).toBe(true);
-        expect(environment.revision).toBe(command === "workspace_environment_update" ? 2 : 1);
+        expect(records).toEqual(storedEnvironment.variables);
+        expect(storedEnvironment.variables.every((v) => v.environmentId === environment.id)).toBe(true);
+        expect(storedEnvironment.revision).toBe(command === "workspace_environment_update" ? 2 : 1);
       }
     },
   );
 
-  it.each([false, true])("preserves CRUD object identity and scope (environment=%s)", async (inEnvironment) => {
+  it.each([false, true])("preserves CRUD record identity and scope (environment=%s)", async (inEnvironment) => {
     const environment = await createEnvironment();
     const scope = { workspaceId: "w1", environmentId: environment.id };
     const prefix = inEnvironment ? "workspace_environment_variable" : "workspace_variable";
@@ -145,8 +150,8 @@ describe("workspace variable record contracts", () => {
     const changed = await mockInvoke<WorkspaceVariable>(`${prefix}_update`, {
       ...scope, variableId: record.id, input: { ...input, id: "ignored", value: "new" },
     });
-    expect(changed).toBe(record);
-    expect(changed).toMatchObject({ value: "new", createdAt, updatedAt, revision: 2 });
+    expect(changed).toMatchObject({ id: record.id, value: "new", createdAt, updatedAt, revision: 2 });
+    expect(record).toMatchObject({ value: input.value, revision: 1 });
     await expect(mockInvoke(`${prefix}_update`, { ...scope, workspaceId: "w2", variableId: record.id, input }))
       .rejects.toThrow(inEnvironment ? "workspace environment not found" : "workspace variable not found");
     await expect(mockInvoke(`${prefix}_delete`, { ...scope, variableId: record.id })).resolves.toEqual([]);
@@ -170,13 +175,39 @@ describe("workspace environments and resolution", () => {
     expect([first.isActive, second.isActive, other.isActive]).toEqual([true, false, true]);
     await expect(mockInvoke("workspace_environment_set_active", { workspaceId: "w1", environmentId: other.id }))
       .rejects.toThrow("workspace environment not found");
-    await mockInvoke("workspace_environment_set_active", { workspaceId: "w1", environmentId: null });
-    expect([first.isActive, second.isActive, other.isActive]).toEqual([false, false, true]);
+    await expect(mockInvoke("workspace_environment_set_active", { workspaceId: "w1", environmentId: null }))
+      .resolves.toEqual([{ ...first, isActive: false }, second]);
+    await expect(mockInvoke("workspace_environments_list", { workspaceId: "w2" })).resolves.toEqual([other]);
     await mockInvoke("workspace_environment_set_active", { workspaceId: "w1", environmentId: second.id });
     await expect(mockInvoke("workspace_environment_delete", { workspaceId: "w1", environmentId: second.id })).resolves.toEqual([first]);
-    expect(first.isActive).toBe(true);
-    expect([first.revision, other.revision]).toEqual([1, 1]);
     await expect(mockInvoke("workspace_environment_delete", { workspaceId: "w1", environmentId: first.id })).resolves.toEqual([]);
+  });
+
+  it("returns independent environment snapshots before and after activation", async () => {
+    const workspaceId = "w1";
+    const first = await createEnvironment(workspaceId, "First");
+    const second = await createEnvironment(workspaceId, "Second");
+    const variable = await mockInvoke<WorkspaceVariable>("workspace_environment_variable_create", {
+      workspaceId, environmentId: first.id, input,
+    });
+    const list = () => mockInvoke<WorkspaceEnvironment[]>("workspace_environments_list", { workspaceId });
+    const [before, after] = await Promise.all([
+      list(),
+      mockInvoke<WorkspaceEnvironment[]>("workspace_environment_set_active", { workspaceId, environmentId: second.id }),
+    ]);
+
+    expect(before.map(({ isActive }) => isActive)).toEqual([true, false]);
+    expect(after.map(({ isActive }) => isActive)).toEqual([false, true]);
+    await mockInvoke("workspace_environment_variable_update", {
+      workspaceId, environmentId: first.id, variableId: variable.id, input: { ...input, value: "updated" },
+    });
+    expect(before[0].variables[0].value).toBe(input.value);
+    expect(after[0].variables[0].value).toBe(input.value);
+    before[1].isActive = true;
+    after[0].variables[0].value = "caller edit";
+    const current = await list();
+    expect(current.map(({ isActive }) => isActive)).toEqual([false, true]);
+    expect(current[0].variables[0].value).toBe("updated");
   });
 
   it("validates reordering before mutation and only updates changed positions", async () => {
@@ -190,11 +221,15 @@ describe("workspace environments and resolution", () => {
     expect([first.sortOrder, second.sortOrder, first.revision, second.revision]).toEqual([0, 1, 1, 1]);
     vi.setSystemTime(new Date(updatedAt));
     const args = { workspaceId: "w1", environmentIds: [second.id, first.id] };
-    await expect(mockInvoke("workspace_environments_reorder", args)).resolves.toEqual([second, first]);
-    await mockInvoke("workspace_environments_reorder", args);
-    expect([first.revision, second.revision, other.revision]).toEqual([2, 2, 1]);
-    await mockInvoke("workspace_environment_update_metadata", { workspaceId: "w1", environmentId: first.id, name: "Renamed", sortOrder: 3 });
-    expect(first).toMatchObject({ name: "Renamed", sortOrder: 3, revision: 3, variables: [] });
+    const reordered = [
+      { ...second, sortOrder: 0, revision: 2, updatedAt },
+      { ...first, sortOrder: 1, revision: 2, updatedAt },
+    ];
+    await expect(mockInvoke("workspace_environments_reorder", args)).resolves.toEqual(reordered);
+    await expect(mockInvoke("workspace_environments_reorder", args)).resolves.toEqual(reordered);
+    await expect(mockInvoke("workspace_environments_list", { workspaceId: "w2" })).resolves.toEqual([other]);
+    await expect(mockInvoke("workspace_environment_update_metadata", { workspaceId: "w1", environmentId: first.id, name: "Renamed", sortOrder: 3 }))
+      .resolves.toMatchObject({ name: "Renamed", sortOrder: 3, revision: 3, variables: [] });
   });
 
   it("resolves exact keys with enabled environment overrides and validates explicit environment scope", async () => {
