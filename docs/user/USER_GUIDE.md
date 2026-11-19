@@ -15,16 +15,10 @@ Unfour opens into a single workspace surface:
 
 ## Current Capabilities
 
-This guide describes **v0.13.0**, released as Standard stable on **2026-11-07**.
-It adds supported cURL import with masked preview, local Database/SSH sidebar
-search, read-only UTF-8 SFTP preview up to 1 MiB, and consistency fixes. See the
-[Release Notes](../release/v0.13.0-release-notes.md). CI, RC builds,
-formal publication and distribution evidence are collected in
-[release verification](../testing/release-verification.md#v0130-final-release-verification-record).
-Native install/update, detailed live-service and real-device checks without
-evidence remain **NOT VERIFIED**. The
-[v0.13.0 RC record](../testing/v0.13.0-rc-final-verification-2026-11-07.md)
-describes the targeted Windows checks and remaining scenario gaps.
+The current download is **v0.14.0 Standard stable**, released 2026-11-09.
+See the [published Release Notes](../release/v0.14.0-release-notes.md).
+Sections and paragraphs marked **v0.15.0** describe the source in preparation.
+See the [v0.15.0 draft Release Notes](../release/v0.15.0-release-notes.md).
 
 - The workspace shell is usable. API, SSH, and Database sidebars keep
   independent bounded widths and restore their own layout when switching
@@ -186,11 +180,80 @@ outer UPDATE/DELETE WHERE can waive the existing unbounded-write confirmation;
 comments, literals and nested SELECTs cannot. A predicate such as `WHERE 1=1`
 can still affect every row. Full access keeps its existing confirmation bypass.
 
-## SSH routes for API and Redis
+## SSH routes for private services (v0.15.0)
 
-To reach a private API or Redis host, save the jump host under **SSH** and verify its host fingerprint there. Use the service's internal hostname and port in the API URL or Redis connection, including when using TLS. In the API request toolbar, select the route, then choose an environment default or a request override. Save a request override to reuse it in Flow on the same device. In **Database → Redis**, select the SSH connection in the connection editor and test the route before saving. A tunnel failure stops the operation. [Shared SSH tunnel design](../architecture/shared-ssh-tunnels.md)
+To reach a private API, Redis, PostgreSQL, openGauss or MySQL service, save
+the jump host under **SSH** and verify its host fingerprint there. Use the
+service's original hostname and port, including for TLS. The jump host
+resolves and connects to the destination. In the API toolbar, select the
+route and choose an environment default or a request override. Save the
+override to reuse it in Flow on the same device. For Redis or network SQL,
+select the saved SSH connection in the connection editor and test it before
+saving. A tunnel failure stops the operation.
 
-## Redis in the development client
+You can also choose a connected temporary bastion session from the same
+workspace for API, Redis, network SQL or a separate SSH target. The choice
+is local to the window and works only while the parent session is available
+and the bastion permits SSH TCP forwarding to that destination. The SSH
+target uses its own login and host key. TCP detection checks whether the
+channel opens. Use the service's own test to verify the application protocol.
+[Shared SSH tunnel design](../architecture/shared-ssh-tunnels.md)
+
+## Temporary bastion sessions (v0.15.0)
+
+Use your existing JumpServer/QizhiTech AccessClient authorization workflow
+on Windows and configure its terminal handoff to launch Unfour using a
+supported argument form:
+
+- Xshell: `-url <SSH URL> -newtab <label>`. Use a single
+  `ssh://<identity>:<credential>@<host>:<port>` URL. Identity and credential
+  accept only ASCII letters, digits and `-._~` as literal characters. The label
+  cannot start with a hyphen.
+- SecureCRT: `/T /N <label> /SSH2 <host> /P <port> /L <identity> /PASSWORD <credential>`.
+  Supply arguments in this order. Switches are case-insensitive and identity
+  and credential are separate literal arguments.
+
+Both forms require an ASCII hostname or IPv4 address and an explicit port
+from 1 to 65535 with no leading zero. Fields must be nonempty, with no control
+characters or vertical bars. The display label cannot be all whitespace.
+The URL and label (Xshell), or the combined argument values (SecureCRT),
+must fit within 64 KiB.
+Unsupported launch arguments produce a redacted diagnostic. For multiple
+workspaces, select and confirm the destination workspace. The app checks any
+existing trusted fingerprint and keeps a first-use fingerprint in memory
+for the workspace. Temporary credentials and handles are used for the live
+session. For a new login, launch again from the bastion.
+
+1. Complete the asset login in the temporary tab and verify the target and
+   its idle POSIX shell. Finish any pending input first.
+2. In the SSH Task run dialog, select the temporary target and **Use logged-in
+   terminal (recommended)** for a command-only task. In API, select the
+   connected temporary session and **Reuse logged-in terminal (curl)** in
+   the route picker for a supported HTTP request. Confirm the shell each time.
+3. Run the **Logged-in terminal curl** capability check on that shell to
+   qualify eligible small requests for fewer upload round trips. The check
+   must verify an exact round trip and recovery. Manual input, a Task or a
+   changed shell can invalidate this result. Other supported requests use
+   the conservative transfer.
+4. While an operation uses the terminal, manual input is paused. Check the
+   response or Task result and confirm the prompt is available again. If
+   the terminal needs recovery, reopen it from the bastion. If cancellation,
+   timeout or disconnect leaves the outcome unknown, check the remote state
+   before retrying.
+
+Terminal curl sends from the selected host. It accepts JSON, text and
+URL-encoded bodies and responses up to 10 MiB. Redirects are returned without
+following. File upload and streaming are outside this mode. A blank or
+unlimited timeout uses 30 seconds in terminal curl mode.
+
+Extra native SSH exec and TCP channels require their own support on the
+bastion. Extra exec can encounter a separate login prompt. Capability
+detection also offers an SFTP probe for authorized testing. Bastion-specific
+SFTP/WinSCP handoff, `rz`/ZMODEM and Flow or K3s deployment on the temporary
+session are outside v0.15.0. Ordinary SSH continues to provide SFTP.
+[Launch and capability details](../architecture/bastion-launch-contract.md)
+
+## Redis workbench (v0.15.0)
 
 In **Database**, create a connection and choose **Redis**. Set the host, port, logical database, TLS and authentication, then test and save. Open the saved connection alongside your SQL tabs. Look up an exact key or browse a pattern such as `product:*`. A missing key, a key without expiry and a key with a positive TTL have different status indicators.
 
@@ -198,7 +261,8 @@ Open a Hash or Set to browse members and filter by pattern. Lists show indices. 
 
 Connections open read-only by default. To edit, enable writes for the saved connection on this device. Desktop edits support creating a String or a Hash with its first field, updating a complete String, adding/editing/deleting individual Hash fields, setting or removing a key's TTL, and deleting a single key. Check the connection, logical database and exact key in the preview before applying. Editing preserves existing expiry. If the original value changed or the server's reply was lost, read the key again before deciding what to do. The local grant stays off on imported connections. Flow and MCP checks remain read-only.
 
-For a readable text key, use **Create Flow from this key** to prepare an unsaved check. The new definition uses a secret runtime input for the actual key. You can also add a Redis key check in the Flow editor and feed its `matched` result into a Condition or Wait Until. This source feature targets standalone Redis. [Redis design and operation limits](../architecture/redis-workbench.md)
+For a readable text key, use **Create Flow from this key** to prepare an unsaved check. The new definition uses a secret runtime input for the actual key. You can also add a Redis key check in the Flow editor and feed its `matched` result into a Condition or Wait Until. The workbench targets standalone Redis. Cluster and Sentinel are outside this scope.
+[Redis design and operation limits](../architecture/redis-workbench.md)
 
 ## Flow
 
@@ -266,11 +330,18 @@ the [RC checklist](../testing/v0.12.0-rc-checklist.md) records them separately.
 
 Saved requests are stored inside the active workspace.
 
+**v0.15.0.** If a saved request was selected in a workspace, the first visit to
+API after restart reopens that request from its saved definition. Other tabs,
+unsaved draft changes and previous responses are outside recovery.
+See [SSH routes](#ssh-routes-for-private-services-v0150) to reach an internal
+API or [temporary bastion sessions](#temporary-bastion-sessions-v0150) to use
+curl in a logged-in shell.
+
 ## SSH Terminal
 
 The SSH Terminal supports saved SSH connections, credential references,
 terminal sessions, PTY input/output, resize, search, redacted log export,
-clipboard context actions, host-key trust, reconnect, SFTP remote files, and
+clipboard context actions, host-key trust, reconnect, SFTP on ordinary SSH, and
 serial command/upload/download tasks. Recorded SSH checks and the checks that
 remain `NOT VERIFIED` are in
 [release verification](../testing/release-verification.md).
@@ -279,6 +350,7 @@ Verify host-key fingerprints before trusting a new server. Review destructive
 commands before running them, and use disposable data when testing SFTP or SSH
 task workflows.
 
+**v0.15.0.** Accepting a history suggestion returns focus to the terminal.
 If a command has been sent and the connection drops, the command times out, or
 you cancel it before receiving its exit status or termination signal, the Task
 and its parent Flow show **Outcome unknown**. Later steps stop even if you
@@ -302,7 +374,7 @@ translations. Loading, empty and load-failure states are distinct and offer
 retry. Refresh failures keep already-loaded tasks/history available, with compact
 messages in narrow sidebars and history panels.
 
-When a desktop or MCP process exits during a task, opening its history marks
+**v0.15.0.** When a desktop or MCP process exits during a task, opening its history marks
 the run as failed with an interruption message. Check the remote state before
 rerunning steps. For a run started by an older version, first close the process
 that started it, then select **Mark interrupted** on that history row.
@@ -325,7 +397,7 @@ The database screen can save workspace-scoped database connections.
    current statement.
 10. Review result rows, affected rows, and duration.
 
-In **Results**, use the page controls to browse the rows returned by the selected
+**v0.15.0.** In **Results**, use the page controls to browse the rows returned by the selected
 statement. Filtering, sorting, and paging work on those rows without executing
 the SQL again. The execution's row limit still controls how many rows are returned.
 
@@ -334,16 +406,8 @@ result, use **Copy TSV** or export CSV or JSON. When you filter or sort, **Copy
 and export scope** lets you choose between the current view across all its pages
 and all returned rows in their original order.
 
-For PostgreSQL, openGauss, and MySQL, choose a saved SSH connection in the
-database connection's network route and enter the database's original host and
-port. Test and save the connection. The same route carries queries, schema
-browsing, edits, and exports.
-
-To use a bastion session, first open it from the bastion client and finish its
-SSH trust prompt. Select the connected session in the API request toolbar or
-the Redis, SQL, or SSH connection editor in that workspace. Keep the bastion
-tab open while using the route. The session selection lasts for this window.
-The bastion must permit SSH TCP forwarding to the destination.
+For private database hosts, see [SSH routes](#ssh-routes-for-private-services-v0150).
+The selected SQL route carries queries, schema browsing, edits and exports.
 
 SQLite, PostgreSQL, and MySQL are supported. Compatible MariaDB servers use the
 MySQL driver path. Recorded database checks, and the separate MariaDB matrix

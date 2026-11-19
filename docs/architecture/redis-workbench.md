@@ -1,5 +1,10 @@
 # Redis 接入设计
 
+v0.15.0 的连接配置、键浏览和本机写入步骤见
+[用户指南](../user/USER_GUIDE.md#redis-workbench-v0150)。
+单实例、模拟传输和真实服务的证据范围见
+[Redis 验证记录](../testing/redis-workbench.md)。
+
 ## 用户入口
 
 保留 API、SSH、Database、Flow 四个一级入口。Database 侧栏的新增按钮打开连接表单，在驱动选项中选择 Redis。保存后 SQL 和 Redis 连接出现在同一列表，按连接类型显示图标。打开 SQL 连接进入现有查询与表视图，打开 Redis 进入 Key 浏览器；切换两类对象时保留 SQL 草稿。工作区切换清除上一工作区的缓存内容和在途结果。所有新界面文案使用共享中英文词条。

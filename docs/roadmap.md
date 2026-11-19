@@ -6,15 +6,22 @@ This roadmap is a product-direction summary. It is not release evidence. Use
 Versioned sections record what each release shipped. Historical entries do not
 describe the latest release, and they do not change any `NOT VERIFIED` result.
 
-Current source version: `0.14.0` (**preparation; not released**).
-See the [draft v0.14.0 notes](release/v0.14.0-release-notes.md) and
-[current preparation evidence](testing/v0.14.0-release-preparation-2026-11-09.md).
-The latest published release is
-[v0.13.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.13.0), published as
-**Standard stable on 2026-11-07**. CI, RC builds, formal publication, checksums
-and Stable manifest evidence are in the
-[final verification record](testing/release-verification.md#v0130-final-release-verification-record).
-Unrecorded native/manual/live-service checks remain **NOT VERIFIED**.
+Current source version: `0.15.0` (**in preparation**).
+[Draft Release Notes](release/v0.15.0-release-notes.md) ·
+[Preparation and acceptance](testing/v0.15.0-release-preparation-2026-11-19.md)
+
+The latest stable download is
+[v0.14.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.14.0), published
+on **2026-11-09**. [Publication evidence](testing/release-verification.md#v0140-final-release-verification-record)
+
+## v0.14.0 (Published)
+
+- Updated workbench surfaces, document tabs and layout across modules.
+- Added MCP resource management for workspaces, API folders and requests,
+  Saved SQL and database catalog discovery.
+- Improved API and SQL failure recovery, Flow draft protection, environment
+  switching and existing MCP SSH file operations.
+  [Release Notes](release/v0.14.0-release-notes.md)
 
 ## Published capabilities through v0.13.0
 

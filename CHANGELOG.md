@@ -6,12 +6,60 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
-### v0.14.0 preparation — not released
+Preparing v0.15.0 for Standard stable. See the
+[draft Release Notes](docs/release/v0.15.0-release-notes.md) and
+[preparation and acceptance record](docs/testing/v0.15.0-release-preparation-2026-11-19.md).
 
-Planned Standard stable release after `v0.13.0`; no release date or final
-candidate commit has been selected. See the
-[draft Release Notes](docs/release/v0.14.0-release-notes.md) and
-[current verification](docs/testing/v0.14.0-release-preparation-2026-11-09.md).
+### Added
+
+- Open a temporary SSH terminal from supported Xshell and SecureCRT Windows
+  launch arguments used by QizhiTech AccessClient in a JumpServer workflow.
+  Choose the workspace when prompted. Unsupported arguments get redacted
+  diagnostics. To reconnect after a disconnect, launch again from the bastion.
+- Run command-only SSH Tasks or supported HTTP requests via curl on an already
+  logged-in, idle POSIX shell. Explicitly select and confirm the live terminal
+  for each run or send. Detect terminal transport, curl and extra SSH channels
+  separately. [Bastion setup and modes](docs/user/USER_GUIDE.md#temporary-bastion-sessions-v0150)
+- Route API, standalone Redis, PostgreSQL, openGauss and MySQL through a saved
+  SSH jump host. Where TCP forwarding is allowed, a live temporary session can
+  also route API, Redis, network SQL and a separate SSH target in this window.
+- Browse standalone Redis keys, values and TTLs in Database. Enable local writes
+  per saved connection for reviewed String, Hash, expiry and single-key edits.
+  Read-only Redis checks are available in Flow and MCP.
+- Page, filter and sort returned SQL rows without rerunning the query. Copy cell
+  selections as raw TSV or copy/export the current view across pages or all
+  returned rows as TSV, CSV or JSON as appropriate.
+
+### Improved
+
+- Eligible small terminal-curl requests use fewer upload confirmations after a
+  successful capability check on the same shell. Other supported requests use
+  the conservative transfer. Timing shows preparation, transfer, curl and
+  terminal recovery separately.
+- Refine the shared workspace frame and document tabs. Preserve the restart
+  prompt for an installed update across a WebView reload.
+
+### Fixed
+
+- On restart, reopen the last selected API request when it is a saved request,
+  using its saved definition. Other tabs, unsaved edits and previous responses
+  are outside recovery.
+- Keep keyboard focus in the SSH terminal after accepting a history suggestion.
+- Preserve confirmed results through follow-up or terminal recovery failures.
+  Stop Tasks and Flows when remote execution cannot be confirmed and surface the
+  unknown outcome. Keep terminal input isolated until recovery is confirmed.
+- Mask secret environment and workspace variables in MCP output and redact API
+  diagnostics using the executed request. Bind authorization, confirmation and
+  execution to the relevant workspace and request snapshot.
+- Harden ordinary SSH SFTP transfers, interrupted Task history, PostgreSQL
+  table export and credential handling during bastion launch and restart.
+
+## [0.14.0] - 2026-11-09
+
+Standard stable release after v0.13.0.
+[Release Notes](docs/release/v0.14.0-release-notes.md) ·
+[GitHub Release](https://github.com/zyqzyq/Unfour/releases/tag/v0.14.0) ·
+[release verification](docs/testing/release-verification.md#v0140-final-release-verification-record)
 
 ### Added
 
@@ -950,7 +998,8 @@ First public release.
 - Linux artifacts remain experimental/unverified until real-device smoke checks
   are complete.
 
-[Unreleased]: https://github.com/zyqzyq/Unfour/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/zyqzyq/Unfour/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/zyqzyq/Unfour/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/zyqzyq/Unfour/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/zyqzyq/Unfour/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/zyqzyq/Unfour/compare/v0.10.0...v0.11.0

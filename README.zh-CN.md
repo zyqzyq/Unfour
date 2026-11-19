@@ -18,19 +18,15 @@ Unfour 在一个桌面应用中提供 API 测试、SSH、数据库工具、本�
 </div>
 
 > [!WARNING]
-> Unfour v0.13.0 已于 2026-11-07 正式发布。产品统一为 Unfour。
 > Windows NSIS 安装包尚未签名，可能触发 SmartScreen 或其他操作系统安全警告。
 > 请使用 GitHub Release 中的 `SHA256SUMS.txt` 校验下载文件。
 
-请参阅 [v0.13.0 变更记录](CHANGELOG.md#0130---2026-11-07)、
-[Release Notes](docs/release/v0.13.0-release-notes.md)及
-[正式发布验证记录](docs/testing/release-verification.md#v0130-final-release-verification-record)。
+**最新稳定版** · [v0.14.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.14.0)，
+发布于 2026-11-09 · [变更记录](CHANGELOG.md#0140---2026-11-09) ·
+[发布说明](docs/release/v0.14.0-release-notes.md)
 
-下文能力描述基于 **v0.13.0 Standard stable**，新增受支持的 cURL 导入、Database/SSH
-侧栏搜索、SFTP 文本预览及一致性修复。Tag 对应源码的 CI、四平台 RC 构建和正式发布
-均已通过，Windows RC 的针对性原生复验也已通过。缺少证据的原生安装、升级、真实服务
-及人工验证仍为 **NOT VERIFIED**，具体范围见
-[RC 验收记录](docs/testing/v0.13.0-rc-final-verification-2026-11-07.md)。
+**准备中** · v0.15.0 · [未发布变更](CHANGELOG.md#unreleased) ·
+[发布说明草案](docs/release/v0.15.0-release-notes.md)
 
 ## 下载
 
@@ -41,9 +37,8 @@ Unfour 在一个桌面应用中提供 API 测试、SSH、数据库工具、本�
 - macOS 提供 Apple Silicon 与 Intel 包；v0.9.0 已记录真机安装运行验证，但未 Apple 签名、未公证；
   Gatekeeper 可能拦截。
 - Linux 目前只发布 x86_64（x64）AppImage，定位为 Experimental（实验性），
-  当前面向 Ubuntu 22.04+，不支持 Ubuntu 20.04。v0.13.0 使用 Ubuntu 22.04 构建，
-  已发布产物的真实运行验证仍为 `NOT VERIFIED`。`.deb` 和 `.rpm` 暂不正式支持，
-  也不会公开发布。
+  当前面向 Ubuntu 22.04+。v0.14.0 使用 Ubuntu 22.04 构建，原生运行仍待验证。
+  `.deb` 和 `.rpm` 暂不正式支持，也不会公开发布。
 - 使用 Release 中的 `SHA256SUMS.txt` 校验下载的安装包。
 
 ## Unfour 是什么？
@@ -101,8 +96,9 @@ Unfour 本身不修改代码仓库：代码变更由 Coding 客户端负责，Un
   文件夹，解析共享工作区变量，检查响应体 / 请求头 / Cookie / 耗时，运行已保存的请求前与
   响应后脚本，查看脚本测试和控制台输出，保留经过脱敏的历史记录，并导入导出集合与环境。
 - **SSH Terminal（SSH 终端）** - 管理 SSH 连接与终端会话（分屏、搜索、主机密钥信任、
-  剪贴板右键菜单、持久化的脱敏命令历史与输入建议、脱敏日志），通过 SFTP 浏览与传输
-  远程文件，并在 Connections / Files / Tasks 侧栏中编排多步骤 SSH 任务（命令、上传、下载）。
+  剪贴板右键菜单、持久化的脱敏命令历史与输入建议、脱敏日志），在普通 SSH 连接上
+  通过 SFTP 浏览与传输远程文件，并在 Connections / Files / Tasks 侧栏中编排多步骤
+  SSH 任务（命令、上传、下载）。
 - **Database（数据库）** - 管理数据库连接，浏览 Schema，在带确认的安全检查下运行
   SQL（支持多语句全部运行 / 运行选中），预览与编辑表数据，查看查询结果，并导出表结构与数据：
   结构使用 SQL，数据支持 SQL、CSV 与 JSON。
@@ -133,6 +129,23 @@ Cloud Sync 的远端变更在本地提交后，会刷新已打开模块及工作
 保留编辑草稿和执行状态。SSH Task 支持审核后重跑、上次参数回填，以及共享中英文提示和
 加载／刷新失败重试。Database MCP 调用将权限与执行绑定到同一次工作区快照；
 guarded 模式的 UPDATE/DELETE 确认使用解析后的最外层 WHERE 判断。
+
+## v0.15.0 即将推出
+
+- **Windows 堡垒机临时会话。** 从 JumpServer／齐治 AccessClient 发出的受支持 Xshell 或
+  SecureCRT 启动参数打开临时终端。到达目标机器的空闲 POSIX shell 后，显式选择并确认
+  该终端，运行仅含命令步骤的 SSH Task 或通过远端 curl 发送 API 请求。通过终端 curl
+  能力检测后，符合条件的小请求可减少传输往返。本版暂不提供堡垒机专用 SFTP／WinSCP、
+  `rz`／ZMODEM 或临时会话的 Flow／K3s 部署。
+  [堡垒机配置与执行模式](docs/user/USER_GUIDE.md#temporary-bastion-sessions-v0150)
+- **经 SSH 路由访问内网服务。** 为 API、Redis 或网络 SQL 数据库选择已保存的 SSH
+  跳板。堡垒机允许 TCP 转发时，也可在当前窗口选择已连接的临时会话。
+  [SSH 路由](docs/user/USER_GUIDE.md#ssh-routes-for-private-services-v0150)
+- **Redis 与 SQL 结果。** 在 Database 查阅 Redis 单实例中的键与 TTL，按连接在本机启用
+  写入并确认变更，也可在 Flow 和 MCP 使用只读检查。SQL 已返回的行可分页、选择、
+  复制和导出，无需重新执行查询。[Redis 配置](docs/user/USER_GUIDE.md#redis-workbench-v0150)
+- **接续工作。** 若上次选中的是已保存 API 请求，重启后会按保存内容打开这一条。
+  接受 SSH 历史补全后可继续在终端输入。MCP 工具输出会遮盖秘密环境变量。
 
 ## 截图
 
@@ -226,39 +239,9 @@ pnpm run test:rust      # cargo test --workspace
 
 ## 发布状态
 
-[Unfour v0.13.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.13.0) 已于
-2026-11-07 作为 Standard stable 版本正式发布。CI、Standard Release Candidate、
-Standard Release、发布资产、checksums 以及在线 updater/download manifests 已验证。
-没有 v0.13.0 实际证据的平台、真实服务与人工回归继续保持 `NOT VERIFIED`。
-早期版本及 v0.13.0 RC 准备记录保留其历史范围。产品统一为 Unfour。
-发布验证证据见：
-
-- `docs/testing/release-verification.md`
-- `docs/testing/manual-test-cases.md`
-- `docs/release/release-checklist.md`
-- `docs/release/distribution.md`
-- `docs/release/signing.md`
-
-Windows 是主分发路径，提供尚未签名的 NSIS `.exe` 安装包，可能触发 SmartScreen。
-macOS 提供 Apple Silicon 与 Intel 包，v0.9.0 已记录真机验证，但未 Apple 签名、未公证，
-Gatekeeper 可能拦截。Linux 目前只发布 x86_64（x64）AppImage，定位为 Experimental
-（实验性），当前运行与测试基线为 Ubuntu 22.04+，不支持 Ubuntu 20.04；不能仅凭
-glibc 版本就保证其他发行版兼容。`.deb` 和 `.rpm` 暂不正式支持，也不会公开发布。
-请使用 Release 中的 `SHA256SUMS.txt` 校验下载的产物。除非发布检查确实成功执行，或有当前仓库证据支撑，
-否则不得声称其通过。
-
-已发布的 v0.9.0 Linux AppImage 构建成功，但因依赖 Ubuntu 24.04 时代的
-GLIBC/GLIBCXX 符号，在 Ubuntu 20.04 上启动失败。v0.13.0 AppImage 已使用
-Ubuntu 22.04 构建，不会替换已发布的 v0.9.0 文件。在记录已发布产物的实际运行测试前，
-v0.13.0 Ubuntu 22.04/24.04 运行回归仍为 `NOT VERIFIED`，详见
-[发布验证记录](docs/testing/release-verification.md#linux-appimage-compatibility)。
-
-早期版本的真机与人工结果，以及仍然保持 `NOT VERIFIED` 的检查，集中记录在
-[发布验证](docs/testing/release-verification.md)。该记录中，下列 v0.13.0 事项仍为
-`NOT VERIFIED`：原生安装与更新、已发布产物上的工作区 / Auth / 数据库 / MCP / Flow
-回归、账号 / Cloud Sync 与 MCP 生产策略旅程、Linux 运行、macOS 与 Linux 凭据存储，
-以及人工 MSIX / Store 路径。正式发布不会把这些事项改成 `PASS`。v0.9.0 的平台结果
-保留其原始范围。
+v0.14.0 已正式发布。分发结果及待完成的原生安装和真实服务检查见
+[v0.14.0 验证记录](docs/testing/release-verification.md#v0140-final-release-verification-record)。
+v0.15.0 的剩余验收见[发布检查清单](docs/release/release-checklist.md#v0150-preparation-status)。
 
 ## 文档
 

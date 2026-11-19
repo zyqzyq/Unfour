@@ -23,7 +23,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.14.0"
+version = "0.15.0"
 
 [patch.crates-io]
 # SQLx 0.8.6 needs a pool-scoped socket factory to carry its normal database

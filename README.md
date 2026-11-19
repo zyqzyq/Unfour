@@ -18,21 +18,17 @@ Unfour brings API testing, SSH, database tools, local Flow runbooks, and MCP-ass
 </div>
 
 > [!WARNING]
-> Unfour v0.13.0 was released on 2026-11-07. Windows NSIS
-> installers are unsigned and may trigger SmartScreen or other operating-system
-> security warnings. Use `SHA256SUMS.txt` from the GitHub Release to verify
-> downloaded files.
+> Windows NSIS installers are unsigned and may trigger SmartScreen or other
+> operating-system security warnings. Use `SHA256SUMS.txt` from the GitHub
+> Release to verify downloaded files.
 
-See the [v0.13.0 changelog](CHANGELOG.md#0130---2026-11-07),
-[Release Notes](docs/release/v0.13.0-release-notes.md), and
-[final release verification](docs/testing/release-verification.md#v0130-final-release-verification-record).
+**Latest stable download** ·
+[v0.14.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.14.0), released
+2026-11-09 · [Changelog](CHANGELOG.md#0140---2026-11-09) ·
+[Release Notes](docs/release/v0.14.0-release-notes.md)
 
-The capabilities below describe **v0.13.0 Standard stable**, adding supported
-cURL import, Database/SSH sidebar search, SFTP text preview and consistency
-fixes. CI, four-platform RC builds and formal publication passed on the tagged
-source. Targeted Windows RC native checks passed; native install/update and
-live-service/manual checks without evidence remain **NOT VERIFIED**. See the
-[RC record](docs/testing/v0.13.0-rc-final-verification-2026-11-07.md) for the scope.
+**In preparation** · v0.15.0 · [Unreleased changes](CHANGELOG.md#unreleased) ·
+[Draft Release Notes](docs/release/v0.15.0-release-notes.md)
 
 ## Download
 
@@ -45,8 +41,8 @@ from GitHub Releases.
   verification was recorded for v0.9.0. They are not Apple-signed or notarized;
   Gatekeeper may block them.
 - Linux publishes an x86_64 (x64) AppImage only. It is Experimental and currently
-  targets Ubuntu 22.04+; Ubuntu 20.04 is not supported. v0.13.0 was built on
-  Ubuntu 22.04; installed-artifact runtime verification remains `NOT VERIFIED`.
+  targets Ubuntu 22.04+. The v0.14.0 build used Ubuntu 22.04, with native
+  runtime checks still open.
   `.deb` and `.rpm` packages are not formally supported or published.
 - Verify downloaded installers with the release `SHA256SUMS.txt` asset.
 
@@ -122,8 +118,9 @@ workspace, environment, risky actions, and final decision.
 - **SSH Terminal** - Manage SSH connections and terminal sessions (split panes,
   search, clipboard context menu, persistent redacted command history and
   typing suggestions, host-key trust, redacted logs), browse and
-  transfer remote files over SFTP, and automate multi-step SSH tasks (command,
-  upload, download) from the Connections / Files / Tasks sidebar.
+  transfer remote files over SFTP on ordinary SSH connections, and automate
+  multi-step SSH tasks (command, upload, download) from the Connections /
+  Files / Tasks sidebar.
 - **Database** - Manage database connections, browse schemas, run SQL with
   confirmation-aware safety checks (including multi-statement Run All /
   Run Selected), preview and edit table rows, review query output, and export
@@ -166,6 +163,29 @@ execution state. SSH Tasks support reviewed reruns and previous-parameter recall
 with shared English/Chinese feedback and retry for loading/refresh failures.
 Database MCP calls bind policy and execution to one workspace per call; guarded
 UPDATE/DELETE confirmation checks the parsed outer WHERE.
+
+## What's coming in v0.15.0
+
+- **Windows bastion sessions.** Open a temporary terminal from supported
+  Xshell or SecureCRT launch arguments from JumpServer/QizhiTech AccessClient.
+  On an idle, logged-in POSIX shell, explicitly select and confirm the
+  terminal for command-only SSH Tasks or API requests through remote curl.
+  Run the terminal curl capability check to enable faster transfers for eligible
+  small requests. Bastion-specific SFTP/WinSCP, `rz`/ZMODEM and temporary-session
+  Flow or K3s deployment are outside this release.
+  [Bastion setup and modes](docs/user/USER_GUIDE.md#temporary-bastion-sessions-v0150)
+- **SSH routes to private services.** Select a saved jump host for API,
+  Redis or network SQL. A live bastion can also serve as a window-local
+  TCP route if its server permits forwarding.
+  [SSH routes](docs/user/USER_GUIDE.md#ssh-routes-for-private-services-v0150)
+- **Redis and query results.** Browse standalone Redis keys and TTLs in
+  Database, opt into confirmed local writes, or use read-only checks in Flow
+  and MCP. Page, select, copy and export returned SQL rows without rerunning
+  the query. [Redis setup](docs/user/USER_GUIDE.md#redis-workbench-v0150)
+- **Resume work.** If a saved API request was selected, restart into that
+  request using its saved definition. Accept an SSH history suggestion and
+  keep typing in the terminal. MCP masks secret environment variables in tool
+  output.
 
 ## Screenshots
 
@@ -265,47 +285,11 @@ map.
 
 ## Release Status
 
-[Unfour v0.13.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.13.0) was
-published as a Standard stable release on 2026-11-07. CI, Standard Release
-Candidate, Standard Release, published assets, checksums, and live updater/download
-manifests are verified. Native platform, live-service, and manual regressions
-without v0.13.0 evidence remain `NOT VERIFIED`. Earlier releases and v0.13.0
-RC preparation records retain their historical scope.
-Release verification evidence is documented in:
-
-- `docs/testing/release-verification.md`
-- `docs/testing/manual-test-cases.md`
-- `docs/release/release-checklist.md`
-- `docs/release/distribution.md`
-- `docs/release/signing.md`
-
-Windows is the primary distribution path and ships an unsigned NSIS `.exe`
-installer that may trigger SmartScreen. macOS has Apple Silicon and Intel
-packages, with real-device verification recorded for v0.9.0, but they are not
-Apple-signed or notarized and Gatekeeper may block them. Linux publishes an
-x86_64 (x64) AppImage only,
-remains Experimental, and uses Ubuntu 22.04+ as its current runtime/test baseline.
-Ubuntu 20.04 is not supported; compatibility with other distributions is not
-guaranteed solely by their glibc version. `.deb` and `.rpm` packages are not
-formally supported or published. Use the release `SHA256SUMS.txt` to verify
-downloaded artifacts, and do not claim a release check passes unless it was run
-successfully for the target platform or is backed by current repository evidence.
-
-The published v0.9.0 Linux AppImage built successfully but failed to launch on
-Ubuntu 20.04 because it requires Ubuntu 24.04-era GLIBC/GLIBCXX symbols. The
-v0.13.0 AppImage was built on Ubuntu 22.04; the immutable v0.9.0 download
-remains unchanged. v0.13.0 Ubuntu 22.04/24.04 runtime regression remains
-`NOT VERIFIED` until installed-artifact testing is recorded; see
-[release verification](docs/testing/release-verification.md#linux-appimage-compatibility).
-
-Earlier live and manual results, including checks that remain `NOT VERIFIED`,
-are collected in [release verification](docs/testing/release-verification.md).
-That record still leaves these v0.13.0 items `NOT VERIFIED`: native install and
-update journeys, released-artifact Workspace/Auth/Database/MCP/Flow regressions,
-Account/Cloud Sync and MCP production-policy journeys, Linux runtime, macOS and
-Linux credential stores, and the manual MSIX/Store path. Publication does not
-convert those items to `PASS`. Historical v0.9.0 platform results keep their
-original scope.
+v0.14.0 is published. See the
+[v0.14.0 verification record](docs/testing/release-verification.md#v0140-final-release-verification-record)
+for distribution results and open native and live-service checks.
+The [release checklist](docs/release/release-checklist.md#v0150-preparation-status)
+tracks the remaining v0.15.0 acceptance.
 
 ## Documentation
 

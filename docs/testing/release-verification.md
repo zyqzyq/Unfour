@@ -1,13 +1,41 @@
 # Release Verification
 
-Current preparation: **v0.14.0 — NOT RELEASED / RC NOT STARTED**.
-Use the [2026-11-09 preparation record](v0.14.0-release-preparation-2026-11-09.md)
-for current source identity, fresh local results, native/live-service limits and
-the exact-SHA RC handoff. Historical records below are not v0.14.0 evidence.
+Current preparation is **v0.15.0 · IN PREPARATION / RC NOT STARTED**.
+See the [2026-11-19 preparation record](v0.15.0-release-preparation-2026-11-19.md)
+for source identity, local checks and remaining acceptance.
 
-Latest published release: **v0.13.0 Standard stable — RELEASED** on
-**2026-11-07**. Publication, automated verification and manual acceptance are
-separate states; missing scenario evidence remains **NOT VERIFIED**.
+The latest published release is **v0.14.0 Standard stable**, released
+**2026-11-09**. See the [release checklist](../release/release-checklist.md#v0140-released-status).
+
+## v0.14.0 Final Release Verification Record
+
+GitHub records checked on **2026-11-19 (Asia/Shanghai)**. The local and
+GitHub tags resolve to `ec77f8aa3e1c5456cdc9ac82d635b6b28be08851`.
+[GitHub Release](https://github.com/zyqzyq/Unfour/releases/tag/v0.14.0)
+ID `438970681` is marked latest, non-draft and non-prerelease. GitHub records
+publication at `2026-11-09T10:03:43Z` (18:03:43 Asia/Shanghai).
+
+| Gate | Evidence on the tagged source |
+| --- | --- |
+| CI | PASS, 7/7 jobs. [CI #340](https://github.com/zyqzyq/Unfour/actions/runs/42581914727) |
+| Standard Release Candidate | PASS, 6/6 jobs including all four native builds. [RC #23](https://github.com/zyqzyq/Unfour/actions/runs/42581973834) |
+| Standard Release | PASS, 7/7 jobs including all four native builds and publication. [Release #35](https://github.com/zyqzyq/Unfour/actions/runs/42592248681) |
+| Build and asset inventory | Four Release Actions artifacts and 13 public GitHub assets, including ten installer/updater payloads and signatures, both manifests and `SHA256SUMS.txt`. The tagged Linux native build uses `ubuntu-22.04`. |
+| R2 re-download | The publish log reports ten checksum entries passing before GitHub publication. |
+| Stable promotion | Publish logs record `stable/downloads.json` at `10:03:47Z`, then `stable/latest.json` at `10:03:48Z`. |
+| Live Stable manifests | Both report 0.14.0 and contain the four platform entries. The raw bytes of each manifest match its GitHub Release asset by SHA-256. [Downloads](https://releases.unfour.dev/stable/downloads.json) · [Updater](https://releases.unfour.dev/stable/latest.json) |
+
+The [preparation checkpoint](v0.14.0-release-preparation-2026-11-09.md) records
+local and Windows checks made before publication. Its artifact and workflow
+statuses apply to that checkpoint. Native install, launch, upgrade, updater
+signature rejection, uninstall, OS trust, real SSH/SFTP/Task, live account
+and service scenarios, and the separate Store/MSIX path remain **NOT VERIFIED**
+where scenario evidence is missing. Keep any local native checks within the
+recorded binaries and environment.
+
+[Release Notes](../release/v0.14.0-release-notes.md) ·
+[Changelog](../../CHANGELOG.md#0140---2026-11-09) ·
+[Tag comparison](https://github.com/zyqzyq/Unfour/compare/v0.13.0...v0.14.0)
 
 ## v0.13.0 Final Release Verification Record
 
