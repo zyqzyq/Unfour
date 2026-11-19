@@ -234,6 +234,8 @@ export function useApiRequestTabs(workspaceId: string) {
 
   const openHistory = useCallback(
     async (historyId: string) => {
+      // Claim the workspace before the asynchronous history read completes.
+      useApiRequestTabStore.getState().initializeWorkspace(workspaceId);
       const detail = await getApiHistoryDetail(workspaceId, historyId);
       useApiRequestTabStore.getState().openHistory(workspaceId, detail);
     },
@@ -361,6 +363,7 @@ export function useApiRequestTabs(workspaceId: string) {
     duplicateMutation,
     environments,
     historyItems: historyQuery.data ?? [],
+    loadedSavedRequests: savedQuery.isSuccess && savedQuery.fetchStatus === "idle" ? savedQuery.data : undefined,
     savedRequests: savedQuery.data ?? [],
     state,
     closeTab: (tabId: string) =>

@@ -55,6 +55,7 @@ type ApiTabStore = {
   failTabSave: (workspaceId: string, tabId: string, error: string) => void;
   failTabSend: (workspaceId: string, tabId: string, error: string, errorCode?: string | null) => void;
   failTabCancel: (workspaceId: string, tabId: string, executionId: string, error: string) => void;
+  initializeWorkspace: (workspaceId: string, saved?: ApiSavedRequest) => void;
   newRequest: (workspaceId: string, draft?: RequestDraft) => void;
   openHistory: (workspaceId: string, history: ApiHistoryDetail) => void;
   openSaved: (workspaceId: string, saved: ApiSavedRequest) => void;
@@ -102,6 +103,13 @@ function withWorkspace(
 
 export const useApiRequestTabStore = create<ApiTabStore>((set) => ({
   byWorkspace: {},
+  initializeWorkspace: (workspaceId, saved) => set((state) => {
+    if (state.byWorkspace[workspaceId]) return state;
+    const slice = saved
+      ? { ...openSavedRequest(emptyApiTabsState(workspaceId), saved), nextNewIndex: 1 }
+      : createDefaultApiTabState(workspaceId);
+    return { byWorkspace: { ...state.byWorkspace, [workspaceId]: slice } };
+  }),
   setNameEditing: (workspaceId, tabId, nameEditing) => set((state) => withWorkspace(state, workspaceId, (slice) => ({
     ...slice, tabs: slice.tabs.map((tab) => tab.id === tabId ? { ...tab, nameEditing } : tab),
   }))),

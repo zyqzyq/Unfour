@@ -3,6 +3,7 @@ import { Button, EmptyState, useI18n } from "@unfour/ui";
 import { formatError } from "./model/api-request-state";
 import { historyReplayError } from "./model/history-replay";
 import { useApiRequestTabs } from "./hooks/useApiRequestTabs";
+import { useApiRequestSelection } from "./hooks/useApiRequestSelection";
 import { useApiCollections } from "./hooks/useApiCollections";
 import { useApiCollectionFolders } from "./hooks/useApiCollectionFolders";
 import {
@@ -24,12 +25,14 @@ export function ApiClientPage({
   onActiveSavedRequestChange,
   onShellSidebarChange,
   openIntent,
+  restoreSavedRequestId,
   workspaceId,
 }: {
   active?: boolean;
   onActiveSavedRequestChange?: (requestId: string | null) => void;
   onShellSidebarChange?: (sidebar: ReactNode | null) => void;
   openIntent: ApiOpenIntent | null;
+  restoreSavedRequestId?: string | null;
   workspaceId: string;
 }) {
   const { t } = useI18n();
@@ -44,6 +47,7 @@ export function ApiClientPage({
     newRequest,
     openHistory,
     openSaved,
+    loadedSavedRequests,
     reloadTab,
     saveTab,
     savedRequests,
@@ -131,11 +135,6 @@ export function ApiClientPage({
     selectTab(tabId);
   }, [selectTab]);
 
-  useEffect(
-    () => onActiveSavedRequestChange?.(activeTab?.savedRequestId ?? null),
-    [activeTab?.savedRequestId, onActiveSavedRequestChange],
-  );
-
   const handleOpenIntent = useCallback((intent: ApiOpenIntent) => {
     pendingHistorySave.current = null;
     pendingSend.current = null;
@@ -159,6 +158,8 @@ export function ApiClientPage({
     consumedOpenIntent.current = { workspaceId, nonce: openIntent.nonce };
     handleOpenIntent(openIntent);
   }, [handleOpenIntent, openIntent, savedRequests, workspaceId]);
+
+  useApiRequestSelection({ active, loadedSavedRequests, onActiveSavedRequestChange, restoreSavedRequestId, workspaceId });
 
   useEffect(() => {
     if (activeTab && pendingHistorySave.current === activeTab.id) {

@@ -1,5 +1,5 @@
 import AppShell from "./AppShell";
-import { useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { FeedbackProvider } from "@unfour/ui";
 import { useWorkspaceStore } from "@unfour/workspace-core";
@@ -44,13 +44,18 @@ function DesktopWorkbench({ extensions }: DesktopAppProps) {
   const [databaseStatusBarContent, setDatabaseStatusBarContent] = useState<ReactNode>(null);
   const {
     activeTabId, layoutWorkspaceId, bottomPanelHeight, setActiveTab: setActiveTabInStore,
-    setBottomPanelHeight, setSelectedApiRequest, setModuleSidebarWidth,
+    selectedApiRequestId, setBottomPanelHeight, setModuleSidebarWidth,
     sidebarCollapsed, sidebarWidths, toggleSidebar, tabs,
   } = useWorkspaceStore();
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
   const mounts = usePersistentFeatureMounts({ activeTabId, setActiveTab: setActiveTabInStore, tabs });
   const workspace = useDesktopWorkspace();
   const { activeWorkspace, activeEnvironment, workspaceEnvironments, workspaceQuery, refreshWorkspaces } = workspace;
+  const workspaceId = activeWorkspace?.id;
+  const onActiveSavedRequestChange = useCallback((requestId: string | null) => {
+    const layout = useWorkspaceStore.getState();
+    if (workspaceId && layout.layoutWorkspaceId === workspaceId) layout.setSelectedApiRequest(requestId);
+  }, [workspaceId]);
   const handlePreloadFeature = useFeatureModulePreload(activeTab.kind, { queryClient, workspaceId: activeWorkspace?.id });
   const navigation = useDesktopNavigation({
     activeWorkspace, activeEnvironmentId: activeEnvironment?.id ?? null,
@@ -144,7 +149,8 @@ function DesktopWorkbench({ extensions }: DesktopAppProps) {
         onSshSidebarChange={setSshSidebarContent}
         onDatabaseSidebarChange={setDatabaseSidebarContent}
         onDatabaseStatusBarChange={setDatabaseStatusBarContent}
-        onActiveSavedRequestChange={setSelectedApiRequest}
+        onActiveSavedRequestChange={onActiveSavedRequestChange}
+        restoreSavedRequestId={layoutWorkspaceId === workspaceId ? selectedApiRequestId : undefined}
         statusBarRightAccessory={statusBarRightAccessory}
       />}
     />

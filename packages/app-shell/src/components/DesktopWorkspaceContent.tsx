@@ -20,6 +20,7 @@ type DesktopWorkspaceContentProps = {
   onDatabaseSidebarChange: (content: ReactNode | null) => void;
   onDatabaseStatusBarChange: (content: ReactNode | null) => void;
   onActiveSavedRequestChange: (requestId: string | null) => void;
+  restoreSavedRequestId: string | null | undefined;
   statusBarRightAccessory: ReactNode;
 };
 
@@ -43,7 +44,7 @@ function WorkspaceStartupState({ query }: { query: DesktopWorkspaceController["w
 export function DesktopWorkspaceContent({
   activeTab, workspace, navigation, mounts, extensionContext, variableDecoration: VariableDecoration,
   onApiSidebarChange, onFlowSidebarChange, onSshSidebarChange, onDatabaseSidebarChange,
-  onDatabaseStatusBarChange, onActiveSavedRequestChange, statusBarRightAccessory,
+  onDatabaseStatusBarChange, onActiveSavedRequestChange, restoreSavedRequestId, statusBarRightAccessory,
 }: DesktopWorkspaceContentProps) {
   const { activeWorkspace, workspaceQuery } = workspace;
   const { variableManagerOpen, variableManagerRequest, closeVariableManager, setVariableManagerDirty } = navigation;
@@ -70,6 +71,7 @@ export function DesktopWorkspaceContent({
         onShellSidebarChange={onApiSidebarChange}
         onActiveSavedRequestChange={onActiveSavedRequestChange}
         openIntent={null}
+        restoreSavedRequestId={restoreSavedRequestId}
         workspaceId={activeWorkspace.id}
       />
     </div>}
