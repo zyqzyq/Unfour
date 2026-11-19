@@ -13,6 +13,9 @@ enum Mode {
     /// Return only after the runner has cancelled the step token.
     SuccessAfterSignal,
     FailureAfterSignal,
+    HistoryBudgetResult {
+        failed: bool,
+    },
     UnknownWithDiagnostics,
     CleanStop,
     Hang,
@@ -35,7 +38,7 @@ impl FlowExecutor for Scripted {
 
     fn execute<'a>(
         &'a self,
-        _: &'a FlowAction,
+        action: &'a FlowAction,
         _: &'a Value,
         _: &'a FlowRunInput,
         cancel: CancellationToken,
@@ -64,6 +67,18 @@ impl FlowExecutor for Scripted {
                     cancel.cancelled().await;
                     tokio::task::yield_now().await;
                     Err(AppError::Validation("FLOW_TEST_FAILURE".into()))
+                }
+                Mode::HistoryBudgetResult { failed } => {
+                    if action.arguments["arg0"].as_str().map(str::len) != Some(255 * 1024)
+                        || action.arguments["authorization"] != "budget-fixture-secret"
+                    {
+                        return Err(invalid("FLOW_TEST_ARGUMENTS_INVALID"));
+                    }
+                    if failed {
+                        Err(invalid("FLOW_TEST_FAILURE"))
+                    } else {
+                        Ok(json!({"confirmed": true}))
+                    }
                 }
             }
         })
@@ -540,30 +555,39 @@ async fn flow_action_history_budget_preserves_known_success_and_failure() {
         let bus = test_bus().await;
         let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
         let service = FlowService::new(bus.db.clone());
-        let mut step = effect(500);
-        let bindings = (0..17)
+        let mut step = effect(20_000);
+        let mut bindings = (0..17)
             .map(|i| (format!("arg{i}"), json!({"$ref":"/inputs/value"})))
             .collect::<serde_json::Map<_, _>>();
+        bindings.insert("authorization".into(), json!({"$ref":"/inputs/auth"}));
         step["action"]["arguments"] = json!(bindings);
         let flow = service
             .save(definition(&workspace, json!([step, later_wait()])))
             .await
             .unwrap();
         let mut input = request(&workspace, &flow.id);
-        input.inputs = json!({"value":"v".repeat(255 * 1024)});
+        input.inputs = json!({"value":"v".repeat(255 * 1024), "auth":"budget-fixture-secret"});
+        // Reject oversized in-flight writes so the test does not depend on deadline timing.
+        sqlx::query(
+            "CREATE TRIGGER enforce_history_budget BEFORE UPDATE OF run_json ON flow_runs
+            WHEN NEW.finished_at IS NULL
+              AND length(CAST(json_extract(NEW.run_json, '$.steps') AS BLOB)) > 4194304
+            BEGIN SELECT RAISE(FAIL, 'fixture history budget exceeded'); END",
+        )
+        .execute(bus.db.pool())
+        .await
+        .unwrap();
         let driver = Arc::new(Scripted {
             started: Mutex::new(None),
-            mode: if failed {
-                Mode::FailureAfterSignal
-            } else {
-                Mode::SuccessAfterSignal
-            },
+            mode: Mode::HistoryBudgetResult { failed },
         });
         let run = service.run(input, driver).await.unwrap();
         let result = finished(&bus, &run).await;
+        assert!(serde_json::to_vec(&result.steps).unwrap().len() <= 4 * 1024 * 1024);
         assert_eq!(result.steps[0].attempts.len(), 1);
+        assert_eq!(result.steps[0].attempts[0].input, Value::Null);
+        assert_eq!(result.context.inputs["auth"], "<redacted>");
         assert_eq!(result.steps[1].status, FlowStepRunStatus::Skipped);
-        assert!(serde_json::to_vec(&result.steps).unwrap().len() <= 4_194_304);
         if failed {
             assert_eq!(result.status, FlowRunStatus::Failed);
             assert_eq!(result.error.as_deref(), Some("FLOW_TEST_FAILURE"));
