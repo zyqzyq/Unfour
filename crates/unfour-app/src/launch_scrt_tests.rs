@@ -1,5 +1,8 @@
 use super::*;
 
+const SAVED_SESSION: &str = "Synthetic sessions\\other.invalid";
+const WINDOW_TITLE: &str = "合成外部窗口标题";
+
 fn fixture() -> Vec<String> {
     [
         "/T",
@@ -19,6 +22,14 @@ fn fixture() -> Vec<String> {
     .collect()
 }
 
+fn with_saved_session(args: Vec<String>, session: &str) -> Vec<String> {
+    ["/s", session]
+        .into_iter()
+        .map(str::to_owned)
+        .chain(args)
+        .collect()
+}
+
 #[test]
 fn observed_scrt_order_uses_host_and_auth_fields_not_label() {
     let args = fixture();
@@ -31,6 +42,27 @@ fn observed_scrt_order_uses_host_and_auth_fields_not_label() {
         (endpoint.identity, endpoint.credential),
         ("synthetic-user", "synthetic-grant")
     );
+}
+
+#[test]
+fn saved_session_and_window_title_preserve_the_explicit_connection() {
+    let original = fixture();
+    let title = ["/titlebar".to_owned(), WINDOW_TITLE.to_owned()];
+    let mut titled = original.clone();
+    titled.extend(title);
+    for args in [
+        with_saved_session(original.clone(), SAVED_SESSION),
+        titled.clone(),
+        with_saved_session(titled, SAVED_SESSION),
+    ] {
+        let Ok(Launch::Terminal(endpoint)) = parse(&args) else {
+            panic!("synthetic SecureCRT argv rejected")
+        };
+        assert_eq!(endpoint.label, original[2]);
+        assert_eq!((endpoint.host, endpoint.port), ("gateway.invalid", 22022));
+        assert_eq!(endpoint.identity, original[8]);
+        assert_eq!(endpoint.credential, original[10]);
+    }
 }
 
 #[test]
@@ -64,19 +96,44 @@ fn missing_reordered_duplicate_and_execution_options_are_rejected() {
         assert_eq!(parse(&args).err(), Some(UNSUPPORTED));
     }
     for suffix in [
+        vec!["/UNKNOWN", "value"],
+        vec!["/SSH2", "other.invalid"],
+        vec!["/S", SAVED_SESSION],
+        vec!["/TITLEBAR"],
+        vec!["/TITLEBAR", "one", "/TITLEBAR", "two"],
+        vec!["unexpected-operand"],
         vec!["/SCRIPT", "synthetic.vbs"],
+        vec!["/TITLEBAR", WINDOW_TITLE, "/SCRIPT", "synthetic.vbs"],
         vec!["/PASSWORD", "synthetic-duplicate"],
         vec!["--task", "synthetic-task"],
         vec!["--flow", "synthetic-flow"],
         vec!["-exec", "synthetic-command"],
     ] {
-        let mut args = fixture();
-        args.extend(suffix.into_iter().map(str::to_owned));
-        assert_eq!(parse(&args).err(), Some(UNSUPPORTED));
+        for mut args in [fixture(), with_saved_session(fixture(), SAVED_SESSION)] {
+            args.extend(suffix.iter().map(|value| (*value).to_owned()));
+            assert_eq!(parse(&args).err(), Some(UNSUPPORTED));
+        }
     }
+    assert_eq!(parse(&["/S", SAVED_SESSION]).err(), Some(UNSUPPORTED));
+    let repeated = with_saved_session(with_saved_session(fixture(), SAVED_SESSION), SAVED_SESSION);
+    assert_eq!(parse(&repeated).err(), Some(UNSUPPORTED));
     let mut args = fixture();
     args.swap(5, 7);
     args.swap(6, 8);
+    assert_eq!(parse(&args).err(), Some(UNSUPPORTED));
+}
+
+#[test]
+fn ignored_fields_obey_the_same_argument_boundary() {
+    for invalid in ["", "   ", "session|separate", "session\nline", "session\0"] {
+        let args = with_saved_session(fixture(), invalid);
+        assert_eq!(parse(&args).err(), Some(UNSUPPORTED));
+        let mut args = fixture();
+        args.extend(["/TITLEBAR".to_owned(), invalid.to_owned()]);
+        assert_eq!(parse(&args).err(), Some(UNSUPPORTED));
+    }
+    let mut args = with_saved_session(fixture(), &"s".repeat(32_768));
+    args.extend(["/TITLEBAR".to_owned(), "t".repeat(32_768)]);
     assert_eq!(parse(&args).err(), Some(UNSUPPORTED));
 }
 
@@ -127,6 +184,13 @@ fn invalid_unicode_in_any_value_is_rejected() {
         args[index] = OsString::from_wide(&[0xd800]);
         assert_eq!(parse(&args).err(), Some(UNSUPPORTED));
     }
+    let mut args = with_saved_session(fixture(), SAVED_SESSION);
+    args.extend(["/TITLEBAR".to_owned(), WINDOW_TITLE.to_owned()]);
+    for index in [1, 14] {
+        let mut args: Vec<OsString> = args.iter().map(Into::into).collect();
+        args[index] = OsString::from_wide(&[0xd800]);
+        assert_eq!(parse(&args).err(), Some(UNSUPPORTED));
+    }
 }
 
 #[cfg(windows)]
@@ -134,8 +198,10 @@ fn invalid_unicode_in_any_value_is_rejected() {
 fn scrt_requests_expose_display_metadata_without_serializing_credentials() {
     let bus = tauri::async_runtime::block_on(CommandBus::ephemeral()).unwrap();
     let args = fixture();
-    for _ in 0..2 {
-        assert!(deliver(&args, Some(&bus)).unwrap());
+    let mut extended = with_saved_session(args.clone(), SAVED_SESSION);
+    extended.extend(["/TITLEBAR".to_owned(), WINDOW_TITLE.to_owned()]);
+    for argv in [&args, &extended] {
+        assert!(deliver(argv, Some(&bus)).unwrap());
     }
     let pending = bus.list_temporary_ssh("").unwrap();
     assert_eq!(pending.len(), 2);
@@ -147,8 +213,13 @@ fn scrt_requests_expose_display_metadata_without_serializing_credentials() {
     assert!(pending
         .iter()
         .all(|p| p.display_name == args[2] && p.endpoint == "gateway.invalid:22022"));
-    for index in [8, 10] {
-        assert!(!json.contains(&args[index]));
+    for value in [
+        args[8].as_str(),
+        args[10].as_str(),
+        "Synthetic sessions",
+        WINDOW_TITLE,
+    ] {
+        assert!(!json.contains(value));
     }
     for entry in pending {
         bus.cancel_temporary_ssh("", &entry.handle).unwrap();

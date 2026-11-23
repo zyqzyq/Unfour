@@ -60,8 +60,10 @@ async function waitFor(check, message, timeout = 25000) {
   throw new Error(message);
 }
 const label = "SYNTHETIC-ASSET @different.invalid";
+const savedSession = "SYNTHETIC-SAVED-SESSION @other.invalid";
+const windowTitle = "SYNTHETIC-WINDOW-TITLE";
 const received = [];
-const reportSentinels = ["tcp.fixture.invalid", "denied.fixture.invalid"];
+const reportSentinels = [savedSession, windowTitle, "tcp.fixture.invalid", "denied.fixture.invalid"];
 let browser;
 let createdTasks = 0;
 async function rejectWithDiagnostic(argv, expectedCount) {
@@ -86,8 +88,8 @@ async function rejectWithDiagnostic(argv, expectedCount) {
   }, "rejected launch did not finish writing its redacted report");
   for (const report of contents) {
     assert.match(report, /^Unfour launch diagnostic v1\nBASTION_LAUNCH_UNSUPPORTED\n/);
-    assert.match(report, /argv\[0\] = (-url|\/T)/);
-    for (const secret of ["fixture-user", "fixture-grant", label, "SYNTHETIC_EXTRA", "SYNTHETIC_CRT_USER", "SYNTHETIC_CRT_GRANT", "gateway.invalid"]) {
+    assert.match(report, /^argv\[0\] = (?:-url|\/[ST])$/m);
+    for (const secret of ["fixture-user", "fixture-grant", label, savedSession, windowTitle, "SYNTHETIC_EXTRA", "SYNTHETIC_CRT_USER", "SYNTHETIC_CRT_GRANT", "gateway.invalid"]) {
       assert.ok(!report.includes(secret), "launch report leaked a synthetic value");
     }
   }
@@ -108,9 +110,9 @@ async function verify() {
   const [, port] = ready.split(" ");
   const url = "ssh://fixture-user:fixture-grant@127.0.0.1:" + port;
   const xshellArgv = ["-url", url, "-newtab", label];
-  const scrtArgv = ["/T", "/N", label, "/SSH2", "127.0.0.1", "/P", port, "/L", "fixture-user", "/PASSWORD", "fixture-grant"];
-  const argvFor = (kind) => kind === "scrt" ? scrtArgv : xshellArgv;
-  const argv = argvFor(mode);
+  const scrtArgv = ["/S", savedSession, "/T", "/N", label, "/SSH2", "127.0.0.1", "/P", port, "/L", "fixture-user", "/PASSWORD", "fixture-grant"];
+  const scrtWithTitle = [...scrtArgv, "/TITLEBAR", windowTitle];
+  const argv = mode === "scrt" ? scrtArgv : xshellArgv;
   const launches = [mode, mode, mode === "scrt" ? "xshell" : "scrt"];
   await rejectWithDiagnostic([...argv, "-exec", "SYNTHETIC_EXTRA"], 1);
   console.log("Malformed Windows argv produced a redacted diagnostic before app startup");
@@ -140,7 +142,8 @@ async function verify() {
     if (i > 0) {
       await page.getByRole("button", { name: /^(API Client|API 客户端|API)$/i }).first().click();
       sessionStart = received.length;
-      const warm = launch("unfour.exe", argvFor(launches[i]));
+      const warmArgs = launches[i] === "scrt" ? scrtWithTitle : xshellArgv;
+      const warm = launch("unfour.exe", warmArgs);
       await waitFor(() => warm.exitCode !== null, "secondary process did not forward and exit");
       assert.equal(warm.exitCode, 0);
       assert.equal(primary.exitCode, null);
@@ -165,7 +168,7 @@ async function verify() {
     await page.keyboard.press("Enter");
     await expect(rows).toContainText("A2_ECHO_OK");
     if (i === 0) {
-      await rejectWithDiagnostic([...scrtArgv, "/SCRIPT", "SYNTHETIC_EXTRA"], 2);
+      await rejectWithDiagnostic([...scrtWithTitle, "/SCRIPT", "SYNTHETIC_EXTRA"], 2);
       assert.equal(primary.exitCode, null, "rejected hot launch affected the running app");
       await expect(rows).toContainText("A2_ECHO_OK");
       await expect(sidebarSearch).toBeVisible();
@@ -174,7 +177,7 @@ async function verify() {
     const text = await page.locator("body").innerText();
     assert.ok(text.includes(label));
     assert.ok(text.includes("127.0.0.1:" + port));
-    for (const secret of ["fixture-user", "fixture-grant", url]) assert.ok(!text.includes(secret));
+    for (const secret of ["fixture-user", "fixture-grant", url, savedSession, windowTitle]) assert.ok(!text.includes(secret));
     const completed = await verifyCapabilityChecks(page, received, metadata,
       ["fixture-user", "fixture-grant", label, url, "127.0.0.1"],
       i === 0 ? process.env.UNFOUR_BASTION_QA_SCREENSHOT : undefined);

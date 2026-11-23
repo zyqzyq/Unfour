@@ -1,4 +1,4 @@
-//! Windows outer Xshell and SecureCRT argv, observed with AccessClient 4.6.15.
+//! Windows outer Xshell and SecureCRT argv observed from AccessClient.
 //! Delimiters and encoding inside other handoff formats are still unknown.
 use std::ffi::OsStr;
 use unfour_command_bus::{CommandBus, LaunchReceipt, TemporaryRequest};
@@ -43,24 +43,7 @@ fn parse<S: AsRef<OsStr>>(args: &[S]) -> Result<Launch<'_>, &'static str> {
             }
             parse_endpoint(url, label).map(Launch::Terminal)
         }
-        [tab, name, label, protocol, host, port_flag, port, login, identity, password, credential]
-            if slash_option(tab.as_ref(), "/T")
-                && slash_option(name.as_ref(), "/N")
-                && slash_option(protocol.as_ref(), "/SSH2")
-                && slash_option(port_flag.as_ref(), "/P")
-                && slash_option(login.as_ref(), "/L")
-                && slash_option(password.as_ref(), "/PASSWORD") =>
-        {
-            parse_scrt([
-                label.as_ref(),
-                host.as_ref(),
-                port.as_ref(),
-                identity.as_ref(),
-                credential.as_ref(),
-            ])
-            .map(Launch::Terminal)
-        }
-        _ => Err(UNSUPPORTED),
+        _ => parse_scrt(args).map(Launch::Terminal),
     }
 }
 
@@ -70,18 +53,52 @@ fn slash_option(value: &OsStr, expected: &str) -> bool {
         .is_some_and(|value| value.eq_ignore_ascii_case(expected))
 }
 
-fn parse_scrt(values: [&OsStr; 5]) -> Result<Endpoint<'_>, &'static str> {
-    let [label, host, port, identity, credential] = values;
-    let label = label.to_str().ok_or(UNSUPPORTED)?;
-    let host = host.to_str().ok_or(UNSUPPORTED)?;
-    let port = port.to_str().ok_or(UNSUPPORTED)?;
-    let identity = identity.to_str().ok_or(UNSUPPORTED)?;
-    let credential = credential.to_str().ok_or(UNSUPPORTED)?;
+fn parse_scrt<S: AsRef<OsStr>>(args: &[S]) -> Result<Endpoint<'_>, &'static str> {
+    // The observed AccessClient envelope can prefix the explicit SSH2 request
+    // with a SecureCRT session name. Unfour uses only the explicit request.
+    let (saved_session, args) = match args {
+        [flag, session, rest @ ..] if slash_option(flag.as_ref(), "/S") => (Some(session), rest),
+        _ => (None, args),
+    };
+    let [tab, name, label, protocol, host, port_flag, port, login, identity, password, credential, tail @ ..] =
+        args
+    else {
+        return Err(UNSUPPORTED);
+    };
+    if !slash_option(tab.as_ref(), "/T")
+        || !slash_option(name.as_ref(), "/N")
+        || !slash_option(protocol.as_ref(), "/SSH2")
+        || !slash_option(port_flag.as_ref(), "/P")
+        || !slash_option(login.as_ref(), "/L")
+        || !slash_option(password.as_ref(), "/PASSWORD")
+    {
+        return Err(UNSUPPORTED);
+    }
+
+    // A window title is presentation metadata. Any other tail may change
+    // the meaning of the request and must go through the launch diagnostic.
+    let window_title = match tail {
+        [] => None,
+        [flag, title] if slash_option(flag.as_ref(), "/TITLEBAR") => Some(title),
+        _ => return Err(UNSUPPORTED),
+    };
+
+    let label = label.as_ref().to_str().ok_or(UNSUPPORTED)?;
+    let host = host.as_ref().to_str().ok_or(UNSUPPORTED)?;
+    let port = port.as_ref().to_str().ok_or(UNSUPPORTED)?;
+    let identity = identity.as_ref().to_str().ok_or(UNSUPPORTED)?;
+    let credential = credential.as_ref().to_str().ok_or(UNSUPPORTED)?;
     let fields = [label, host, port, identity, credential];
-    if fields.iter().map(|v| v.len()).sum::<usize>() > 64 * 1024
-        || fields
-            .iter()
-            .any(|v| v.is_empty() || v.contains('|') || v.chars().any(char::is_control))
+    let mut value_bytes = fields.iter().map(|value| value.len()).sum::<usize>();
+    for value in [saved_session, window_title].into_iter().flatten() {
+        let value = value.as_ref().to_str().ok_or(UNSUPPORTED)?;
+        if value.trim().is_empty() || !valid_scrt_value(value) {
+            return Err(UNSUPPORTED);
+        }
+        value_bytes = value_bytes.saturating_add(value.len());
+    }
+    if value_bytes > 64 * 1024
+        || !fields.into_iter().all(valid_scrt_value)
         || label.trim().is_empty()
         || !valid_host(host)
         || port.starts_with('0')
@@ -99,6 +116,10 @@ fn parse_scrt(values: [&OsStr; 5]) -> Result<Endpoint<'_>, &'static str> {
         identity,
         credential,
     })
+}
+
+fn valid_scrt_value(value: &str) -> bool {
+    !value.is_empty() && !value.contains('|') && !value.chars().any(char::is_control)
 }
 
 #[cfg(test)]

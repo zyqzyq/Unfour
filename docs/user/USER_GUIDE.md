@@ -208,12 +208,16 @@ supported argument form:
   accept only ASCII letters, digits and `-._~` as literal characters. The label
   cannot start with a hyphen.
 - SecureCRT: `/T /N <label> /SSH2 <host> /P <port> /L <identity> /PASSWORD <credential>`.
-  Supply arguments in this order. Switches are case-insensitive and identity
-  and credential are separate literal arguments.
+  Supply arguments in this order. AccessClient can add `/S <session>` before
+  `/T`. Unfour also accepts one trailing `/TITLEBAR <title>`. Unfour discards
+  both optional values and uses `/N` for its tab label and the explicit SSH2
+  fields for the connection. Switches are case-insensitive and identity and
+  credential are separate literal arguments.
 
 Both forms require an ASCII hostname or IPv4 address and an explicit port
 from 1 to 65535 with no leading zero. Fields must be nonempty, with no control
-characters or vertical bars. The display label cannot be all whitespace.
+characters or vertical bars. The display label, session name and window title
+cannot be all whitespace.
 The URL and label (Xshell), or the combined argument values (SecureCRT),
 must fit within 64 KiB.
 Unsupported launch arguments produce a redacted diagnostic. For multiple
