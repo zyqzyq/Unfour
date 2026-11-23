@@ -1,13 +1,74 @@
 # Release Verification
 
-Current preparation is **v0.15.0 · IN PREPARATION / RC RERUN PENDING**.
-See the [2026-11-19 preparation record](v0.15.0-release-preparation-2026-11-19.md)
-for source identity and remaining acceptance, and the
-[Standard RC E2E repair](v0.15.0-release-preparation-2026-11-19.md#standard-rc-e2e-repair)
-for the failed run and local verification.
+The latest Standard stable release is **v0.15.0**, published on **2026-11-19**.
+See the [release checklist](../release/release-checklist.md#v0150-released-status).
 
-The latest published release is **v0.14.0 Standard stable**, released
-**2026-11-09**. See the [release checklist](../release/release-checklist.md#v0140-released-status).
+## v0.15.0 Final Release Verification Record
+
+GitHub and public Stable distribution evidence checked on **2026-11-23**
+(Asia/Shanghai).
+
+### Source and publication
+
+- Version `0.15.0`, tag `v0.15.0`. The local tag and the GitHub tag resolve to
+  [`e2861065681f1a0484a394afd924f984bea3be35`](https://github.com/zyqzyq/Unfour/commit/e2861065681f1a0484a394afd924f984bea3be35).
+- Standard stable was published at `2026-11-19T10:16:44Z`
+  (18:16:44 Asia/Shanghai). GitHub Release ID `451173549` is public, non-draft
+  and non-prerelease. [GitHub Release](https://github.com/zyqzyq/Unfour/releases/tag/v0.15.0)
+- [Release Notes](../release/v0.15.0-release-notes.md) ·
+  [Changelog](../../CHANGELOG.md#0150---2026-11-19) ·
+  [Tag comparison](https://github.com/zyqzyq/Unfour/compare/v0.14.0...v0.15.0)
+
+### Automated workflow evidence
+
+GitHub records all three runs as completed successfully on attempt 1 at the
+exact tagged SHA.
+
+| Workflow | Trigger | Result |
+| --- | --- | --- |
+| [CI #364](https://github.com/zyqzyq/Unfour/actions/runs/44479408201) | Push to `main` | PASS, 7/7 jobs. |
+| [Standard Release Candidate #25](https://github.com/zyqzyq/Unfour/actions/runs/44488056149) | Manual dispatch | PASS, 6/6 jobs. Identity, verification and four native builds completed and produced four RC artifacts. |
+| [Standard Release #36](https://github.com/zyqzyq/Unfour/actions/runs/44497832021) | Push of `v0.15.0` | PASS, 7/7 jobs. Identity, verification, four native builds and publication completed. The run produced four Standard build artifacts. |
+
+The RC and Standard workflows each built Windows x64, macOS arm64 and x64,
+and Linux x64 (Experimental AppImage on the Ubuntu 22.04 build baseline).
+The [publish job](https://github.com/zyqzyq/Unfour/actions/runs/44497832021/job/135490786375)
+passed the R2 re-download checksum step, uploaded the same staged files to
+GitHub and promoted the Stable downloads manifest before the updater.
+
+### Published assets and Stable manifests
+
+- GitHub lists 13 uploaded assets, excluding GitHub-generated source archives.
+  These include the Windows x64 `.exe`, two macOS `.dmg` installers, two macOS
+  `.app.tar.gz` updater archives, the Linux x64 `.AppImage`, four updater
+  `.sig` files, `SHA256SUMS.txt`, `downloads.json` and `latest.json`.
+  [Published assets](https://github.com/zyqzyq/Unfour/releases/expanded_assets/v0.15.0)
+- The downloaded `SHA256SUMS.txt` matches its GitHub asset digest. Its ten
+  entries match the filenames and SHA-256 digests in the GitHub metadata for
+  the installers, updater archives and signature files.
+  [Checksum file](https://github.com/zyqzyq/Unfour/releases/download/v0.15.0/SHA256SUMS.txt)
+- Public Stable reads returned `0.15.0` in both manifests. Each matched its
+  GitHub Release asset byte for byte and listed four platform entries under
+  `/stable/0.15.0/`. The updater manifest contains a signature field for
+  each platform. [Downloads](https://releases.unfour.dev/stable/downloads.json) ·
+  [Updater](https://releases.unfour.dev/stable/latest.json)
+
+### Release operator confirmations
+
+- The v0.15.0 website content and bastion guide were synchronized, reviewed and
+  deployed. [Official website](https://unfour.dev/)
+- Website download verification, upgrades and publication across the release
+  channels were completed, including Microsoft Store publication via the
+  separate MSIX path.
+
+Store submission identifiers, Store package hashes and per-scenario test
+environments or results were not supplied. Manual scenarios without separate
+evidence remain **NOT VERIFIED**, including native OS trust, invalid-updater
+signature rejection, customer bastion Task/curl and TCP routes, and
+live-service and platform-specific acceptance. The
+[historical preparation and acceptance record](v0.15.0-release-preparation-2026-11-19.md)
+preserves the earlier CI and RC failures, their repairs and the scope of
+the local evidence.
 
 ## v0.14.0 Final Release Verification Record
 

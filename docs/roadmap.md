@@ -6,13 +6,26 @@ This roadmap is a product-direction summary. It is not release evidence. Use
 Versioned sections record what each release shipped. Historical entries do not
 describe the latest release, and they do not change any `NOT VERIFIED` result.
 
-Current source version: `0.15.0` (**in preparation**).
-[Draft Release Notes](release/v0.15.0-release-notes.md) ·
-[Preparation and acceptance](testing/v0.15.0-release-preparation-2026-11-19.md)
+The latest Standard stable release is
+[v0.15.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.15.0), published
+on **2026-11-19**.
 
-The latest stable download is
-[v0.14.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.14.0), published
-on **2026-11-09**. [Publication evidence](testing/release-verification.md#v0140-final-release-verification-record)
+## v0.15.0 (Published)
+
+- Windows bastion launch opens a temporary terminal from supported Xshell and
+  SecureCRT handoffs. An already logged-in, idle POSIX shell can run confirmed
+  command-only SSH Tasks and supported API requests via curl.
+- Saved SSH jump hosts route API, standalone Redis, PostgreSQL, openGauss and
+  MySQL. A live temporary session can also forward TCP to private services or a
+  separate SSH target when the server permits it.
+- The standalone Redis workbench adds key and TTL inspection, guarded desktop
+  edits and read-only Flow/MCP checks. SQL Results adds local paging, filtering,
+  sorting, cell selection and copy/export of returned rows.
+- Restored the selected saved API request after restart, improved SSH terminal
+  focus and preserved confirmed results when terminal recovery fails.
+
+[Release Notes](release/v0.15.0-release-notes.md) ·
+[Final release verification](testing/release-verification.md#v0150-final-release-verification-record)
 
 ## v0.14.0 (Published)
 
@@ -435,19 +448,23 @@ Historical status:
 
 Release claims remain limited by the current verification matrix.
 
-## Beyond v0.12.0
+## Future candidates
 
-No version beyond v0.12.0 is assigned. Likely follow-up areas, none of which are
-release claims:
+These candidates have no assigned release:
 
-- operating-system code signing and macOS notarization;
-- richer database result interactions;
-- sensitive-data Cloud Sync and synchronization of Flow run history/runtime data;
-- plugin extension points.
+- Operating-system code signing and macOS notarization.
+- Sensitive-data Cloud Sync and synchronization of Flow run history and runtime
+  data.
+- Plugin extension points.
+- `rz`/ZMODEM on a logged-in terminal.
 
-MCP and local Flow runbooks are current capabilities, not future AI work. A
-separate CLI is not part of the current product. Adding another adapter later
-would still go through the command bus.
+## Bastion scope
+
+Dedicated bastion SFTP is not planned. Ordinary SSH connections continue to
+offer SFTP. Flow and K3s deployment through temporary sessions remain deferred.
+
+MCP and local Flow runbooks are available today. A separate CLI is outside the
+current product scope. Any future adapter would use the command bus.
 
 ## Release Rule
 

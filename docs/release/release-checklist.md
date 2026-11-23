@@ -1,33 +1,29 @@
 # Release checklist
 
-## v0.15.0 preparation status
+## v0.15.0 released status
 
-**IN PREPARATION / RC RERUN PENDING** as of 2026-11-19 (Asia/Shanghai).
-The latest published Standard stable release is [v0.14.0](#v0140-released-status).
+**RELEASED** as Standard stable on **2026-11-19** at `10:16:44Z`
+(18:16:44 Asia/Shanghai). The local and GitHub tag `v0.15.0` resolve to
+`e2861065681f1a0484a394afd924f984bea3be35`.
 
-[Draft Release Notes](v0.15.0-release-notes.md) ·
-[Unreleased changelog](../../CHANGELOG.md#unreleased) ·
-[Preparation results and acceptance matrix](../testing/v0.15.0-release-preparation-2026-11-19.md)
+[GitHub Release](https://github.com/zyqzyq/Unfour/releases/tag/v0.15.0) ·
+[Changelog](../../CHANGELOG.md#0150---2026-11-19) ·
+[Release Notes](v0.15.0-release-notes.md) ·
+[Final release verification](../testing/release-verification.md#v0150-final-release-verification-record)
 
-| Gate | Current disposition |
+| Gate | Result |
 | --- | --- |
-| Source version, release contract, docs and local build | See the dated preparation record |
-| Review, commit, push and CI on the reviewed complete SHA | PENDING for the E2E repair. |
-| Standard Release Candidate with `ref=<full-reviewed-commit-SHA>` | Baseline FAIL at Chromium E2E. The repaired worktree passed 84/84 locally. Rerun PENDING. [E2E repair and results](../testing/v0.15.0-release-preparation-2026-11-19.md#standard-rc-e2e-repair) |
-| Windows x64, macOS arm64/x64 and Linux x64 signed updater builds in one RC run | NOT RUN |
-| RC artifact identity, SHA-256, signatures, platform checks and focused feature acceptance | NOT VERIFIED |
-| Customer bastion launch, idle-shell Task/curl, TCP routes and real-service journeys on the RC | NOT VERIFIED |
-| Formal tag, GitHub Release and Stable manifest promotion | PENDING release-operator approval after acceptance |
-| Microsoft Store and unfour-web | Separate release-operator follow-up |
+| CI on the tagged commit | PASS, 7/7 jobs. [CI #364](https://github.com/zyqzyq/Unfour/actions/runs/44479408201) |
+| Standard Release Candidate | PASS, 6/6 jobs and four native build artifacts. [RC #25](https://github.com/zyqzyq/Unfour/actions/runs/44488056149) |
+| Standard Release | PASS, 7/7 jobs including four native builds and publication. [Standard Release #36](https://github.com/zyqzyq/Unfour/actions/runs/44497832021) |
+| GitHub assets and Stable manifests | 13 uploaded assets. The checksum list agrees with GitHub digests, and both live manifests match the v0.15.0 GitHub assets. |
+| Website content and bastion guide | Synchronized, reviewed and deployed, as confirmed by the release operator. |
+| Website download verification, upgrades and channel rollout | Complete, as confirmed by the release operator, including Microsoft Store publication via the separate MSIX path. |
 
-Review and commit the complete preparation, push it and check CI for that
-exact commit. Dispatch [Standard Release Candidate](../../.github/workflows/release-candidate.yml)
-with the full SHA in the `ref` input. Verify the resolved SHA and the four
-artifacts from that run, then record acceptance and the go/no-go decision.
-After approval, tag that SHA and push the tag to trigger
-[Standard Release](../../.github/workflows/release.yml). The workflow supplies
-a generic GitHub Release body. Use the feature sections of the
-[v0.15.0 notes](v0.15.0-release-notes.md) for the published body after the workflow succeeds.
+The [historical preparation record](../testing/v0.15.0-release-preparation-2026-11-19.md)
+preserves the failed baseline CI and RC, the fixes and the acceptance matrix
+from before publication. Manual scenarios without specific evidence retain
+their **NOT VERIFIED** status.
 
 ## v0.14.0 released status
 
@@ -41,7 +37,8 @@ a generic GitHub Release body. Use the feature sections of the
 - CI passed 7/7, Standard RC passed 6/6, and Standard Release passed 7/7,
   including four native builds. The GitHub Release has 13 assets. The publish
   job reports ten successful R2 checksum checks and promotes downloads before
-  the updater. Both live Stable manifests match their GitHub Release assets.
+  the updater. Both live Stable manifests matched their GitHub Release assets
+  at the v0.14.0 verification checkpoint.
   [Final release verification](../testing/release-verification.md#v0140-final-release-verification-record)
 - Native installs and upgrades, signed updater rejection, OS trust, real
   SSH/SFTP/Task and live-service journeys, and the separate Store/MSIX path

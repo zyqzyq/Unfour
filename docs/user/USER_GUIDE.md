@@ -15,10 +15,8 @@ Unfour opens into a single workspace surface:
 
 ## Current Capabilities
 
-The current download is **v0.14.0 Standard stable**, released 2026-11-09.
-See the [published Release Notes](../release/v0.14.0-release-notes.md).
-Sections and paragraphs marked **v0.15.0** describe the source in preparation.
-See the [v0.15.0 draft Release Notes](../release/v0.15.0-release-notes.md).
+The current download is **v0.15.0 Standard stable**, released 2026-11-19.
+See the [published v0.15.0 Release Notes](../release/v0.15.0-release-notes.md).
 
 - The workspace shell is usable. API, SSH, and Database sidebars keep
   independent bounded widths and restore their own layout when switching

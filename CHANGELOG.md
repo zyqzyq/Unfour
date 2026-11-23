@@ -6,9 +6,12 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
-Preparing v0.15.0 for Standard stable. See the
-[draft Release Notes](docs/release/v0.15.0-release-notes.md) and
-[preparation and acceptance record](docs/testing/v0.15.0-release-preparation-2026-11-19.md).
+## [0.15.0] - 2026-11-19
+
+Standard stable release.
+[Release Notes](docs/release/v0.15.0-release-notes.md) ·
+[GitHub Release](https://github.com/zyqzyq/Unfour/releases/tag/v0.15.0) ·
+[final release verification](docs/testing/release-verification.md#v0150-final-release-verification-record)
 
 ### Added
 
@@ -998,7 +1001,8 @@ First public release.
 - Linux artifacts remain experimental/unverified until real-device smoke checks
   are complete.
 
-[Unreleased]: https://github.com/zyqzyq/Unfour/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/zyqzyq/Unfour/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/zyqzyq/Unfour/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/zyqzyq/Unfour/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/zyqzyq/Unfour/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/zyqzyq/Unfour/compare/v0.11.0...v0.12.0
