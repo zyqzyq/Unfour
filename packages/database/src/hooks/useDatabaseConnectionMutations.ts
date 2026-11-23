@@ -1,4 +1,4 @@
-import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from "react";
+import { type Dispatch, type SetStateAction, useLayoutEffect, useRef, useState } from "react";
 import { useMutation, type QueryClient } from "@tanstack/react-query";
 import {
   bindTemporaryHandle,
@@ -58,9 +58,9 @@ export function useDatabaseConnectionMutations({
   t: ReturnType<typeof useI18n>["t"];
   workspaceId: string;
 }) {
-  const saveScope = useRef<string | null>(workspaceId);
-  useEffect(() => {
-    saveScope.current = workspaceId;
+  const saveScope = useRef<{ workspaceId: string } | null>(null);
+  useLayoutEffect(() => {
+    saveScope.current = { workspaceId };
     return () => { saveScope.current = null; };
   }, [workspaceId]);
   const saveMutation = useMutation({
@@ -73,7 +73,10 @@ export function useDatabaseConnectionMutations({
       }
       return saveDatabaseConnection(input, secret || null);
     },
-    onMutate: ({ input }) => ({ previous: connectionTemporaryHandle("database", input.workspaceId, input.id) }),
+    onMutate: ({ input }) => ({
+      scope: saveScope.current,
+      previous: connectionTemporaryHandle("database", input.workspaceId, input.id),
+    }),
     onError: (_error, { input }) => { void queryClient.invalidateQueries({ queryKey: databaseConnectionsQueryKey(input.workspaceId) }); },
     onSuccess: async (connection, { input }, before) => {
       const queryKey = databaseConnectionsQueryKey(connection.workspaceId);
@@ -82,7 +85,7 @@ export function useDatabaseConnectionMutations({
         replaceDatabaseConnectionInCache(current, connection),
       );
       void queryClient.invalidateQueries({ queryKey });
-      if (saveScope.current !== connection.workspaceId) return;
+      if (saveScope.current?.workspaceId !== connection.workspaceId || before?.scope !== saveScope.current) return;
       if (input.id && (before?.previous !== connectionTemporaryHandle("database", connection.workspaceId, connection.id)
         || input.expectedSnapshot?.sshConnectionId !== connection.sshConnectionId
         || input.expectedSnapshot?.sshRevision !== connection.sshRevision)) {
@@ -154,7 +157,7 @@ export function useDatabaseConnectionMutations({
       return databaseRouteVersion(connection.workspaceId, connection.id);
     },
     onError: (error, connection, version) => {
-      if (saveScope.current !== connection.workspaceId || version !== databaseRouteVersion(connection.workspaceId, connection.id)) return;
+      if (saveScope.current?.workspaceId !== connection.workspaceId || version !== databaseRouteVersion(connection.workspaceId, connection.id)) return;
       const connectionId = connection.id;
       setTestResult(null);
       setConnectionState(connectionId, {
@@ -163,7 +166,7 @@ export function useDatabaseConnectionMutations({
       });
     },
     onSuccess: (result, connection, version) => {
-      if (saveScope.current !== connection.workspaceId || version !== databaseRouteVersion(connection.workspaceId, connection.id)) return;
+      if (saveScope.current?.workspaceId !== connection.workspaceId || version !== databaseRouteVersion(connection.workspaceId, connection.id)) return;
       const connectionId = connection.id;
       setTestResult(result);
       setConnectionState(connectionId, {
@@ -181,12 +184,10 @@ export function useDatabaseConnectionMutations({
   // the "Test connection" button, which must work for brand-new (unsaved)
   // connections. Unlike `testMutation` (by saved id, which also opens a
   // session), this only checks connectivity and leaves state disconnected.
-  const testInputMutation = useMutation({
+  const testInput = useMutation({
+    mutationKey: ["database-test-input", workspaceId],
     mutationFn: ({ input, secret }: { input: DatabaseConnectionInput; secret: string | null }) =>
       testDatabaseConnectionInput(input, secret),
-    onSuccess: (result) => setTestResult(result),
-    onError: (error) =>
-      setTestResult({ ok: false, message: formatDatabaseError(error, t), serverVersion: null }),
   });
 
   return {
@@ -195,7 +196,15 @@ export function useDatabaseConnectionMutations({
     duplicateMutation,
     saveMutation,
     setDeleteConfirm,
-    testInputMutation,
+    testInputMutation: {
+      isPending: testInput.isPending,
+      reset: testInput.reset,
+      mutate: (variables: Parameters<typeof testInput.mutate>[0]) => testInput.mutate(variables, {
+        onSuccess: (result) => setTestResult(result),
+        onError: (error) =>
+          setTestResult({ ok: false, message: formatDatabaseError(error, t), serverVersion: null }),
+      }),
+    },
     testMutation,
   };
 }

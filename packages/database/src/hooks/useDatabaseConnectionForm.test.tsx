@@ -75,6 +75,20 @@ const connection: DatabaseConnection = {
   remoteId: null,
 };
 
+it("keeps a new draft isolated from a saved connection selected in the workspace", () => {
+  const { result, rerender } = renderHook(
+    ({ selected }: { selected: DatabaseConnection | null }) =>
+      useDatabaseConnectionForm("ws-a", selected?.id ?? null, selected),
+    { initialProps: { selected: null as DatabaseConnection | null } },
+  );
+  act(() => {
+    result.current.setEditorOpen(true);
+    result.current.setForm({ workspaceId: "ws-a", driver: "mysql", name: "New draft", port: 3306 });
+  });
+  rerender({ selected: connection });
+  expect(result.current.form).toEqual({ workspaceId: "ws-a", driver: "mysql", name: "New draft", port: 3306 });
+});
+
 it("preserves unsaved edits through cache renders, but clears credentials on connection/workspace changes", () => {
   const { result, rerender } = renderHook(
     ({

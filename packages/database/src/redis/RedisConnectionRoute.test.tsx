@@ -42,6 +42,8 @@ it("keeps the temporary target password separate from the saved Redis password",
 it("tests and saves the selected SSH route, requiring a new password after retargeting", async () => {
   vi.mocked(listSshConnections).mockResolvedValue([jump, { ...jump, workspaceId: "other", id: "foreign", name: "Other" }]);
   render(<RedisConnectionDialog workspaceId="w" original={cache} latest={cache} initialName="" onClose={vi.fn()} onSaved={vi.fn()} />);
+  expect(screen.getByLabelText("Database type")).toHaveValue("redis");
+  expect(screen.getByLabelText("Database type")).toBeDisabled();
   await screen.findByRole("option", { name: /Staging/ });
   expect(screen.queryByRole("option", { name: /Other/ })).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Network route"), { target: { value: "jump" } });

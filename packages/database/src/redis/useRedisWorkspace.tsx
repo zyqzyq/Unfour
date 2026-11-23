@@ -7,9 +7,7 @@ import { useDatabaseTabStore } from "../model/database-tab-state";
 import { RedisConnectionDialog } from "./RedisConnectionDialog";
 import { updateRedisConnectionsAfterMutation, useRedisConnections } from "./redis-connections";
 
-type DialogState =
-  | { kind: "create"; workspaceId: string; initialName: string }
-  | { kind: "edit" | "delete"; workspaceId: string; connection: RedisConnection };
+type DialogState = { kind: "edit" | "delete"; workspaceId: string; connection: RedisConnection };
 const EMPTY: RedisConnection[] = [];
 
 export function useRedisWorkspace(workspaceId: string, active: boolean) {
@@ -38,14 +36,15 @@ export function useRedisWorkspace(workspaceId: string, active: boolean) {
     remove: (connection: RedisConnection) => { reset(); setDialog({ kind: "delete", workspaceId, connection }); },
   }), [open, reset, workspaceId]);
   const localDialog = active && dialog?.workspaceId === workspaceId ? dialog : null;
-  const formOpen = localDialog?.kind === "create" || localDialog?.kind === "edit";
-  const original = localDialog?.kind === "edit" ? localDialog.connection : null;
+  function cacheSavedConnection(connection: RedisConnection) {
+    void updateRedisConnectionsAfterMutation(queryClient, connection, "save");
+  }
   const dialogs = <>
-    {formOpen && <RedisConnectionDialog key={original?.id ?? workspaceId} workspaceId={workspaceId}
-      original={original} latest={connections.find((c) => c.id === original?.id)}
-      initialName={localDialog.kind === "create" ? localDialog.initialName : ""} onClose={() => setDialog(null)}
+    {localDialog?.kind === "edit" && <RedisConnectionDialog key={localDialog.connection.id} workspaceId={workspaceId}
+      original={localDialog.connection} latest={connections.find((c) => c.id === localDialog.connection.id)}
+      initialName="" onClose={() => setDialog(null)}
       onSaved={(connection) => {
-        void updateRedisConnectionsAfterMutation(queryClient, connection, "save");
+        cacheSavedConnection(connection);
         setDialog((current) => current === localDialog ? null : current);
         open(connection);
       }} />}
@@ -55,5 +54,5 @@ export function useRedisWorkspace(workspaceId: string, active: boolean) {
         <span role="alert" className="block text-[var(--u-color-danger)]">{redisErrorMessage(deletion.error, t)}</span>}</>}
       onConfirm={() => deletion.mutate(localDialog.connection)} />}
   </>;
-  return { actions, connections, dialogs, query, create: (initialName: string) => setDialog({ kind: "create", workspaceId, initialName }) };
+  return { actions, connections, dialogs, query, cacheSavedConnection };
 }

@@ -12,52 +12,26 @@ import {
   ErrorState,
   Input,
   SavedSecretInput,
-  Select,
   useI18n,
 } from "@unfour/ui";
 import { DatabaseErrorDetails } from "./DatabaseErrorDetails";
 import { DatabaseNetworkRoute } from "./DatabaseNetworkRoute";
 
 export function DatabaseConnectionDialog({
-  canTest,
-  externalChange = false,
-  onReload,
-  onChooseRedis,
-  error,
-  form,
-  onOpenChange,
-  onPasswordChange,
-  onSubmit,
-  onTest,
-  onUpdate,
-  open,
-  password,
-  savePending,
-  testPending,
   children,
+  onClose,
+  pending,
+  title,
 }: {
-  canTest: boolean;
-  externalChange?: boolean;
-  onReload?: () => void;
-  onChooseRedis?: () => void;
-  error: unknown;
-  form: DatabaseConnectionInput;
-  onOpenChange: (open: boolean) => void;
-  onPasswordChange: (value: string) => void;
-  onSubmit: (event: FormEvent) => void;
-  onTest: () => void;
-  onUpdate: (patch: Partial<DatabaseConnectionInput>) => void;
-  open: boolean;
-  password: string;
-  savePending: boolean;
-  testPending: boolean;
-  children?: ReactNode;
+  children: ReactNode;
+  onClose: () => void;
+  pending: boolean;
+  title: string;
 }) {
-  const { t } = useI18n();
   const returnFocus = useRef<HTMLElement | null>(null);
 
   return (
-    <Dialog onOpenChange={(next) => { if (!savePending) onOpenChange(next); }} open={open}>
+    <Dialog onOpenChange={(open) => { if (!open && !pending) onClose(); }} open>
       <DialogContent
         onOpenAutoFocus={() => {
           returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -67,16 +41,55 @@ export function DatabaseConnectionDialog({
           event.preventDefault();
           returnFocus.current.focus();
         }}
-        title={t("database.connection.settings")}
       >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2.5">
             <span className="flex size-8 items-center justify-center rounded-[var(--u-radius-md)] bg-[var(--u-color-primary-soft)] text-[var(--u-color-primary)]">
               <Database aria-hidden="true" size={16} />
             </span>
-            {t("database.connection.settings")}
+            {title}
           </DialogTitle>
         </DialogHeader>
+        {children}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function DatabaseConnectionForm({
+  canTest,
+  externalChange = false,
+  onReload,
+  error,
+  form,
+  onClose,
+  onPasswordChange,
+  onSubmit,
+  onTest,
+  onUpdate,
+  password,
+  savePending,
+  testPending,
+  typeSelect,
+}: {
+  canTest: boolean;
+  externalChange?: boolean;
+  onReload?: () => void;
+  error: unknown;
+  form: DatabaseConnectionInput;
+  onClose: () => void;
+  onPasswordChange: (value: string) => void;
+  onSubmit: (event: FormEvent) => void;
+  onTest: () => void;
+  onUpdate: (patch: Partial<DatabaseConnectionInput>) => void;
+  password: string;
+  savePending: boolean;
+  testPending: boolean;
+  typeSelect: ReactNode;
+}) {
+  const { t } = useI18n();
+
+  return (
         <form className="flex min-h-0 flex-col" onSubmit={(event) => { if (externalChange || savePending) event.preventDefault(); else onSubmit(event); }}>
           <fieldset disabled={savePending} className="contents">
           <DialogBody className="space-y-4">
@@ -84,9 +97,7 @@ export function DatabaseConnectionDialog({
             <Field title={t("database.fields.name")}>
               <Input onChange={(event) => onUpdate({ name: event.target.value })} value={form.name} />
             </Field>
-            <Field title={t("database.fields.driver")}>
-              {open && <ConnectionPresetSelect key={`${form.workspaceId}:${form.id ?? "new"}:${form.expectedSnapshot?.credentialRef ?? ""}`} form={form} onUpdate={onUpdate} onChooseRedis={form.id ? undefined : onChooseRedis} />}
-            </Field>
+            {typeSelect}
             {form.driver === "sqlite" ? (
               <Field title={t("database.fields.sqlitePath")}>
                 <Input onChange={(event) => onUpdate({ sqlitePath: event.target.value })} placeholder="E:\\data\\app.sqlite" value={form.sqlitePath ?? ""} />
@@ -106,11 +117,11 @@ export function DatabaseConnectionDialog({
                     />
                   </Field>
                 </div>
-                {open && <DatabaseNetworkRoute workspaceId={form.workspaceId} sshId={form.sshConnectionId} revision={form.expectedSshRevision}
+                <DatabaseNetworkRoute workspaceId={form.workspaceId} sshId={form.sshConnectionId} revision={form.expectedSshRevision}
                   temporaryHandle={form.temporaryHandle} onChange={(route) => onUpdate(route.temporaryHandle
                     ? { temporaryHandle: route.temporaryHandle, sshConnectionId: form.expectedSnapshot?.sshConnectionId ?? null,
                       expectedSshRevision: form.expectedSnapshot?.sshRevision ?? undefined }
-                    : route)} />}
+                    : route)} />
                 <Field title={t("database.fields.database")}>
                   <Input onChange={(event) => onUpdate({ database: event.target.value })} value={form.database ?? ""} />
                 </Field>
@@ -118,7 +129,7 @@ export function DatabaseConnectionDialog({
                   <Input onChange={(event) => onUpdate({ username: event.target.value })} value={form.username ?? ""} />
                 </Field>
                 <Field title={t("database.fields.password")}>
-                  {open && <ConnectionSecretEditor key={`${form.workspaceId}:${form.id ?? "new"}:${form.expectedSnapshot?.credentialRef ?? ""}`} form={form} password={password} onPasswordChange={onPasswordChange} onUpdate={onUpdate} disabled={savePending} />}
+                  <ConnectionSecretEditor key={`${form.workspaceId}:${form.id ?? form.driver}:${form.expectedSnapshot?.credentialRef ?? ""}`} form={form} password={password} onPasswordChange={onPasswordChange} onUpdate={onUpdate} disabled={savePending} />
                 </Field>
               </>
             )}
@@ -149,7 +160,7 @@ export function DatabaseConnectionDialog({
               <Plug size={13} />
               {testPending ? t("database.connection.testing") : t("database.connection.test")}
             </Button>
-            <Button onClick={() => onOpenChange(false)} size="sm" type="button" variant="ghost">
+            <Button onClick={onClose} size="sm" type="button" variant="ghost">
               {t("common.confirm.cancel")}
             </Button>
             <Button disabled={savePending || externalChange} size="sm" type="submit">
@@ -159,9 +170,6 @@ export function DatabaseConnectionDialog({
           </DialogFooter>
           </fieldset>
         </form>
-        {children}
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -178,40 +186,6 @@ function Field({
       {children}
     </label>
   );
-}
-
-// A preset is transient editor state; only the existing transport fields leave
-// this component. Reopening an existing connection starts from its driver.
-function ConnectionPresetSelect({ form, onUpdate, onChooseRedis }: {
-  form: DatabaseConnectionInput;
-  onUpdate: (patch: Partial<DatabaseConnectionInput>) => void;
-  onChooseRedis?: () => void;
-}) {
-  const { t } = useI18n();
-  const [preset, setPreset] = useState<string>(form.driver);
-  return <Select
-    value={preset}
-    options={[
-      { label: t("database.driver.postgres"), value: "postgres" },
-      { label: t("database.driver.opengauss"), value: "opengauss" },
-      { label: t("database.driver.mysql"), value: "mysql" },
-      { label: t("database.driver.sqlite"), value: "sqlite" },
-      ...(onChooseRedis ? [{ label: "Redis", value: "redis" }] : []),
-    ]}
-    onChange={(event) => {
-      const value = event.target.value;
-      if (value === "redis") { onChooseRedis?.(); return; }
-      const driver = value === "opengauss" ? "postgres" : value as DatabaseConnectionInput["driver"];
-      setPreset(value);
-      onUpdate({
-        driver,
-        ...(driver === "sqlite" && { sshConnectionId: null, expectedSshRevision: undefined, temporaryHandle: null }),
-        sqlitePath: driver === "sqlite" ? form.sqlitePath : null,
-        sslMode: driver === "sqlite" ? null : form.sslMode,
-        credentialRef: driver === "sqlite" ? null : form.credentialRef,
-      });
-    }}
-  />;
 }
 
 function ConnectionSecretEditor({ form, password, onPasswordChange, onUpdate, disabled }: {

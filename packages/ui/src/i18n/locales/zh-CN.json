@@ -1183,6 +1183,7 @@
     "connection": {
       "connectBeforeRefresh": "刷新 schema 前请先连接数据库。",
       "connected": "已连接",
+      "createTitle": "新建数据库连接",
       "deleteLabel": "删除数据库连接",
       "disconnected": "已断开",
       "executingSql": "SQL 执行中",
@@ -1212,6 +1213,7 @@
       "mysql": "MySQL / MariaDB",
       "postgres": "PostgreSQL",
       "opengauss": "openGauss",
+      "redis": "Redis",
       "sqlite": "SQLite"
     },
     "errors": {

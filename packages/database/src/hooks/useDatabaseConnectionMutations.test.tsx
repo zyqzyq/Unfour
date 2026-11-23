@@ -140,7 +140,7 @@ describe("database credential save", () => {
     expect(bindTemporaryHandle).toHaveBeenCalledWith("database", "ws-current", existing.id, "current-session");
     expect(saveMock).not.toHaveBeenCalled();
   });
-  it("does not hydrate an old save result after the editor switches workspace", async () => {
+  it.each(["ws-next", "ws-current"])("ignores an old save result with a fresh editor in %s", async (workspaceId) => {
     const existing = persisted({ credentialRef: CURRENT_REF });
     let finishSave!: (connection: DatabaseConnection) => void;
     saveMock.mockImplementationOnce(() => new Promise((resolve) => { finishSave = resolve; }));
@@ -150,9 +150,15 @@ describe("database credential save", () => {
     act(() => { pending = result.current.mutations.saveMutation.mutateAsync({ input: databaseConnectionToInput(existing, "ws-current"), secret: "" }); });
     await act(async () => Promise.resolve());
     rerender({ workspaceId: "ws-next" });
+    if (workspaceId === "ws-current") rerender({ workspaceId });
+    act(() => {
+      result.current.formState.setEditorOpen(true);
+      result.current.formState.setForm({ workspaceId, name: "Fresh draft", driver: "sqlite" });
+    });
     await act(async () => { finishSave(persisted({ name: "Old workspace saved" })); await pending; });
-    expect(result.current.formState.form.workspaceId).toBe("ws-next");
-    expect(result.current.formState.form.name).toBe("");
+    expect(result.current.formState.form.workspaceId).toBe(workspaceId);
+    expect(result.current.formState.form.name).toBe("Fresh draft");
+    expect(result.current.formState.editorOpen).toBe(true);
   });
   it("sends a replacement in the backend save and retains the returned reference", async () => {
     const existing = persisted({ credentialRef: CURRENT_REF });

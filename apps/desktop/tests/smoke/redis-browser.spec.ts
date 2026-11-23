@@ -1,5 +1,52 @@
 import { expect, test } from "@playwright/test";
 
+test("switches database types in both directions and locks the type when editing", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("unfour.locale", "en"));
+  await page.goto("/");
+  await page.getByRole("navigation").getByRole("button", { name: "Database", exact: true }).click();
+  const sidebar = page.getByRole("complementary");
+  const add = sidebar.getByRole("button", { name: "New database connection", exact: true });
+  const dialog = page.getByRole("dialog");
+  const type = dialog.getByLabel("Database type");
+  const name = dialog.getByLabel("Name", { exact: true });
+  const password = dialog.getByLabel(/^Password/);
+
+  await add.click();
+  await name.fill("Local fixture");
+  await type.selectOption("mysql");
+  await password.fill("fixture-sql-password");
+  await type.press("End");
+  await expect(type).toHaveValue("redis");
+  await expect(type).toBeFocused();
+  await expect(name).toHaveValue("Local fixture");
+  await expect(password).toHaveValue("");
+  await password.fill("fixture-redis-password");
+  await type.selectOption("mysql");
+  await expect(type).toBeFocused();
+  await expect(dialog.getByLabel("Port")).toHaveValue("3306");
+  await expect(name).toHaveValue("Local fixture");
+  await expect(password).toHaveValue("");
+  await type.selectOption("sqlite");
+  await dialog.getByLabel("SQLite Path").fill("fixture.sqlite");
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+
+  await sidebar.getByRole("button", { name: "Local fixture", exact: true }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Edit connection" }).click();
+  await expect(type).toHaveValue("sqlite");
+  await expect(type).toBeDisabled();
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+
+  await add.click();
+  await expect(name).toHaveValue("");
+  await type.selectOption("redis");
+  await name.fill("Cache fixture");
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await sidebar.getByRole("button", { name: "Cache fixture", exact: true }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Edit connection" }).click();
+  await expect(type).toHaveValue("redis");
+  await expect(type).toBeDisabled();
+});
+
 test("opens Redis alongside SQL and starts a Flow from an inspected key", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("unfour.locale", "en"));
   // Keep the UI, connection CRUD, tabs and command transport. A native driver

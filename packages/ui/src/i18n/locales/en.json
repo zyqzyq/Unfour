@@ -1184,6 +1184,7 @@
     "connection": {
       "connectBeforeRefresh": "Connect to the database before refreshing schema.",
       "connected": "connected",
+      "createTitle": "New Database Connection",
       "deleteLabel": "Delete database connection",
       "disconnected": "Disconnected",
       "executingSql": "SQL executing",
@@ -1213,6 +1214,7 @@
       "mysql": "MySQL / MariaDB",
       "postgres": "PostgreSQL",
       "opengauss": "openGauss",
+      "redis": "Redis",
       "sqlite": "SQLite"
     },
     "errors": {

@@ -12,8 +12,12 @@ export function databaseConnectionContent(connection: DatabaseConnection | null)
 
 export function emptyDatabaseConnectionForm(
   workspaceId: string,
+  driver: DatabaseConnectionInput["driver"] = "sqlite",
+  name = "",
 ): DatabaseConnectionInput {
-  return { workspaceId, name: "", driver: "sqlite", sqlitePath: "" };
+  return driver === "sqlite"
+    ? { workspaceId, name, driver, sqlitePath: "" }
+    : { workspaceId, name, driver, port: driver === "mysql" ? 3306 : 5432 };
 }
 
 export function onlyTemporaryRouteChanged(input: DatabaseConnectionInput, secret: string) {

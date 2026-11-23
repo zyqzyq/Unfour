@@ -40,6 +40,7 @@ type TestMutation = {
 
 type TestInputMutation = {
   mutate: (variables: { input: DatabaseConnectionInput; secret: string | null }) => void;
+  reset: () => void;
 };
 
 type DatabaseWorkspaceControllerOptions = {
@@ -49,6 +50,7 @@ type DatabaseWorkspaceControllerOptions = {
   connectionStates: Record<string, DatabaseConnectionSessionState>;
   connections: DatabaseConnection[];
   databaseTabs: ReturnType<typeof useDatabaseTabs>;
+  editorOpen: boolean;
   form: DatabaseConnectionInput;
   hydrateFormFromConnection: (connection: DatabaseConnection) => void;
   maxHistoryEntries: number;
@@ -91,6 +93,7 @@ export function useDatabaseWorkspaceController({
   connectionStates,
   connections,
   databaseTabs,
+  editorOpen,
   form,
   hydrateFormFromConnection,
   maxHistoryEntries,
@@ -200,6 +203,7 @@ export function useDatabaseWorkspaceController({
     setForm(emptyDatabaseConnectionForm(workspaceId));
     // Clear a previously failed save so its error doesn't leak into the new window.
     saveMutation.reset();
+    testInputMutation.reset();
   }
 
   // A save failure belongs to the workspace that produced it.
@@ -210,14 +214,17 @@ export function useDatabaseWorkspaceController({
   }, [workspaceId, resetSaveMutation]);
 
   function handleNewConnection() {
+    if (editorOpen) return;
     newConnection();
     setEditorOpen(true);
   }
 
   function handleEditConnection(connection: DatabaseConnection) {
+    if (editorOpen) return;
     selectConnection(connection.id);
     // Clear a previously failed save so its error doesn't leak into this edit window.
     saveMutation.reset();
+    testInputMutation.reset();
     const latest = resolveCachedDatabaseConnection(
       connection,
       queryClient.getQueryData<DatabaseConnection[]>(databaseConnectionsQueryKey(workspaceId)),

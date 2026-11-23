@@ -31,10 +31,13 @@ export function useDatabaseConnectionForm(
     setTestResult(null);
   } else if (selectedConnectionId !== selection.selectedConnectionId && !(editorOpen && form.id && !selectedConnectionId)) {
     setSelection({ workspaceId, selectedConnectionId });
-    setPassword("");
-    if (selectedConnection) {
-      setForm(databaseConnectionToInput(selectedConnection, workspaceId));
-      setTestResult(null);
+    // A new connection draft has no saved target, even if tree selection changes.
+    if (!editorOpen || form.id) {
+      setPassword("");
+      if (selectedConnection) {
+        setForm(databaseConnectionToInput(selectedConnection, workspaceId));
+        setTestResult(null);
+      }
     }
   } else if (observedConnection !== selectedConnection) {
     setObservedConnection(selectedConnection);
@@ -53,7 +56,10 @@ export function useDatabaseConnectionForm(
     externalChange,
     reloadLatest: () => {
       if (latest) hydrateFormFromConnection(latest);
-      else setEditorOpen(false);
+      else {
+        setPassword("");
+        setEditorOpen(false);
+      }
       setTestResult(null);
     },
     editorOpen,

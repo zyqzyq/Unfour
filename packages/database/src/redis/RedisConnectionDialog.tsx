@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { bindRedisSession, connectionTemporaryHandle, listSshConnections, listTemporaryRoutes, redisTemporaryPassword, saveRedisConnection, temporaryRouteOptions, testRedisConnectionInput, type RedisConnection, type RedisConnectionInput } from "@unfour/command-client";
 import { Button, Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle, Input, SecretInput, Select, useI18n, useLiveOptions } from "@unfour/ui";
+import { DatabaseConnectionTypeSelect } from "../components/DatabaseConnectionTypeSelect";
 import { redisErrorMessage } from "./redis-error";
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -24,13 +25,35 @@ function useJumpHosts(workspaceId: string) {
   return result?.workspaceId === workspaceId ? result : { state: "loading", options: [] };
 }
 
-export function RedisConnectionDialog({ workspaceId, original, latest, initialName, onClose, onSaved }: {
+type RedisConnectionFormProps = {
   workspaceId: string;
   original: RedisConnection | null;
   latest: RedisConnection | undefined;
   initialName: string;
   onClose: () => void;
   onSaved: (connection: RedisConnection) => void;
+};
+
+type Pending = "save" | "test" | null;
+
+export function RedisConnectionDialog(props: RedisConnectionFormProps) {
+  const { t } = useI18n();
+  const [pending, setPending] = useState<Pending>(null);
+  return <Dialog open onOpenChange={(open) => { if (!open && !pending) props.onClose(); }}>
+    <DialogContent title={t("redis.settings")}>
+      <DialogHeader><DialogTitle>{t("redis.settings")}</DialogTitle></DialogHeader>
+      <RedisConnectionForm {...props} pending={pending} setPending={setPending}
+        renderTypeSelect={() => <DatabaseConnectionTypeSelect value="redis" />} />
+    </DialogContent>
+  </Dialog>;
+}
+
+export function RedisConnectionForm({
+  workspaceId, original, latest, initialName, onClose, onSaved, pending, setPending, renderTypeSelect,
+}: RedisConnectionFormProps & {
+  pending: Pending;
+  setPending: (pending: Pending) => void;
+  renderTypeSelect: (name: string) => ReactNode;
 }) {
   const { t } = useI18n();
   const [form, setForm] = useState<RedisConnectionInput>(() => ({
@@ -48,7 +71,6 @@ export function RedisConnectionDialog({ workspaceId, original, latest, initialNa
   const sessions = useLiveOptions(workspaceId, listTemporaryRoutes, true);
   const live = temporaryRouteOptions(sessions?.items ?? [], temporaryHandle, (id) => t("network.temporarySession", { id }), t("network.temporaryUnavailable"));
   const [clear, setClear] = useState(false);
-  const [pending, setPending] = useState<"save" | "test" | null>(null);
   const [tested, setTested] = useState(false);
   const [error, setError] = useState("");
   const { options: jumps, state: listState } = useJumpHosts(workspaceId);
@@ -91,13 +113,11 @@ export function RedisConnectionDialog({ workspaceId, original, latest, initialNa
       setPending(null);
     }
   }
-  return <Dialog open onOpenChange={(open) => { if (!open && !pending) onClose(); }}>
-    <DialogContent title={t("redis.settings")}>
-      <DialogHeader><DialogTitle>{t("redis.settings")}</DialogTitle></DialogHeader>
-      <form className="flex min-h-0 flex-col" onSubmit={(event) => { event.preventDefault(); void submit("save"); }}>
+  return <form className="flex min-h-0 flex-col" onSubmit={(event) => { event.preventDefault(); void submit("save"); }}>
         <fieldset className="contents" disabled={Boolean(pending)}>
           <DialogBody className="space-y-3">
             <Field label={t("database.fields.name")}><Input required value={form.name} onChange={(event) => edit({ name: event.target.value })} /></Field>
+            {renderTypeSelect(form.name)}
             <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-3">
               <Field label={t("database.fields.host")}><Input required value={form.host} onChange={(event) => edit({ host: event.target.value })} /></Field>
               <Field label={t("database.fields.port")}><Input type="number" required min={1} max={65535} value={form.port || ""} onChange={(event) => edit({ port: Number(event.target.value) })} /></Field>
@@ -141,7 +161,5 @@ export function RedisConnectionDialog({ workspaceId, original, latest, initialNa
             <Button type="submit" size="sm" disabled={!valid || changed}>{t("common.actions.save")}</Button>
           </DialogFooter>
         </fieldset>
-      </form>
-    </DialogContent>
-  </Dialog>;
+      </form>;
 }

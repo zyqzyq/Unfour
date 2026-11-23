@@ -4,7 +4,7 @@ import { useState } from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { listTemporaryRoutes, listSshConnections, revealConnectionSecret, type DatabaseConnectionInput, type SshConnection } from "@unfour/command-client";
-import { DatabaseConnectionDialog } from "./DatabaseConnectionDialog";
+import { DatabaseConnectionEditor } from "./DatabaseConnectionEditor";
 import { DatabaseTestResultDialog } from "./DatabaseTestResultDialog";
 
 vi.mock("@unfour/command-client", async (importOriginal) => ({
@@ -15,13 +15,15 @@ vi.mock("@unfour/command-client", async (importOriginal) => ({
 
 afterEach(cleanup);
 
+const draftActions = { onResetSqlDraft: () => {}, onOpenRedis: () => {}, onRedisSaved: () => {} };
+
 it("makes saved and live SSH sources selectable for a network database", async () => {
   vi.mocked(listTemporaryRoutes).mockResolvedValueOnce([{ handle: "session-12345678", displayName: "Production node", endpoint: "10.0.0.8:22" }]);
   vi.mocked(listSshConnections).mockResolvedValueOnce([{ id: "jump", workspaceId: "ws", name: "Gateway", revision: 7,
     host: "fixture", port: 22, username: "user" } as SshConnection]);
   const update = vi.fn();
-  render(<DatabaseConnectionDialog canTest error={null} open form={{ workspaceId: "ws", name: "DB", driver: "mysql" }}
-    password="" onPasswordChange={vi.fn()} onOpenChange={vi.fn()} onUpdate={update} onTest={vi.fn()} onSubmit={vi.fn()}
+  render(<DatabaseConnectionEditor {...draftActions} canTest error={null} form={{ workspaceId: "ws", name: "DB", driver: "mysql" }}
+    password="" onPasswordChange={vi.fn()} onClose={vi.fn()} onUpdate={update} onTest={vi.fn()} onSubmit={vi.fn()}
     savePending={false} testPending={false} />);
   await screen.findByRole("option", { name: /Gateway/ });
   fireEvent.change(screen.getByLabelText("Network route"), { target: { value: "saved:jump" } });
@@ -32,10 +34,11 @@ it("makes saved and live SSH sources selectable for a network database", async (
 
 it("prevents editing and closing while a connection save is pending", () => {
   const close = vi.fn();
-  render(<DatabaseConnectionDialog canTest savePending testPending={false} open onOpenChange={close}
+  render(<DatabaseConnectionEditor {...draftActions} canTest savePending testPending={false} onClose={close}
     form={{ workspaceId: "ws", name: "Database", driver: "sqlite" }} password=""
     onPasswordChange={vi.fn()} onSubmit={vi.fn()} onTest={vi.fn()} onUpdate={vi.fn()} />);
   expect(screen.getByRole("textbox", { name: "Name" })).toBeDisabled();
+  expect(screen.getByRole("combobox", { name: "Database type" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
   fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
   expect(close).not.toHaveBeenCalled();
@@ -48,23 +51,24 @@ it("saves the openGauss preset as postgres and reopens from the saved driver", (
     const [form, setForm] = useState<DatabaseConnectionInput>({ workspaceId: "ws", name: "Gauss", driver: "postgres" });
     return <>
       <button onClick={() => setOpen(true)}>Reopen</button>
-      <DatabaseConnectionDialog canTest error={null} form={form} open={open}
-        onOpenChange={setOpen} onPasswordChange={() => {}} password=""
-        onSubmit={(event) => { event.preventDefault(); save(form); setOpen(false); }}
+      {open && <DatabaseConnectionEditor {...draftActions} canTest error={null} form={form}
+        onClose={() => setOpen(false)} onResetSqlDraft={setForm} onPasswordChange={() => {}} password=""
+        onSubmit={(event) => { event.preventDefault(); save(form); setForm({ ...form, id: "saved" }); setOpen(false); }}
         onTest={() => {}} onUpdate={(patch) => setForm((current) => ({ ...current, ...patch }))}
-        savePending={false} testPending={false} />
+        savePending={false} testPending={false} />}
     </>;
   }
   render(<Editor />);
   const driver = () => screen.getByRole("combobox", { name: "Database type" });
-  expect(within(driver()).getAllByRole("option").map((option) => option.textContent)).toEqual(["PostgreSQL", "openGauss", "MySQL / MariaDB", "SQLite"]);
+  expect(within(driver()).getAllByRole("option").map((option) => option.textContent)).toEqual(["PostgreSQL", "openGauss", "MySQL / MariaDB", "SQLite", "Redis"]);
   fireEvent.change(driver(), { target: { value: "opengauss" } });
   expect(driver()).toHaveValue("opengauss");
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
-  expect(save).toHaveBeenCalledWith({ workspaceId: "ws", name: "Gauss", driver: "postgres", sqlitePath: null, sslMode: undefined, credentialRef: undefined });
+  expect(save).toHaveBeenCalledWith({ workspaceId: "ws", name: "Gauss", driver: "postgres", port: 5432 });
   expect(JSON.stringify(save.mock.calls[0][0])).not.toContain("opengauss");
   fireEvent.click(screen.getByRole("button", { name: "Reopen" }));
   expect(driver()).toHaveValue("postgres");
+  expect(driver()).toBeDisabled();
 });
 
 it("shows runtime detection separately from the protocol and raw banner", () => {
@@ -80,7 +84,7 @@ it("views a saved database password without saving plaintext and keeps clear rev
   function Editor() {
     const [form, setForm] = useState<DatabaseConnectionInput>({ workspaceId: "ws", id: "db", name: "Database", driver: "postgres", credentialRef: "saved-ref" });
     const [password, setPassword] = useState("");
-    return <DatabaseConnectionDialog canTest error={null} form={form} open onOpenChange={() => {}}
+    return <DatabaseConnectionEditor {...draftActions} canTest error={null} form={form} onClose={() => {}}
       onPasswordChange={setPassword} password={password} onSubmit={(event) => { event.preventDefault(); save(form, password); }}
       onTest={() => {}} onUpdate={(patch) => setForm((current) => ({ ...current, ...patch }))} savePending={false} testPending={false} />;
   }

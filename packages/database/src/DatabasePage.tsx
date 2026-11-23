@@ -9,7 +9,7 @@ import {
 import { DatabaseTestResultDialog } from "./components/DatabaseTestResultDialog";
 import { DatabaseModuleToolbar } from "./components/DatabaseModuleToolbar";
 import { DatabaseConnectionErrorBanner } from "./components/DatabaseConnectionErrorBanner";
-import { DatabaseConnectionDialog } from "./components/DatabaseConnectionDialog";
+import { DatabaseConnectionEditor } from "./components/DatabaseConnectionEditor";
 import { DatabaseWorkspace } from "./components/DatabaseWorkspace";
 import { DatabaseStart } from "./components/DatabaseStart";
 import { useDatabaseConnections } from "./hooks/useDatabaseConnections";
@@ -21,6 +21,7 @@ import { useSavedSql } from "./hooks/useSavedSql";
 import { useTableStructure } from "./hooks/useTableStructure";
 import { useDatabaseQueryContext, useDatabaseTabSelection } from "./hooks/useDatabaseTabSynchronization";
 import { EMPTY_CONNECTION_STATES, useDatabaseConnectionStore } from "./model/database-connection-state";
+import { emptyDatabaseConnectionForm } from "./model/database-credentials";
 import type {
   DatabaseConnectionSessionState,
   SqlHistoryEntry,
@@ -257,6 +258,7 @@ export function DatabasePage({
     connectionStates,
     connections,
     databaseTabs,
+    editorOpen,
     form,
     hydrateFormFromConnection,
     maxHistoryEntries: MAX_HISTORY_ENTRIES,
@@ -428,20 +430,33 @@ export function DatabasePage({
         />
       </div>
       </>}
-      <DatabaseConnectionDialog
-        onChooseRedis={() => { setEditorOpen(false); redis.create(form.name); }}
+      {editorOpen && <DatabaseConnectionEditor
         externalChange={externalChange}
         onReload={reloadLatest}
         canTest={canTest}
         error={saveMutation.error}
         form={form}
         key={workspaceId}
-        onOpenChange={setEditorOpen}
+        onClose={() => {
+          setEditorOpen(false);
+          setPassword("");
+          setTestResult(null);
+          testInputMutation.reset();
+          if (!form.id) setForm(emptyDatabaseConnectionForm(workspaceId));
+        }}
+        onResetSqlDraft={(draft) => {
+          setForm(draft);
+          setPassword("");
+          setTestResult(null);
+          saveMutation.reset();
+          testInputMutation.reset();
+        }}
+        onRedisSaved={redis.cacheSavedConnection}
+        onOpenRedis={redis.actions.open}
         onPasswordChange={setPassword}
         onSubmit={submitConnection}
         onTest={testConnectionInput}
         onUpdate={updateForm}
-        open={editorOpen}
         password={password}
         savePending={saveMutation.isPending}
         testPending={testInputMutation.isPending}
@@ -450,7 +465,7 @@ export function DatabasePage({
           onOpenChange={(open) => !open && setTestResult(null)}
           result={testResult}
         />
-      </DatabaseConnectionDialog>
+      </DatabaseConnectionEditor>}
       {redis.dialogs}
       <ConfirmDialog
         confirmLabel={t("common.actions.delete")}
