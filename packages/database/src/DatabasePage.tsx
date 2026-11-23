@@ -191,6 +191,8 @@ export function DatabasePage({
     testMutation,
   } = useDatabaseConnectionMutations({
     databaseTabs,
+    editorOpen,
+    form,
     hydrateFormFromConnection,
     queryClient,
     removeConnection,
@@ -441,7 +443,6 @@ export function DatabasePage({
           setEditorOpen(false);
           setPassword("");
           setTestResult(null);
-          testInputMutation.reset();
           if (!form.id) setForm(emptyDatabaseConnectionForm(workspaceId));
         }}
         onResetSqlDraft={(draft) => {
@@ -463,7 +464,7 @@ export function DatabasePage({
       >
         <DatabaseTestResultDialog
           onOpenChange={(open) => !open && setTestResult(null)}
-          result={testResult}
+          result={testInputMutation.isPending ? null : testResult}
         />
       </DatabaseConnectionEditor>}
       {redis.dialogs}

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { bindRedisSession, listSshConnections, listTemporaryRoutes, saveRedisConnection, testRedisConnectionInput, type RedisConnection, type SshConnection } from "@unfour/command-client";
+import { deferred } from "../hooks/database-controller.test-fixtures";
 import { RedisConnectionDialog } from "./RedisConnectionDialog";
 
 vi.mock("@unfour/command-client", async (load) => ({
@@ -65,4 +66,34 @@ it("preserves an unavailable reference until the user explicitly chooses another
   expect(await screen.findByRole("option", { name: "SSH connection unavailable" })).toBeInTheDocument();
   expect(screen.getByLabelText("Network route")).toHaveValue("removed");
   expect(screen.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+});
+
+it("updates the cache without applying an old save to a reopened Redis settings dialog", async () => {
+  vi.mocked(listSshConnections).mockResolvedValue([]);
+  vi.mocked(listTemporaryRoutes).mockResolvedValue([]);
+  const save = deferred<RedisConnection>();
+  const nextTest = deferred<void>();
+  vi.mocked(saveRedisConnection).mockReturnValueOnce(save.promise);
+  vi.mocked(testRedisConnectionInput).mockReturnValueOnce(nextTest.promise);
+  const onCacheSaved = vi.fn();
+  const onSaved = vi.fn();
+  const settings = <RedisConnectionDialog workspaceId="w" original={cache} latest={cache} initialName=""
+    onClose={vi.fn()} onCacheSaved={onCacheSaved} onSaved={onSaved} />;
+  const { rerender } = render(settings);
+  fireEvent.click(screen.getByRole("button", { name: "Save", exact: true }));
+  expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+  rerender(<></>);
+  rerender(settings);
+
+  fireEvent.change(screen.getByLabelText("Name", { exact: true }), { target: { value: "Reopened draft" } });
+  fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
+  const saved = { ...cache, revision: 6 };
+  await act(async () => save.resolve(saved));
+  expect(onCacheSaved).toHaveBeenCalledWith(saved);
+  expect(onSaved).not.toHaveBeenCalled();
+  expect(screen.getByRole("button", { name: "Testing…" })).toBeDisabled();
+  expect(screen.getByLabelText("Name", { exact: true })).toHaveValue("Reopened draft");
+  await act(async () => nextTest.resolve());
+  expect(screen.getByText("Connection succeeded")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
 });

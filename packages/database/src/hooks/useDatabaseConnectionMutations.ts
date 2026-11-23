@@ -1,4 +1,4 @@
-import { type Dispatch, type SetStateAction, useLayoutEffect, useRef, useState } from "react";
+import { type Dispatch, type SetStateAction, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useMutation, type QueryClient } from "@tanstack/react-query";
 import {
   bindTemporaryHandle,
@@ -26,8 +26,16 @@ import {
 import { formatDatabaseError } from "../result-utils";
 import { onlyTemporaryRouteChanged } from "../model/database-credentials";
 
+type EditorScope = { workspaceId: string; connectionId?: string };
+type EditorAction = "save" | "test";
+type EditorRequest = { scope: EditorScope; action: EditorAction };
+type SaveInput = { input: DatabaseConnectionInput; secret: string };
+type TestInput = { input: DatabaseConnectionInput; secret: string | null };
+
 export function useDatabaseConnectionMutations({
   databaseTabs,
+  editorOpen,
+  form,
   hydrateFormFromConnection,
   queryClient,
   removeConnection,
@@ -42,6 +50,8 @@ export function useDatabaseConnectionMutations({
   workspaceId,
 }: {
   databaseTabs: ReturnType<typeof useDatabaseTabs>;
+  editorOpen: boolean;
+  form: DatabaseConnectionInput;
   hydrateFormFromConnection: (connection: DatabaseConnection) => void;
   queryClient: QueryClient;
   removeConnection: (connectionId: string) => void;
@@ -58,13 +68,23 @@ export function useDatabaseConnectionMutations({
   t: ReturnType<typeof useI18n>["t"];
   workspaceId: string;
 }) {
-  const saveScope = useRef<{ workspaceId: string } | null>(null);
+  const workspaceScope = useRef<{ workspaceId: string } | null>(null);
   useLayoutEffect(() => {
-    saveScope.current = { workspaceId };
-    return () => { saveScope.current = null; };
+    workspaceScope.current = { workspaceId };
+    return () => { workspaceScope.current = null; };
   }, [workspaceId]);
+  const connectionId = form.id;
+  const scope = useMemo(() => editorOpen ? { workspaceId, connectionId } : null,
+    [connectionId, editorOpen, workspaceId]);
+  const editorScope = useRef<EditorScope | null>(null);
+  const inFlight = useRef<EditorRequest | null>(null);
+  const [pendingRequest, setPendingRequest] = useState<EditorRequest | null>(null);
+  const pending = pendingRequest?.scope === scope ? pendingRequest.action : null;
+  const currentForm = useRef(form);
+  useLayoutEffect(() => { currentForm.current = form; }, [form]);
+
   const saveMutation = useMutation({
-    mutationFn: async ({ input, secret }: { input: DatabaseConnectionInput; secret: string }) => {
+    mutationFn: async ({ input, secret }: SaveInput & { scope: EditorScope }) => {
       // Selecting a live transport for an existing definition also works when its
       // persistent jump has gone away. No business write is needed in that case.
       if (input.expectedSnapshot && onlyTemporaryRouteChanged(input, secret)) {
@@ -73,20 +93,17 @@ export function useDatabaseConnectionMutations({
       }
       return saveDatabaseConnection(input, secret || null);
     },
-    onMutate: ({ input }) => ({
-      scope: saveScope.current,
-      previous: connectionTemporaryHandle("database", input.workspaceId, input.id),
-    }),
+    onMutate: ({ input }) => connectionTemporaryHandle("database", input.workspaceId, input.id),
     onError: (_error, { input }) => { void queryClient.invalidateQueries({ queryKey: databaseConnectionsQueryKey(input.workspaceId) }); },
-    onSuccess: async (connection, { input }, before) => {
+    onSuccess: async (connection, { input, scope }, previous) => {
       const queryKey = databaseConnectionsQueryKey(connection.workspaceId);
       await queryClient.cancelQueries({ queryKey, exact: true });
       queryClient.setQueryData<DatabaseConnection[]>(queryKey, (current) =>
         replaceDatabaseConnectionInCache(current, connection),
       );
       void queryClient.invalidateQueries({ queryKey });
-      if (saveScope.current?.workspaceId !== connection.workspaceId || before?.scope !== saveScope.current) return;
-      if (input.id && (before?.previous !== connectionTemporaryHandle("database", connection.workspaceId, connection.id)
+      if (scope.workspaceId !== connection.workspaceId || editorScope.current !== scope) return;
+      if (input.id && (previous !== connectionTemporaryHandle("database", connection.workspaceId, connection.id)
         || input.expectedSnapshot?.sshConnectionId !== connection.sshConnectionId
         || input.expectedSnapshot?.sshRevision !== connection.sshRevision)) {
         onRouteChanged?.(connection.id);
@@ -157,7 +174,7 @@ export function useDatabaseConnectionMutations({
       return databaseRouteVersion(connection.workspaceId, connection.id);
     },
     onError: (error, connection, version) => {
-      if (saveScope.current?.workspaceId !== connection.workspaceId || version !== databaseRouteVersion(connection.workspaceId, connection.id)) return;
+      if (workspaceScope.current?.workspaceId !== connection.workspaceId || version !== databaseRouteVersion(connection.workspaceId, connection.id)) return;
       const connectionId = connection.id;
       setTestResult(null);
       setConnectionState(connectionId, {
@@ -166,7 +183,7 @@ export function useDatabaseConnectionMutations({
       });
     },
     onSuccess: (result, connection, version) => {
-      if (saveScope.current?.workspaceId !== connection.workspaceId || version !== databaseRouteVersion(connection.workspaceId, connection.id)) return;
+      if (workspaceScope.current?.workspaceId !== connection.workspaceId || version !== databaseRouteVersion(connection.workspaceId, connection.id)) return;
       const connectionId = connection.id;
       setTestResult(result);
       setConnectionState(connectionId, {
@@ -186,24 +203,57 @@ export function useDatabaseConnectionMutations({
   // session), this only checks connectivity and leaves state disconnected.
   const testInput = useMutation({
     mutationKey: ["database-test-input", workspaceId],
-    mutationFn: ({ input, secret }: { input: DatabaseConnectionInput; secret: string | null }) =>
+    mutationFn: ({ input, secret }: TestInput & { scope: EditorScope }) =>
       testDatabaseConnectionInput(input, secret),
+    onSuccess: (result, { input, scope }) => {
+      if (editorScope.current === scope && currentForm.current === input) setTestResult(result);
+    },
+    onError: (error, { input, scope }) => {
+      if (editorScope.current === scope && currentForm.current === input) {
+        setTestResult({ ok: false, message: formatDatabaseError(error, t), serverVersion: null });
+      }
+    },
   });
+
+  const { reset: resetSave } = saveMutation;
+  const { reset: resetTest } = testInput;
+  useLayoutEffect(() => {
+    resetSave();
+    resetTest();
+    editorScope.current = scope;
+    return () => { editorScope.current = null; };
+  }, [resetSave, resetTest, scope]);
+
+  async function runEditorMutation<Result>(action: EditorAction, run: (scope: EditorScope) => Promise<Result>) {
+    const scope = editorScope.current;
+    if (!scope || inFlight.current?.scope === scope) return;
+    // Acquire the lock before React commits the disabled controls.
+    const request = { scope, action };
+    inFlight.current = request;
+    setPendingRequest(request);
+    try {
+      return await run(scope);
+    } finally {
+      if (inFlight.current === request) inFlight.current = null;
+      setPendingRequest((current) => current === request ? null : current);
+    }
+  }
 
   return {
     deleteConfirm,
     deleteMutation,
     duplicateMutation,
-    saveMutation,
+    saveMutation: {
+      error: saveMutation.error,
+      isPending: pending === "save",
+      reset: resetSave,
+      mutateAsync: (variables: SaveInput) => runEditorMutation("save", (scope) => saveMutation.mutateAsync({ ...variables, scope })),
+    },
     setDeleteConfirm,
     testInputMutation: {
-      isPending: testInput.isPending,
-      reset: testInput.reset,
-      mutate: (variables: Parameters<typeof testInput.mutate>[0]) => testInput.mutate(variables, {
-        onSuccess: (result) => setTestResult(result),
-        onError: (error) =>
-          setTestResult({ ok: false, message: formatDatabaseError(error, t), serverVersion: null }),
-      }),
+      isPending: pending === "test",
+      reset: resetTest,
+      mutateAsync: (variables: TestInput) => runEditorMutation("test", (scope) => testInput.mutateAsync({ ...variables, scope })),
     },
     testMutation,
   };

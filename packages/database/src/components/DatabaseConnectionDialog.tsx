@@ -88,10 +88,11 @@ export function DatabaseConnectionForm({
   typeSelect: ReactNode;
 }) {
   const { t } = useI18n();
+  const pending = savePending || testPending;
 
   return (
-        <form className="flex min-h-0 flex-col" onSubmit={(event) => { if (externalChange || savePending) event.preventDefault(); else onSubmit(event); }}>
-          <fieldset disabled={savePending} className="contents">
+        <form className="flex min-h-0 flex-col" onSubmit={(event) => { if (externalChange || pending) event.preventDefault(); else onSubmit(event); }}>
+          <fieldset disabled={pending} className="contents">
           <DialogBody className="space-y-4">
             {externalChange && <div role="alert" className="text-[12px] text-[var(--u-color-text-muted)]">{t("common.externalChange")} <Button onClick={onReload} type="button" size="sm" variant="outline">{t("common.reloadLatest")}</Button></div>}
             <Field title={t("database.fields.name")}>
@@ -129,7 +130,7 @@ export function DatabaseConnectionForm({
                   <Input onChange={(event) => onUpdate({ username: event.target.value })} value={form.username ?? ""} />
                 </Field>
                 <Field title={t("database.fields.password")}>
-                  <ConnectionSecretEditor key={`${form.workspaceId}:${form.id ?? form.driver}:${form.expectedSnapshot?.credentialRef ?? ""}`} form={form} password={password} onPasswordChange={onPasswordChange} onUpdate={onUpdate} disabled={savePending} />
+                  <ConnectionSecretEditor key={`${form.workspaceId}:${form.id ?? form.driver}:${form.expectedSnapshot?.credentialRef ?? ""}`} form={form} password={password} onPasswordChange={onPasswordChange} onUpdate={onUpdate} disabled={pending} />
                 </Field>
               </>
             )}
@@ -156,14 +157,14 @@ export function DatabaseConnectionForm({
             ) : null}
           </DialogBody>
           <DialogFooter>
-            <Button className="mr-auto" disabled={!canTest || testPending} onClick={onTest} size="sm" type="button" variant="outline">
+            <Button className="mr-auto" disabled={!canTest || pending} onClick={onTest} size="sm" type="button" variant="outline">
               <Plug size={13} />
               {testPending ? t("database.connection.testing") : t("database.connection.test")}
             </Button>
-            <Button onClick={onClose} size="sm" type="button" variant="ghost">
+            <Button disabled={pending} onClick={onClose} size="sm" type="button" variant="ghost">
               {t("common.confirm.cancel")}
             </Button>
-            <Button disabled={savePending || externalChange} size="sm" type="submit">
+            <Button disabled={pending || externalChange} size="sm" type="submit">
               <Save size={13} />
               {t("common.actions.save")}
             </Button>

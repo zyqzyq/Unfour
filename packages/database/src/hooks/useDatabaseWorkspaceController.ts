@@ -1,4 +1,4 @@
-import { type Dispatch, type FormEvent, type SetStateAction, useEffect } from "react";
+import type { Dispatch, FormEvent, SetStateAction } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import { databaseConnectionStamp } from "@unfour/command-client";
 import type {
@@ -30,8 +30,7 @@ import type {
 } from "../model/types";
 
 type SaveMutation = {
-  mutate: (variables: { input: DatabaseConnectionInput; secret: string }) => void;
-  reset: () => void;
+  mutateAsync: (variables: { input: DatabaseConnectionInput; secret: string }) => Promise<DatabaseConnection | undefined>;
 };
 
 type TestMutation = {
@@ -39,8 +38,7 @@ type TestMutation = {
 };
 
 type TestInputMutation = {
-  mutate: (variables: { input: DatabaseConnectionInput; secret: string | null }) => void;
-  reset: () => void;
+  mutateAsync: (variables: { input: DatabaseConnectionInput; secret: string | null }) => Promise<DatabaseTestResult | undefined>;
 };
 
 type DatabaseWorkspaceControllerOptions = {
@@ -144,7 +142,7 @@ export function useDatabaseWorkspaceController({
 
   function submitConnection(event: FormEvent) {
     event.preventDefault();
-    saveMutation.mutate({
+    void saveMutation.mutateAsync({
       input: {
         ...form,
         workspaceId,
@@ -156,7 +154,7 @@ export function useDatabaseWorkspaceController({
         sslMode: form.sslMode ?? null,
       },
       secret: password,
-    });
+    }).catch(() => {});
   }
 
   function selectConnection(connectionId: string | null) {
@@ -184,7 +182,7 @@ export function useDatabaseWorkspaceController({
   );
 
   function testConnectionInput() {
-    testInputMutation.mutate({ input: form, secret: password || null });
+    void testInputMutation.mutateAsync({ input: form, secret: password || null }).catch(() => {});
   }
 
   function disconnectConnection(connection: DatabaseConnection) {
@@ -201,17 +199,7 @@ export function useDatabaseWorkspaceController({
     selectConnection(null);
     setPassword("");
     setForm(emptyDatabaseConnectionForm(workspaceId));
-    // Clear a previously failed save so its error doesn't leak into the new window.
-    saveMutation.reset();
-    testInputMutation.reset();
   }
-
-  // A save failure belongs to the workspace that produced it.
-  const resetSaveMutation = saveMutation.reset;
-  useEffect(() => {
-    // Form/credential state is reset by useDatabaseConnectionForm before render.
-    resetSaveMutation();
-  }, [workspaceId, resetSaveMutation]);
 
   function handleNewConnection() {
     if (editorOpen) return;
@@ -222,9 +210,6 @@ export function useDatabaseWorkspaceController({
   function handleEditConnection(connection: DatabaseConnection) {
     if (editorOpen) return;
     selectConnection(connection.id);
-    // Clear a previously failed save so its error doesn't leak into this edit window.
-    saveMutation.reset();
-    testInputMutation.reset();
     const latest = resolveCachedDatabaseConnection(
       connection,
       queryClient.getQueryData<DatabaseConnection[]>(databaseConnectionsQueryKey(workspaceId)),

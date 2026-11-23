@@ -42,9 +42,8 @@ export function useRedisWorkspace(workspaceId: string, active: boolean) {
   const dialogs = <>
     {localDialog?.kind === "edit" && <RedisConnectionDialog key={localDialog.connection.id} workspaceId={workspaceId}
       original={localDialog.connection} latest={connections.find((c) => c.id === localDialog.connection.id)}
-      initialName="" onClose={() => setDialog(null)}
+      initialName="" onClose={() => setDialog(null)} onCacheSaved={cacheSavedConnection}
       onSaved={(connection) => {
-        cacheSavedConnection(connection);
         setDialog((current) => current === localDialog ? null : current);
         open(connection);
       }} />}

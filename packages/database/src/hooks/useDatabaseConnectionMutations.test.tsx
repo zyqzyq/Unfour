@@ -91,6 +91,8 @@ function useEditorSession(workspaceId: string, selectedConnectionId: string) {
     databaseTabs: {
       removeConnectionTabs: vi.fn(),
     } as unknown as ReturnType<typeof useDatabaseTabs>,
+    editorOpen: formState.editorOpen,
+    form: formState.form,
     hydrateFormFromConnection: formState.hydrateFormFromConnection,
     queryClient,
     removeConnection: vi.fn(),
@@ -133,6 +135,7 @@ describe("database credential save", () => {
     const existing = persisted({ sshConnectionId: "missing-saved-jump", sshRevision: 6 });
     const { Wrapper } = createWrapper(existing);
     const { result } = renderHook(() => useEditorSession("ws-current", existing.id), { wrapper: Wrapper });
+    act(() => result.current.formState.setEditorOpen(true));
     await act(async () => {
       await result.current.mutations.saveMutation.mutateAsync({ input: { ...databaseConnectionToInput(existing, "ws-current"),
         temporaryHandle: "current-session" }, secret: "" });
@@ -140,31 +143,40 @@ describe("database credential save", () => {
     expect(bindTemporaryHandle).toHaveBeenCalledWith("database", "ws-current", existing.id, "current-session");
     expect(saveMock).not.toHaveBeenCalled();
   });
-  it.each(["ws-next", "ws-current"])("ignores an old save result with a fresh editor in %s", async (workspaceId) => {
+  it.each(["switching workspaces", "returning to the workspace", "reopening the editor"])("ignores an old save result after %s", async (transition) => {
     const existing = persisted({ credentialRef: CURRENT_REF });
     let finishSave!: (connection: DatabaseConnection) => void;
     saveMock.mockImplementationOnce(() => new Promise((resolve) => { finishSave = resolve; }));
-    const { Wrapper } = createWrapper(existing);
+    const { client, Wrapper } = createWrapper(existing);
     const { result, rerender } = renderHook(({ workspaceId }) => useEditorSession(workspaceId, existing.id), { wrapper: Wrapper, initialProps: { workspaceId: "ws-current" } });
-    let pending!: Promise<DatabaseConnection>;
+    act(() => result.current.formState.setEditorOpen(true));
+    let pending!: Promise<DatabaseConnection | undefined>;
     act(() => { pending = result.current.mutations.saveMutation.mutateAsync({ input: databaseConnectionToInput(existing, "ws-current"), secret: "" }); });
     await act(async () => Promise.resolve());
-    rerender({ workspaceId: "ws-next" });
-    if (workspaceId === "ws-current") rerender({ workspaceId });
+    const workspaceId = transition === "switching workspaces" ? "ws-next" : "ws-current";
+    if (transition === "reopening the editor") {
+      act(() => result.current.formState.setEditorOpen(false));
+    } else {
+      rerender({ workspaceId: "ws-next" });
+      if (workspaceId === "ws-current") rerender({ workspaceId });
+    }
     act(() => {
       result.current.formState.setEditorOpen(true);
       result.current.formState.setForm({ workspaceId, name: "Fresh draft", driver: "sqlite" });
     });
-    await act(async () => { finishSave(persisted({ name: "Old workspace saved" })); await pending; });
+    const saved = persisted({ name: "Saved from old editor" });
+    await act(async () => { finishSave(saved); await pending; });
     expect(result.current.formState.form.workspaceId).toBe(workspaceId);
     expect(result.current.formState.form.name).toBe("Fresh draft");
     expect(result.current.formState.editorOpen).toBe(true);
+    expect(client.getQueryData(databaseConnectionsQueryKey(saved.workspaceId))).toEqual([saved]);
   });
   it("sends a replacement in the backend save and retains the returned reference", async () => {
     const existing = persisted({ credentialRef: CURRENT_REF });
     saveMock.mockResolvedValue(persisted({ credentialRef: NEW_REF }));
     const { Wrapper } = createWrapper(existing);
     const { result } = renderHook(() => useEditorSession("ws-current", existing.id), { wrapper: Wrapper });
+    act(() => result.current.formState.setEditorOpen(true));
     await act(async () => {
       await result.current.mutations.saveMutation.mutateAsync({ input: databaseConnectionToInput(existing, "ws-current"), secret: "replacement" });
     });
@@ -172,6 +184,7 @@ describe("database credential save", () => {
     expect(createMock).not.toHaveBeenCalled();
     expect(rotateMock).not.toHaveBeenCalled();
     expect(result.current.formState.form.credentialRef).toBe(NEW_REF);
+    act(() => result.current.formState.setEditorOpen(true));
     await act(async () => {
       await result.current.mutations.saveMutation.mutateAsync({ input: result.current.formState.form, secret: "" });
     });
@@ -181,6 +194,7 @@ describe("database credential save", () => {
     const existing = persisted({ credentialRef: CURRENT_REF });
     const { Wrapper } = createWrapper(existing);
     const { result } = renderHook(() => useEditorSession("ws-current", existing.id), { wrapper: Wrapper });
+    act(() => result.current.formState.setEditorOpen(true));
     await act(async () => {
       await result.current.mutations.saveMutation.mutateAsync({ input: { ...databaseConnectionToInput(existing, "ws-current"), credentialRef: null }, secret: "" });
     });

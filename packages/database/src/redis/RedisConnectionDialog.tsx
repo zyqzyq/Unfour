@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { bindRedisSession, connectionTemporaryHandle, listSshConnections, listTemporaryRoutes, redisTemporaryPassword, saveRedisConnection, temporaryRouteOptions, testRedisConnectionInput, type RedisConnection, type RedisConnectionInput } from "@unfour/command-client";
 import { Button, Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle, Input, SecretInput, Select, useI18n, useLiveOptions } from "@unfour/ui";
 import { DatabaseConnectionTypeSelect } from "../components/DatabaseConnectionTypeSelect";
@@ -31,6 +31,7 @@ type RedisConnectionFormProps = {
   latest: RedisConnection | undefined;
   initialName: string;
   onClose: () => void;
+  onCacheSaved?: (connection: RedisConnection) => void;
   onSaved: (connection: RedisConnection) => void;
 };
 
@@ -49,7 +50,7 @@ export function RedisConnectionDialog(props: RedisConnectionFormProps) {
 }
 
 export function RedisConnectionForm({
-  workspaceId, original, latest, initialName, onClose, onSaved, pending, setPending, renderTypeSelect,
+  workspaceId, original, latest, initialName, onClose, onCacheSaved, onSaved, pending, setPending, renderTypeSelect,
 }: RedisConnectionFormProps & {
   pending: Pending;
   setPending: (pending: Pending) => void;
@@ -73,6 +74,12 @@ export function RedisConnectionForm({
   const [clear, setClear] = useState(false);
   const [tested, setTested] = useState(false);
   const [error, setError] = useState("");
+  const submitting = useRef(false);
+  const mounted = useRef(false);
+  useLayoutEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   const { options: jumps, state: listState } = useJumpHosts(workspaceId);
   const unknownJump = Boolean(form.sshConnectionId && !jumps.some((item) => item.value === form.sshConnectionId));
   const replacePassword = Boolean(original?.hasPassword && (
@@ -91,8 +98,21 @@ export function RedisConnectionForm({
     setForm((current) => ({ ...current, ...patch, ...(changesTarget && { allowWrites: false }) }));
     setTested(false); setError("");
   }
+
+  async function save(input: RedisConnectionInput, secret: string | null) {
+    if (runtimeOnly && original && temporaryHandle) {
+      bindRedisSession(workspaceId, original.id, original.revision, temporaryHandle, runtimePassword);
+      return original;
+    }
+    if (temporaryHandle || originalHandle) {
+      return saveRedisConnection(input, secret, { handle: temporaryHandle ?? null, password: runtimePassword });
+    }
+    return saveRedisConnection(input, secret);
+  }
+
   async function submit(action: "save" | "test") {
-    if (!valid || pending || changed) return;
+    if (!valid || submitting.current || changed) return;
+    submitting.current = true;
     setError(""); setTested(false); setPending(action);
     const secret = clear ? "" : password || null;
     const input = { ...form, expectedSshRevision: jumps.find(j => j.value === form.sshConnectionId)?.revision };
@@ -100,17 +120,17 @@ export function RedisConnectionForm({
       if (action === "test") {
         if (temporaryHandle) await testRedisConnectionInput(input, runtimePassword || null, temporaryHandle);
         else await testRedisConnectionInput(input, secret);
-        setTested(true);
-      } else if (runtimeOnly && original && temporaryHandle) {
-        bindRedisSession(workspaceId, original.id, original.revision, temporaryHandle, runtimePassword);
-        onSaved(original);
-      } else if (temporaryHandle || originalHandle) {
-        onSaved(await saveRedisConnection(input, secret, { handle: temporaryHandle ?? null, password: runtimePassword }));
-      } else onSaved(await saveRedisConnection(input, secret));
+        if (mounted.current) setTested(true);
+        return;
+      }
+      const saved = await save(input, secret);
+      onCacheSaved?.(saved);
+      if (mounted.current) onSaved(saved);
     } catch (cause) {
-      setError(redisErrorMessage(cause, t));
+      if (mounted.current) setError(redisErrorMessage(cause, t));
     } finally {
-      setPending(null);
+      submitting.current = false;
+      if (mounted.current) setPending(null);
     }
   }
   return <form className="flex min-h-0 flex-col" onSubmit={(event) => { event.preventDefault(); void submit("save"); }}>
@@ -156,9 +176,9 @@ export function RedisConnectionForm({
             {tested && <p role="status" className="text-xs text-[var(--u-color-success)]">{t("database.connection.testSuccess")}</p>}
           </DialogBody>
           <DialogFooter>
-            <Button className="mr-auto" type="button" variant="outline" size="sm" disabled={!valid || changed} onClick={() => void submit("test")}>{t(pending === "test" ? "database.connection.testing" : "database.connection.test")}</Button>
-            <Button type="button" variant="ghost" size="sm" onClick={onClose}>{t("common.confirm.cancel")}</Button>
-            <Button type="submit" size="sm" disabled={!valid || changed}>{t("common.actions.save")}</Button>
+            <Button className="mr-auto" type="button" variant="outline" size="sm" disabled={Boolean(pending) || !valid || changed} onClick={() => void submit("test")}>{t(pending === "test" ? "database.connection.testing" : "database.connection.test")}</Button>
+            <Button type="button" variant="ghost" size="sm" disabled={Boolean(pending)} onClick={onClose}>{t("common.confirm.cancel")}</Button>
+            <Button type="submit" size="sm" disabled={Boolean(pending) || !valid || changed}>{t("common.actions.save")}</Button>
           </DialogFooter>
         </fieldset>
       </form>;

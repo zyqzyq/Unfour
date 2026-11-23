@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
+import { useState, type ComponentProps, type ReactNode } from "react";
 import type { DatabaseConnectionInput, RedisConnection } from "@unfour/command-client";
 import { useI18n } from "@unfour/ui";
 import { emptyDatabaseConnectionForm } from "../model/database-credentials";
@@ -18,18 +18,13 @@ export function DatabaseConnectionEditor({
   const { form, onClose, savePending, testPending } = sql;
   const [preset, setPreset] = useState<DatabaseConnectionType | null>(null);
   const [redisPending, setRedisPending] = useState<"save" | "test" | null>(null);
-  const mounted = useRef(false);
-  useLayoutEffect(() => {
-    mounted.current = true;
-    return () => { mounted.current = false; };
-  }, []);
   const type = form.id ? form.driver : preset ?? form.driver;
-  const typeLocked = savePending || testPending || Boolean(redisPending);
+  const pending = savePending || testPending || Boolean(redisPending);
 
   function renderTypeSelect(name: string) {
-    return <DatabaseConnectionTypeSelect value={type} disabled={typeLocked} autoFocus={preset !== null}
+    return <DatabaseConnectionTypeSelect value={type} disabled={pending} autoFocus={preset !== null}
       onChange={form.id ? undefined : (next) => {
-        if (next === type || typeLocked) return;
+        if (next === type || pending) return;
         // openGauss shares the PostgreSQL transport. A fresh draft carries only the name.
         const driver = next === "opengauss" ? "postgres" : next === "redis" ? "sqlite" : next;
         onResetSqlDraft(emptyDatabaseConnectionForm(form.workspaceId, driver, name));
@@ -38,18 +33,14 @@ export function DatabaseConnectionEditor({
   }
 
   return (
-    <DatabaseConnectionDialog onClose={onClose} pending={savePending || Boolean(redisPending)}
+    <DatabaseConnectionDialog onClose={onClose} pending={pending}
       title={t(form.id ? "database.connection.settings" : "database.connection.createTitle")}>
       {type === "redis" ? (
         <RedisConnectionForm workspaceId={form.workspaceId} original={null} latest={undefined} initialName={form.name}
-          onClose={onClose} pending={redisPending} setPending={setRedisPending} renderTypeSelect={renderTypeSelect}
+          onClose={onClose} onCacheSaved={onRedisSaved} pending={redisPending} setPending={setRedisPending} renderTypeSelect={renderTypeSelect}
           onSaved={(connection) => {
-            // The saved record still belongs in its workspace cache if the editor has closed.
-            onRedisSaved(connection);
-            if (mounted.current) {
-              onClose();
-              onOpenRedis(connection);
-            }
+            onClose();
+            onOpenRedis(connection);
           }} />
       ) : (
         <>

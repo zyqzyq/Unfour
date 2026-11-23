@@ -185,21 +185,136 @@ it("locks the type while saving Redis and keeps the next workspace's editor open
   expect(commands.saveDatabaseConnection).not.toHaveBeenCalled();
 });
 
-it("ignores a SQL test result after cancelling and reopening the editor", async () => {
-  const result = deferred<commands.DatabaseTestResult>();
-  vi.mocked(commands.testDatabaseConnectionInput).mockReturnValueOnce(result.promise);
+const types = ["sqlite", "redis"] as const;
+type ConnectionType = typeof types[number];
+const testButton = (name = "Test connection") => screen.getByRole("button", { name });
+const saveButton = () => screen.getByRole("button", { name: "Save", exact: true });
+const cancelButton = () => screen.getByRole("button", { name: "Cancel" });
+const formElement = () => saveButton().closest("form")!;
+
+async function openValidDraft(type: ConnectionType, name = "Test connection draft") {
+  await openConnectionEditor();
+  choose(type);
+  enter("Name", name);
+  if (type === "sqlite") enter("SQLite Path", "example.sqlite");
+}
+
+function deferConnectionTest(type: ConnectionType) {
+  const test = deferred<commands.DatabaseTestResult>();
+  const command = type === "sqlite"
+    ? vi.mocked(commands.testDatabaseConnectionInput).mockReturnValueOnce(test.promise)
+    : vi.mocked(commands.testRedisConnectionInput).mockReturnValueOnce(test.promise.then(() => undefined));
+  return { command, ...test, succeed: () => test.resolve({ ok: true, message: "Connection OK", serverVersion: null }) };
+}
+
+function expectLocked(testLabel: string) {
+  const dialog = screen.getByRole("dialog");
+  for (const control of formElement().querySelectorAll("input, select, button")) {
+    expect(control).toBeDisabled();
+  }
+  fireEvent.click(testButton(testLabel));
+  fireEvent.click(saveButton());
+  fireEvent.submit(formElement());
+  fireEvent.click(cancelButton());
+  fireEvent.keyDown(dialog, { key: "Escape" });
+  const overlay = document.querySelector(".u-dialog-overlay")!;
+  fireEvent.pointerDown(overlay, { pointerType: "mouse", button: 0 });
+  fireEvent.click(overlay);
+  expect(dialog).toBeVisible();
+}
+
+async function expectSuccessfulTest(type: ConnectionType) {
+  expect((await screen.findAllByText("Connection succeeded"))[0]).toBeVisible();
+  if (type === "sqlite") fireEvent.click(screen.getByRole("button", { name: "Close", exact: true }));
+  expect(testButton()).toBeEnabled();
+  expect(saveButton()).toBeEnabled();
+  expect(typeSelect()).toBeEnabled();
+  expect(cancelButton()).toBeEnabled();
+}
+
+it.each(types)("locks the %s form during testing and saving and dispatches each action once", async (type) => {
+  const test = deferConnectionTest(type);
+  const save = deferred<void>();
+  const saveCommand = type === "sqlite"
+    ? vi.mocked(commands.saveDatabaseConnection).mockReturnValueOnce(save.promise.then(() => connection("saved", "sqlite")))
+    : vi.mocked(commands.saveRedisConnection).mockReturnValueOnce(save.promise.then(() => savedRedis));
   mount();
-  await openConnectionEditor();
-  enter("Name", "SQLite connection");
-  enter("SQLite Path", "example.sqlite");
-  fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
-  await waitFor(() => expect(typeSelect()).toBeDisabled());
-  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-  await openConnectionEditor();
-  choose("postgres");
-  await act(async () => result.resolve({ ok: true, message: "Discarded test result" }));
+  await openValidDraft(type);
+  const testAction = testButton();
+  const form = formElement();
+  act(() => {
+    fireEvent.click(testAction);
+    fireEvent.click(testAction);
+    fireEvent.submit(form);
+  });
+  await waitFor(() => expect(testButton("Testing…")).toBeDisabled());
+  expectLocked("Testing…");
+  expect(test.command).toHaveBeenCalledTimes(1);
+  expect(saveCommand).not.toHaveBeenCalled();
+
+  await act(async () => test.succeed());
+  await expectSuccessfulTest(type);
+  act(() => {
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    fireEvent.click(testButton());
+  });
+  await waitFor(() => expect(saveButton()).toBeDisabled());
+  expectLocked("Test connection");
+  expect(saveCommand).toHaveBeenCalledTimes(1);
+  expect(test.command).toHaveBeenCalledTimes(1);
+
+  await act(async () => save.resolve());
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+});
+
+it.each(types)("allows edits and another %s test after a failure", async (type) => {
+  const failed = deferConnectionTest(type);
+  const retry = deferConnectionTest(type);
+  mount();
+  await openValidDraft(type);
+  fireEvent.click(testButton());
+  await act(async () => failed.reject(new Error("Endpoint unavailable")));
+  if (type === "sqlite") {
+    expect(await screen.findByText("Endpoint unavailable")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Close", exact: true }));
+  } else {
+    expect(await screen.findByRole("alert")).toHaveTextContent("Redis operation failed.");
+  }
+
+  const label = type === "sqlite" ? "SQLite Path" : "Host";
+  expect(screen.getByLabelText(label)).toBeEnabled();
+  enter(label, type === "sqlite" ? "updated.sqlite" : "updated.example.test");
+  fireEvent.click(testButton());
+  await waitFor(() => expect(retry.command).toHaveBeenLastCalledWith(
+    expect.objectContaining(type === "sqlite" ? { sqlitePath: "updated.sqlite" } : { host: "updated.example.test" }), null,
+  ));
+  await act(async () => retry.succeed());
+  await expectSuccessfulTest(type);
+});
+
+it.each(types)("keeps a new %s test pending when the old editor's test completes", async (type) => {
+  const oldTest = deferConnectionTest(type);
+  const newTest = deferConnectionTest(type);
+  const { showWorkspace } = mount();
+  await openValidDraft(type, "Old draft");
+  fireEvent.click(testButton());
+  await waitFor(() => expect(oldTest.command).toHaveBeenCalledTimes(1));
+
+  showWorkspace("other");
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  showWorkspace("ws");
+  await openValidDraft(type, "New draft");
+  expect(testButton()).toBeEnabled();
+  fireEvent.click(testButton());
+  await waitFor(() => expect(newTest.command).toHaveBeenCalledTimes(2));
+  await act(async () => oldTest.succeed());
   expect(screen.getAllByRole("dialog")).toHaveLength(1);
-  expect(screen.queryByText("Discarded test result")).not.toBeInTheDocument();
+  expect(screen.queryByText("Connection succeeded")).not.toBeInTheDocument();
+  expect(testButton("Testing…")).toBeDisabled();
+  expect(screen.getByLabelText("Name", { exact: true })).toHaveValue("New draft");
+  await act(async () => newTest.succeed());
+  await expectSuccessfulTest(type);
 });
 
 it("distinguishes pending and failed loading from a genuinely empty workspace and retries", async () => {
