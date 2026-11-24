@@ -168,7 +168,7 @@ describe("task output cleanup races", () => {
     if (!active) rerender({ active: true, activeRunId: "run", workspaceId: "w1" });
     await tick(active ? 16 : 250);
     expect(result.current.eventsByRun.run.map((item) => item.data)).toEqual(["fresh output"]);
-    expect(result.current.eventsByRun.other).toEqual([event({ runId: "other", taskId: "other-task" })]);
+    expect(result.current.eventsByRun.other).toMatchObject([event({ runId: "other", taskId: "other-task" })]);
     expect(registerSshTaskRunChannel).toHaveBeenCalledTimes(1);
     await act(async () => { await result.current.loadHistoryLog("run", "task"); });
     expect(readSshTaskRunLog).not.toHaveBeenCalled();

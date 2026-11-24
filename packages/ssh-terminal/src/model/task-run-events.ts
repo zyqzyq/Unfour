@@ -1,8 +1,30 @@
 import type { SshTaskRunEvent } from "@unfour/command-client";
 
+export type LiveTaskRunEvent = SshTaskRunEvent & { sequence: number };
+export type PendingTaskRunEvents = Map<string | number, LiveTaskRunEvent>;
+
+const MAX_PENDING_TASK_EVENTS = 10_000;
 const MAX_TASK_RUN_EVENTS = 5_000;
 export const MAX_CACHED_TASK_RUNS = 16;
 export const MAX_CACHED_TASK_LOGS = 4;
+
+/** Keep only the latest progress per run and step, even while the panel is hidden. */
+export function queueTaskRunEvent(pending: PendingTaskRunEvents, event: LiveTaskRunEvent) {
+  let key: number | string = event.sequence;
+  if (event.kind === "transfer" && event.stepId) {
+    key = JSON.stringify([event.runId, event.stepId]);
+    pending.delete(key); // Reinsert at the new event's arrival position.
+  }
+  pending.set(key, event);
+  if (pending.size <= MAX_PENDING_TASK_EVENTS) return;
+  for (const [key, candidate] of pending) {
+    if (candidate.kind === "output") {
+      pending.delete(key);
+      return;
+    }
+  }
+  pending.delete(pending.keys().next().value!);
+}
 
 /**
  * Append live task events while keeping transfer progress bounded. A transfer
@@ -10,10 +32,10 @@ export const MAX_CACHED_TASK_LOGS = 4;
  * snapshot to render its progress bar and transcript summary.
  */
 export function appendTaskRunEvents(
-  currentEvents: SshTaskRunEvent[],
-  nextEvents: SshTaskRunEvent[],
+  currentEvents: LiveTaskRunEvent[],
+  nextEvents: LiveTaskRunEvent[],
 ) {
-  const retainedNewestFirst: SshTaskRunEvent[] = [];
+  const retainedNewestFirst: LiveTaskRunEvent[] = [];
   const seenTransferSteps = new Set<string>();
   const merged = [...currentEvents, ...nextEvents];
 
@@ -26,7 +48,16 @@ export function appendTaskRunEvents(
     retainedNewestFirst.push(event);
   }
 
-  return retainedNewestFirst.reverse().slice(-MAX_TASK_RUN_EVENTS);
+  const retained = retainedNewestFirst.reverse();
+  let excess = retained.length - MAX_TASK_RUN_EVENTS;
+  if (excess <= 0) return retained;
+  // Keep step state and progress when verbose output fills the cache.
+  const trimmed = retained.filter((event) => {
+    if (excess === 0 || event.kind !== "output") return true;
+    excess--;
+    return false;
+  });
+  return excess ? trimmed.slice(excess) : trimmed;
 }
 
 /**
@@ -35,12 +66,12 @@ export function appendTaskRunEvents(
  * deleted and reinserted whenever fresh events arrive.
  */
 export function appendTaskRunEventCache(
-  current: Record<string, SshTaskRunEvent[]>,
-  events: SshTaskRunEvent[],
+  current: Record<string, LiveTaskRunEvent[]>,
+  events: LiveTaskRunEvent[],
   pinnedRunId: string | null = null,
 ) {
   const next = { ...current };
-  const eventsByRun = new Map<string, SshTaskRunEvent[]>();
+  const eventsByRun = new Map<string, LiveTaskRunEvent[]>();
   for (const event of events) {
     const runEvents = eventsByRun.get(event.runId);
     if (runEvents) runEvents.push(event);
@@ -67,7 +98,7 @@ export function cacheTaskRunLog(
 }
 
 export function removeTaskRunEventsForTask(
-  current: Record<string, SshTaskRunEvent[]>,
+  current: Record<string, LiveTaskRunEvent[]>,
   taskId: string,
 ) {
   return Object.fromEntries(

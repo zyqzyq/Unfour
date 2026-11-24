@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  registerSshTaskRunChannel,
-  type SshTaskRunEvent,
-} from "@unfour/command-client";
+import { registerSshTaskRunChannel } from "@unfour/command-client";
 import type { useFeedbackErrorHandler } from "@unfour/ui";
 import {
   appendTaskRunEventCache,
+  queueTaskRunEvent,
   removeTaskRunEventsForTask,
+  type LiveTaskRunEvent,
+  type PendingTaskRunEvents,
 } from "../model/task-run-events";
 import { useSshTaskRunHistory } from "./useSshTaskRunHistory";
 
@@ -24,9 +24,9 @@ export function useSshTaskRunOutput({
   workspaceId: string;
 }) {
   const queryClient = useQueryClient();
-  const [eventsByRun, setEventsByRun] = useState<Record<string, SshTaskRunEvent[]>>({});
+  const [eventsByRun, setEventsByRun] = useState<Record<string, LiveTaskRunEvent[]>>({});
   const eventsByRunRef = useRef(eventsByRun);
-  const pendingEventsRef = useRef<SshTaskRunEvent[]>([]);
+  const pendingEventsRef = useRef<PendingTaskRunEvents>(new Map());
   const removedRunsRef = useRef(new Set<string>());
   const tasksSurfaceActiveRef = useRef(active);
   const activeRunIdRef = useRef(activeRunId);
@@ -48,22 +48,23 @@ export function useSshTaskRunOutput({
     // Coalesce per-line task output into one React update ~per frame. Without
     // this, a verbose command (or transfer progress) re-renders thousands of
     // transcript spans and can freeze the Tasks surface.
-    pendingEventsRef.current = [];
+    const pending = pendingEventsRef.current;
+    pending.clear();
     let flushTimer: ReturnType<typeof setTimeout> | null = null;
     const flushPending = () => {
       flushTimer = null;
       if (disposed) {
         return;
       }
-      if (!pendingEventsRef.current.length) return;
+      if (!pending.size) return;
       // Keep buffering while Connections is shown so a hidden Tasks tree does
       // not re-render on every remote line; flush when Tasks becomes active.
       if (!tasksSurfaceActiveRef.current) {
         flushTimer = setTimeout(flushPending, 250);
         return;
       }
-      const batch = pendingEventsRef.current;
-      pendingEventsRef.current = [];
+      const batch = [...pending.values()];
+      pending.clear();
       eventsByRunRef.current = appendTaskRunEventCache(
         eventsByRunRef.current, batch, activeRunIdRef.current,
       );
@@ -76,12 +77,11 @@ export function useSshTaskRunOutput({
         }
       }
     };
+    // Cache eviction and transfer coalescing may shift every array index.
+    let sequence = 0;
     registerSshTaskRunChannel((event) => {
       if (disposed || removedRunsRef.current.has(event.runId)) return;
-      pendingEventsRef.current.push(event);
-      if (pendingEventsRef.current.length > 10_000) {
-        pendingEventsRef.current = pendingEventsRef.current.slice(-10_000);
-      }
+      queueTaskRunEvent(pending, { ...event, sequence: sequence++ });
       if (flushTimer === null) {
         flushTimer = setTimeout(flushPending, 16);
       }
@@ -93,7 +93,7 @@ export function useSshTaskRunOutput({
       disposed = true;
       if (flushTimer !== null) clearTimeout(flushTimer);
       flushTimer = null;
-      pendingEventsRef.current = [];
+      pending.clear();
       dispose?.();
     };
   }, [queryClient, workspaceId]);
@@ -102,7 +102,9 @@ export function useSshTaskRunOutput({
     if (!clearTaskHistoryLogs(taskId)) return;
     // Cleanup success is the boundary for events already received. Do not block
     // run IDs: a running task can still produce fresh output after cleanup.
-    pendingEventsRef.current = pendingEventsRef.current.filter((event) => event.taskId !== taskId);
+    for (const [key, event] of pendingEventsRef.current) {
+      if (event.taskId === taskId) pendingEventsRef.current.delete(key);
+    }
     eventsByRunRef.current = removeTaskRunEventsForTask(eventsByRunRef.current, taskId);
     setEventsByRun(eventsByRunRef.current);
   }, [clearTaskHistoryLogs]);
@@ -110,7 +112,9 @@ export function useSshTaskRunOutput({
   const clearRunOutput = useCallback((runId: string) => {
     removedRunsRef.current.add(runId);
     clearRunHistoryLog(runId);
-    pendingEventsRef.current = pendingEventsRef.current.filter((event) => event.runId !== runId);
+    for (const [key, event] of pendingEventsRef.current) {
+      if (event.runId === runId) pendingEventsRef.current.delete(key);
+    }
     const next = { ...eventsByRunRef.current };
     delete next[runId];
     eventsByRunRef.current = next;

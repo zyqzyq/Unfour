@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SshTaskRunEvent } from "@unfour/command-client";
 import {
+  type LiveTaskRunEvent,
   MAX_CACHED_TASK_LOGS,
   MAX_CACHED_TASK_RUNS,
   appendTaskRunEventCache,
@@ -9,8 +10,10 @@ import {
   removeTaskRunEventsForTask,
 } from "./task-run-events";
 
-function event(partial: Partial<SshTaskRunEvent>): SshTaskRunEvent {
+let sequence = 0;
+function event(partial: Partial<SshTaskRunEvent>): LiveTaskRunEvent {
   return {
+    sequence: sequence++,
     runId: "run-1",
     taskId: "task-1",
     kind: "output",

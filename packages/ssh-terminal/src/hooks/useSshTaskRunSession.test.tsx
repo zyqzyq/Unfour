@@ -165,7 +165,7 @@ describe("task run subscription lifecycle", () => {
     expect(result.current.eventsByRun).toEqual({});
     expect(invalidate).not.toHaveBeenCalled();
     await tick(1);
-    expect(result.current.eventsByRun.run).toEqual(events);
+    expect(result.current.eventsByRun.run).toEqual(events.map((event, sequence) => ({ ...event, sequence })));
     expect(invalidate).toHaveBeenCalledExactlyOnceWith({ queryKey: ["ssh-task-runs", "w1", "task"] });
   });
 
@@ -242,6 +242,30 @@ describe("task run subscription lifecycle", () => {
 });
 
 describe("task run output bounds", () => {
+  it("keeps step state and output across runs while hidden transfers report progress", async () => {
+    const { result, rerender } = await setup(false);
+    const runs = ["first", "second"];
+    act(() => {
+      for (const runId of runs) {
+        subscriptions[0].listener(event({ runId, kind: "step", stepId: "upload", status: "running" }));
+        subscriptions[0].listener(event({ runId, data: "upload started" }));
+      }
+      for (let index = 0; index < 10_002; index++) {
+        subscriptions[0].listener(event({ runId: runs[index % 2], kind: "transfer", stepId: "upload", transferredBytes: index }));
+      }
+    });
+    await tick(16);
+    rerender({ active: true, workspaceId: "w1" });
+    await tick(250);
+    for (const [index, runId] of runs.entries()) {
+      expect(result.current.eventsByRun[runId]).toMatchObject([
+        { kind: "step", status: "running" },
+        { kind: "output", data: "upload started" },
+        { kind: "transfer", transferredBytes: 10_000 + index },
+      ]);
+    }
+  });
+
   it("caps hidden pending output at 10000 before applying the per-run cache bound", async () => {
     const { result, rerender, invalidate } = await setup(false);
     act(() => {
@@ -252,9 +276,10 @@ describe("task run output bounds", () => {
     rerender({ active: true, workspaceId: "w1" });
     await tick(250);
     expect(result.current.eventsByRun.run).toHaveLength(5000);
-    expect(result.current.eventsByRun.run[0].data).toBe("5000");
+    expect(result.current.eventsByRun.run[0]).toMatchObject({ kind: "run", status: "success" });
+    expect(result.current.eventsByRun.run[1].data).toBe("5001");
     expect(result.current.eventsByRun.run.at(-1)?.data).toBe("9999");
-    expect(invalidate).not.toHaveBeenCalled();
+    expect(invalidate).toHaveBeenCalledExactlyOnceWith({ queryKey: ["ssh-task-runs", "w1", "task"] });
   });
 
   it("uses the latest selected run when pruning and compacts transfer progress", async () => {
@@ -272,7 +297,7 @@ describe("task run output bounds", () => {
     expect(Object.keys(result.current.eventsByRun)).toHaveLength(16);
     expect(result.current.eventsByRun["run-0"]).toBeDefined();
     expect(result.current.eventsByRun["run-1"]).toBeUndefined();
-    expect(result.current.eventsByRun.new).toEqual([event({ runId: "new", kind: "transfer", stepId: "upload", transferredBytes: 2 })]);
+    expect(result.current.eventsByRun.new).toMatchObject([event({ runId: "new", kind: "transfer", stepId: "upload", transferredBytes: 2 })]);
     expect(registerSshTaskRunChannel).toHaveBeenCalledTimes(1);
   });
 });
@@ -439,7 +464,7 @@ describe("task history selection and cleanup races", () => {
     await act(async () => { cleanupResult = result.current.clearMutation.mutateAsync("task").catch((error) => error); });
     act(() => subscriptions[0].listener(event({ data: "during cleanup" })));
     await tick(16);
-    expect(result.current.eventsByRun).toEqual(active ? { run: [event({ data: "during cleanup" })] } : {});
+    expect(result.current.eventsByRun).toEqual(active ? { run: [{ ...event({ data: "during cleanup" }), sequence: 0 }] } : {});
     const failure = new Error("cleanup denied");
     await act(async () => {
       if (success) clearing.resolve({ deletedRuns: 1, deletedLogs: 1 });

@@ -102,7 +102,7 @@ test("SSH task output preserves a scrolled reading position until following late
   await page.getByRole("button", { name: "Run", exact: true }).last().click();
   await page.getByRole("dialog").getByRole("button", { name: "Run", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  const output = page.locator("pre").filter({ hasText: "line 0" });
+  const output = page.getByLabel("Task output", { exact: true });
   const emit = (data: string) => page.evaluate((text) => {
     const emitEvent = (window as unknown as { __ueTaskEvent: (event: unknown) => void }).__ueTaskEvent;
     emitEvent({ runId: "ue-run", taskId: "task", kind: "output", stepId: "step", stream: "stdout", data: text, createdAt: new Date().toISOString() });
@@ -128,4 +128,20 @@ test("SSH task output preserves a scrolled reading position until following late
   await emit("following again\n");
   await expect(output).toContainText("following again");
   await expect.poll(() => output.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight)).toBeLessThan(2);
+
+  await page.evaluate(() => {
+    const send = (window as unknown as { __ueTaskEvent: (event: unknown) => void }).__ueTaskEvent;
+    const step = { runId: "ue-run", taskId: "task", stepId: "step", stepName: "Read output", position: 0, createdAt: "same timestamp" };
+    send({ ...step, kind: "step", status: "running" });
+    for (let index = 0; index < 4999; index++) {
+      send({ ...step, kind: "output", stream: "stdout", data: `burst ${index}\n` });
+    }
+  });
+  const lastLine = output.getByText("burst 4998", { exact: true });
+  await expect(lastLine).toBeInViewport();
+  const retained = await lastLine.elementHandle();
+  await emit("after rollover\n");
+  await expect(output.getByText("after rollover", { exact: true })).toBeInViewport();
+  expect(await retained!.evaluate((node) => node.isConnected && node.textContent === "burst 4998\n")).toBe(true);
+  await expect(page.getByRole("listitem").filter({ hasText: "Read output" }).getByText("Running", { exact: true })).toBeVisible();
 });

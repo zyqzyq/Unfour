@@ -1,9 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { SshTaskRunEvent } from "@unfour/command-client";
+import type { LiveTaskRunEvent } from "./task-run-events";
 import { buildTaskRunTranscript } from "./task-run-transcript";
 
-function event(partial: Partial<SshTaskRunEvent>): SshTaskRunEvent {
+let sequence = 0;
+beforeEach(() => { sequence = 0; });
+
+function event(partial: Partial<SshTaskRunEvent>): LiveTaskRunEvent {
   return {
+    sequence: sequence++,
     runId: "run-1",
     taskId: "task-1",
     kind: "output",
@@ -148,34 +153,33 @@ describe("transcript event ordering and incomplete events", () => {
     const before = structuredClone(events);
     const lines = buildTaskRunTranscript(events, labels);
     expect(lines).toEqual([
-      { key: "header-output-a-0", kind: "header", text: "── 3. Build ──" },
-      { key: "output-later-0", kind: "output", stream: "stderr", text: "first" },
-      { key: "output-earlier-1", kind: "output", stream: null, text: "global" },
-      { key: `output-${events[2].createdAt}-2`, kind: "output", stream: null, text: "same" },
-      { key: "header-output-b-3", kind: "header", text: "── 1. b ──" },
-      { key: `output-${events[3].createdAt}-3`, kind: "command", stream: "command", text: "other" },
-      { key: "header-output-a-4", kind: "header", text: "── 1. a ──" },
-      { key: `output-${events[4].createdAt}-4`, kind: "output", stream: null, text: "back" },
+      { key: "header-0", kind: "header", text: "── 3. Build ──" },
+      { key: "output-0", kind: "output", stream: "stderr", text: "first" },
+      { key: "output-1", kind: "output", stream: null, text: "global" },
+      { key: "output-2", kind: "output", stream: null, text: "same" },
+      { key: "header-3", kind: "header", text: "── 1. b ──" },
+      { key: "output-3", kind: "command", stream: "command", text: "other" },
+      { key: "header-4", kind: "header", text: "── 1. a ──" },
+      { key: "output-4", kind: "output", stream: null, text: "back" },
     ]);
     expect(events).toEqual(before);
     expect(buildTaskRunTranscript(events, labels)).toEqual(lines);
   });
 
   it("retains repeated running headers and ignores non-renderable events", () => {
-    const running = event({ kind: "step", stepId: "a", status: "running", error: "ignored" });
+    const running = { kind: "step", stepId: "a", status: "running", error: "ignored" } as const;
     const lines = buildTaskRunTranscript([
       event({ kind: "run", status: "failed", error: "ignored" }),
       event({ kind: "step", status: "running" }),
       event({ kind: "step", stepId: "a" }),
       event({ kind: "transfer" }),
       event({ stepId: "a", data: "" }),
-      running, running,
+      event(running), event(running),
       event({ stepId: "a", data: " " }),
     ], labels);
     expect(lines.map((line) => line.kind)).toEqual(["header", "header", "output"]);
     expect(lines.map((line) => line.key)).toEqual([
-      `header-a-${running.createdAt}-5`, `header-a-${running.createdAt}-6`,
-      `output-${running.createdAt}-7`,
+      "header-5", "header-6", "output-7",
     ]);
   });
 
@@ -186,10 +190,10 @@ describe("transcript event ordering and incomplete events", () => {
       event({ kind: "step", stepId: "a", status }),
     ], labels);
     expect(lines).toEqual([
-      { key: "transfer-a-1", kind: "transfer", text: "transfer: 0 B / 0 B (0 B/s)" },
-      { key: "done-a-1", kind: "meta", text: `↳ ${status} · 0 ms · exit 0` },
-      { key: "error-a-1", kind: "error", text: "failure detail" },
-      { key: "done-a-2", kind: "meta", text: `↳ ${status}` },
+      { key: "transfer-1", kind: "transfer", text: "transfer: 0 B / 0 B (0 B/s)" },
+      { key: "done-1", kind: "meta", text: `↳ ${status} · 0 ms · exit 0` },
+      { key: "error-1", kind: "error", text: "failure detail" },
+      { key: "done-2", kind: "meta", text: `↳ ${status}` },
     ]);
   });
 
@@ -203,8 +207,8 @@ describe("transcript event ordering and incomplete events", () => {
       event({ kind: "transfer", stepId: "a", transferredBytes: 5 }),
     ], labels);
     expect(lines.map(({ key, text }) => [key, text])).toEqual([
-      ["transfer-b-3", "download: 3 B / 0 B (0 B/s)"],
-      ["done-b-3", "↳ success"],
+      ["transfer-3", "download: 3 B / 0 B (0 B/s)"],
+      ["done-3", "↳ success"],
       ["transfer-live-a", "transfer: 5 B / 0 B (0 B/s)"],
       ["transfer-live-b", "transfer: 4 B / 0 B (0 B/s)"],
     ]);

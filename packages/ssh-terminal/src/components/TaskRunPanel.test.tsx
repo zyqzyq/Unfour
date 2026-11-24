@@ -15,13 +15,14 @@ const props: ComponentProps<typeof TaskRunPanel> = {
 it.each(["failed", "cancelled"] as const)("shows a localized unknown outcome for %s completion and after reopening the run", (status) => {
   const error = "SSH_TASK_OUTCOME_UNCERTAIN";
   const finalEvent = {
+    sequence: 1,
     runId: "run", taskId: "task", kind: "run", status, stepId: null,
     stepName: null, stepType: null, position: null, stream: null, data: null,
     exitCode: null, durationMs: null, direction: null, transferredBytes: null,
     totalBytes: null, bytesPerSecond: null, error, createdAt: "now",
   } as const;
   const { rerender } = render(<I18nProvider initialLocale="zh-CN"><TaskRunPanel {...props}
-    events={[{ ...finalEvent, kind: "step", stepId: "command" }, finalEvent]} /></I18nProvider>);
+    events={[{ ...finalEvent, sequence: 0, kind: "step", stepId: "command" }, finalEvent]} /></I18nProvider>);
   expect(screen.getByText("结果未知")).toBeVisible();
   expect(screen.getByText(/↳ 结果未知/)).toBeVisible();
   expect(screen.queryByText(error)).not.toBeInTheDocument();
@@ -56,6 +57,7 @@ it("offers rerun after a terminal completion event even before history polling u
   const { rerender } = render(<TaskRunPanel {...props} onRerun={onRerun} />);
   expect(screen.queryByRole("button", { name: "Run again" })).not.toBeInTheDocument();
   rerender(<TaskRunPanel {...props} onRerun={onRerun} events={[{
+    sequence: 0,
     runId: "run", taskId: "task", kind: "run", status: "cancelled", stepId: null,
     stepName: null, stepType: null, position: null, stream: null, data: null,
     exitCode: null, durationMs: null, direction: null, transferredBytes: null,

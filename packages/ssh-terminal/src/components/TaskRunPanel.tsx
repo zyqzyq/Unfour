@@ -4,13 +4,14 @@ import type {
   SshTaskRunEvent,
 } from "@unfour/command-client";
 import { isTemporarySshTaskRun } from "@unfour/command-client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Button, StatusBadge, useI18n } from "@unfour/ui";
 import { CircleStop, FolderOpen, X } from "lucide-react";
 import { formatTaskHistoryLog, formatTaskRunError, taskDisplayStatus } from "../model/errors";
 import { buildTaskRunTranscript } from "../model/task-run-transcript";
+import type { LiveTaskRunEvent } from "../model/task-run-events";
 
 const HEIGHT_KEY = "unfour.ssh.task-run-panel-height";
 const MIN_HEIGHT = 160;
@@ -29,7 +30,7 @@ export function TaskRunPanel({
   task,
 }: {
   cancelling: boolean;
-  events: SshTaskRunEvent[];
+  events: LiveTaskRunEvent[];
   logLoading?: boolean;
   logText?: string | null;
   onCancel: () => void;
@@ -127,7 +128,7 @@ export function TaskRunPanel({
   const historyLog = formatTaskHistoryLog((logText ?? "").trim(), t);
   const showHistoryLog = !hasLiveTranscript && !running && Boolean(historyLog);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const node = outputRef.current;
     if (!node || !following) return;
     node.scrollTop = node.scrollHeight;
@@ -219,8 +220,7 @@ export function TaskRunPanel({
                       {t(`ssh.tasks.run.status.${stepStatus}`)}
                     </StatusBadge>
                   </div>
-                  {(event?.durationMs !== null && event?.durationMs !== undefined) ||
-                  event?.exitCode !== null ? (
+                  {event?.durationMs != null || event?.exitCode != null ? (
                     <div className="ml-7 mt-0.5 text-[10px] text-[var(--u-color-text-soft)]">
                       {event?.durationMs !== null && event?.durationMs !== undefined
                         ? `${event.durationMs} ms`
