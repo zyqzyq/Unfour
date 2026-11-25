@@ -10,6 +10,7 @@ export function useApiCollectionTreeData(
   search: string,
   folders: ApiCollectionFolder[],
 ) {
+  const searchText = search.trim().toLowerCase();
   const savedQuery = useQuery({
     enabled: Boolean(workspaceId),
     queryKey: ["api-saved", workspaceId],
@@ -20,10 +21,16 @@ export function useApiCollectionTreeData(
     enabled: Boolean(workspaceId),
     queryKey: ["api-history", workspaceId],
     queryFn: () => listApiHistory(workspaceId),
+    select: (items) => {
+      if (!searchText) return items;
+      return items.filter((item) =>
+        [item.name ?? "", item.url, item.method, String(item.status ?? "")]
+          .some((value) => value.toLowerCase().includes(searchText)),
+      );
+    },
   });
   const requests = savedQuery.data ?? [];
   const folderNameById = new Map(folders.map((folder) => [folder.id, folder.name]));
-  const searchText = search.trim().toLowerCase();
   const visibleRequests = requests.filter((request) =>
     searchText
       ? [
@@ -36,13 +43,6 @@ export function useApiCollectionTreeData(
         ].some((value) => value.toLowerCase().includes(searchText))
       : true,
   );
-  const historyItems = (historyQuery.data ?? []).filter((item) =>
-    searchText
-      ? [item.name ?? "", item.url, item.method, String(item.status ?? "")]
-          .some((value) => value.toLowerCase().includes(searchText))
-      : true,
-  );
-
   // Keep the full list for name validation even when search hides a conflict.
-  return { requests, visibleRequests, historyItems };
+  return { requests, visibleRequests, historyQuery };
 }

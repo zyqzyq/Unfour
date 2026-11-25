@@ -786,14 +786,20 @@ describe("ApiCollectionTree state and action regressions", () => {
       deletedAt: null, remoteId: null, revision: 1, syncStatus: "local",
     }]);
     const { props } = renderTree();
-    await treeRow("Past request");
+    const toggle = screen.getByRole("button", { name: "Expand request history" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
     fireEvent.change(screen.getByRole("textbox", { name: "Search API requests" }), { target: { value: " 201 " } });
-    expect(await treeRow("Past request")).toBeInTheDocument();
+    expect(await screen.findByText("Matches: 1")).toBeVisible();
+    expect(screen.getByText("Past request")).not.toBeVisible();
+    fireEvent.click(toggle);
+    expect(await treeRow("Past request")).toBeVisible();
     expect(screen.queryByText("Get Users")).not.toBeInTheDocument();
     fireEvent.click(screen.getByText("Past request").closest("button")!);
     expect(props.onOpenIntent).toHaveBeenCalledWith({ historyId: "history-1", kind: "history", nonce: expect.any(Number) });
     fireEvent.change(screen.getByRole("textbox", { name: "Search API requests" }), { target: { value: "absent" } });
-    expect(screen.getByText("Send a request to build history")).toBeInTheDocument();
+    expect(screen.getByText("No matching requests in history")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Collapse request history" }));
+    expect(screen.getByText("No matching requests in history")).not.toBeVisible();
   });
 
   it.each(["rename", "delete", "move"])("preserves dirty draft, tab panels and active selection after request %s", async (action) => {

@@ -75,10 +75,30 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  localStorage.clear();
   vi.resetAllMocks();
 });
 
 describe("ApiClientSidebar", () => {
+  it("only reports zero history matches after a successful load", async () => {
+    let failLoad!: (error: Error) => void;
+    listHistoryMock.mockReturnValueOnce(new Promise((_, reject) => { failLoad = reject; }));
+    renderSidebar();
+    fireEvent.change(screen.getByRole("textbox", { name: "Search API requests" }), { target: { value: "orders" } });
+    fireEvent.click(screen.getByRole("button", { name: "Expand request history" }));
+    expect(screen.getByText("Loading...")).toBeVisible();
+    expect(screen.queryByText("Matches: 0")).toBeNull();
+
+    failLoad(new Error("offline"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Failed to load request history.");
+    expect(screen.queryByText("No matching requests in history")).toBeNull();
+    expect(screen.queryByText("Matches: 0")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText("No matching requests in history")).toBeVisible();
+    expect(screen.getByText("Matches: 0")).toBeVisible();
+  });
+
   it("keeps API navigation limited to collections and history", () => {
     renderSidebar();
 

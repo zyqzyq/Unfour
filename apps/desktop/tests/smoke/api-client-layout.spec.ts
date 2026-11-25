@@ -1,5 +1,39 @@
 import { expect, test } from "@playwright/test";
 
+test("request history folds down and gives its space back to collections", async ({ page }, testInfo) => {
+  await page.addInitScript(() => localStorage.setItem("unfour.locale", "zh-CN"));
+  await page.setViewportSize({ width: 1024, height: 640 });
+  await page.route("**/browser-mocks/state.ts*", async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, body: await response.text() + `
+      for (let i = 1; i <= 20; i++) {
+        mockStore.history.push({ id: 'h' + i, workspaceId: 'mock-workspace', name: 'Request ' + i,
+          method: 'GET', url: 'https://example.test/' + i, createdAt: '2026-10-01T10:00:00Z',
+          status: 200, durationMs: 10 });
+      }
+    ` });
+  });
+  await page.goto("/");
+  const expand = page.getByRole("button", { name: "展开请求历史" });
+  const collapse = page.getByRole("button", { name: "收起请求历史" });
+  await expect(expand).toBeInViewport({ ratio: 1 });
+  const folded = (await expand.boundingBox())!;
+  await expand.press("Enter");
+  await expect(page.getByText("Request 1", { exact: true })).toBeInViewport();
+  const opened = (await collapse.boundingBox())!;
+  expect(opened.y).toBeLessThan(folded.y - 100);
+  await page.getByText("Request 20", { exact: true }).scrollIntoViewIfNeeded();
+  expect((await collapse.boundingBox())!.y).toBe(opened.y);
+  await page.screenshot({ path: testInfo.outputPath("history-expanded.png") });
+
+  await page.reload();
+  await expect(collapse).toBeVisible();
+  await collapse.press("Space");
+  await expect(expand).toBeFocused();
+  expect((await expand.boundingBox())!.y).toBe(folded.y);
+  await page.screenshot({ path: testInfo.outputPath("history-collapsed.png") });
+});
+
 test("API shows the environment tunnel, supports a request override and keeps the original URL", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("unfour.locale", "en"));
   await page.route("**/browser-mocks/state.ts*", async (route) => {

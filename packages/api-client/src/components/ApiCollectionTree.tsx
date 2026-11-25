@@ -36,7 +36,7 @@ export function ApiCollectionTree({
   const collections = useApiCollections(workspaceId);
   const folderActions = useApiCollectionFolders(workspaceId);
   const requestActions = useApiCollectionRequestActions(workspaceId);
-  const { requests, visibleRequests, historyItems } = useApiCollectionTreeData(
+  const { requests, visibleRequests, historyQuery } = useApiCollectionTreeData(
     workspaceId, search, folderActions.folders,
   );
   const dialogs = useApiCollectionTreeDialogs({
@@ -127,7 +127,11 @@ export function ApiCollectionTree({
           <SidebarEmpty>{t("api.collection.none")}</SidebarEmpty>
         )}
       </div>
-      <ApiCollectionHistorySection items={historyItems} onOpenIntent={onOpenIntent} />
+      <ApiCollectionHistorySection
+        filtering={Boolean(search.trim())}
+        history={historyQuery}
+        onOpenIntent={onOpenIntent}
+      />
       <ApiCollectionTreeDialogs dialogs={dialogs} workspaceId={workspaceId} />
     </div>
   );
