@@ -20,11 +20,20 @@ test("SSH history and previous parameters open the same editable run dialog", as
       const run = { id: "failed", workspaceId, taskId: "task", connectionId: "deleted-conn", status: "failed", startedAt: "2026-10-21T00:00:00Z", finishedAt: "2026-10-21T00:00:01Z", logPath: "fixture.log", errorMessage: "fixture failure",
         context: { version: 1, environmentId: null, taskVersion: "old", environmentUpdatedAt: null, inputs: { VERSION: { source: "manual", value: "previous-version" }, CUSTOM: { source: "manual" } } } };
       window.__sshStarts = 0;
-      export function handleSshTaskMock(command) {
+      export function handleSshTaskMock(command, args) {
         if (command === "ssh_tasks_list") return [task];
         if (command === "ssh_task_get") return detail;
         if (command === "ssh_task_runs_list") return [run];
-        if (command === "ssh_task_run_log_read") return "previous log";
+        if (command === "ssh_task_run_log_read" && args.stepNavigation) return [
+          "Unfour SSH task log v2",
+          '@step {"id":"removed","name":"Former deploy","position":0,"status":"running"}',
+          "[time] step 'Former deploy' running",
+          "[time] stdout remote output",
+          '@@step {"id":"fake","name":"Fake step","position":1,"status":"success"}',
+          ...Array.from({ length: 80 }, (_, i) => "previous log " + i),
+          '@step {"id":"removed","name":"Former deploy","position":0,"status":"failed"}',
+          "[time] step 'Former deploy' failed: original error",
+        ].join("\\n");
         if (command === "ssh_task_run") { window.__sshStarts++; return { ...run, id: "new", status: "success" }; }
         return UNHANDLED;
       }
@@ -104,7 +113,14 @@ test("SSH history and previous parameters open the same editable run dialog", as
   await expect(dialog.getByLabel("CUSTOM", { exact: true })).toHaveAttribute("type", "password");
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
   await page.locator("tbody tr").filter({ hasText: "fixture failure" }).click();
-  await expect(page.getByText("previous log", { exact: true })).toBeVisible();
+  const output = page.getByLabel("Task output");
+  await expect(output).toContainText("previous log 79");
+  await expect(output).toContainText('@step {"id":"fake"');
+  await expect(page.getByRole("button", { name: /Fake step/ })).toHaveCount(0);
+  const originalStep = page.getByRole("button", { name: /Former deploy.*Failed/ });
+  await originalStep.press("Enter");
+  await expect(output).toBeFocused();
+  await expect(output.getByText(/failed: original error/)).toBeInViewport();
   await page.getByRole("button", { name: "Run again", exact: true }).last().click();
   await expect(dialog).toBeVisible();
   expect(await page.evaluate("window.__sshStarts")).toBe(0);

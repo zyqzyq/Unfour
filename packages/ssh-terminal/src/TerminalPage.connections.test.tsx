@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import type { ComponentProps } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { SshConnection, SshSessionSummary } from "@unfour/command-client";
 import { FeedbackProvider, I18nProvider } from "@unfour/ui";
@@ -168,15 +168,77 @@ it("tests the full unsaved form through the test endpoint and retains the draft"
   expect(screen.getByRole("button", { name: "Test connection" })).toBeEnabled();
 });
 
-it("shows a test endpoint rejection in the result dialog without creating a session", async () => {
-  mocks.test.mockRejectedValue(new Error("fixture authentication rejected"));
+it("tests a LAN host and saves locally while the WebView reports offline", async () => {
+  mocks.test.mockResolvedValue({ ok: false, message: "LAN fixture unreachable" });
+  renderPage();
+  await editConnection();
+  const online = onlineManager.isOnline();
+  try {
+    act(() => onlineManager.setOnline(false));
+    const host = screen.getByRole("textbox", { name: "Host" });
+    fireEvent.change(host, { target: { value: "fixture.lan" } });
+    fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
+    expect(await screen.findByText("LAN fixture unreachable")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(host).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(mocks.save).toHaveBeenCalledOnce();
+  } finally {
+    act(() => onlineManager.setOnline(online));
+  }
+});
+
+it("serializes test and save before repaint and allows correcting a failed test", async () => {
+  let failTest!: (reason: Error) => void;
+  mocks.test
+    .mockReturnValueOnce(new Promise((_, reject) => { failTest = reject; }))
+    .mockResolvedValueOnce({ ok: true, message: "corrected host accepted" });
+  renderPage();
+  await editConnection();
+  const test = screen.getByRole("button", { name: "Test connection" });
+  const form = screen.getByRole("button", { name: "Save" }).closest("form")!;
+  act(() => {
+    test.click();
+    test.click();
+    fireEvent.submit(form);
+  });
+  await waitFor(() => expect(mocks.test).toHaveBeenCalledOnce());
+  expect(screen.getByRole("textbox", { name: "Host" })).toBeDisabled();
+  expect(mocks.save).not.toHaveBeenCalled();
+  await act(async () => { failTest(new Error("fixture authentication rejected")); });
+  expect(await screen.findByText("fixture authentication rejected")).toBeVisible();
+  expect(screen.getByRole("dialog", { name: /Connection failed/ })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Host" }), { target: { value: "corrected.example.com" } });
+  fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
+  expect(await screen.findByText("corrected host accepted")).toBeVisible();
+  expect(mocks.test.mock.lastCall?.[0]).toMatchObject({ host: "corrected.example.com" });
+  expect(mocks.connect).not.toHaveBeenCalled();
+  expect(useTerminalStore.getState().frontendFailedSessions).toEqual({});
+});
+
+it("keeps an old test completion out of a newly selected connection's editor", async () => {
+  const other = { ...connection, id: "other", name: "Other fixture", host: "other.example.com" };
+  let completeOld!: (result: { ok: boolean; message: string }) => void;
+  let completeNew!: (result: { ok: boolean; message: string }) => void;
+  mocks.listConnections.mockResolvedValue([connection, other]);
+  mocks.test
+    .mockReturnValueOnce(new Promise((resolve) => { completeOld = resolve; }))
+    .mockReturnValueOnce(new Promise((resolve) => { completeNew = resolve; }));
   renderPage();
   await editConnection();
   fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
-  expect(await screen.findByText("fixture authentication rejected")).toBeVisible();
-  expect(screen.getByRole("dialog", { name: /Connection failed/ })).toBeVisible();
-  expect(mocks.connect).not.toHaveBeenCalled();
-  expect(useTerminalStore.getState().frontendFailedSessions).toEqual({});
+  await waitFor(() => expect(mocks.test).toHaveBeenCalledTimes(1));
+  act(() => useWorkspaceStore.getState().setSelectedSshConnection(other.id));
+  expect(screen.getByRole("textbox", { name: "Host" })).toHaveValue(other.host);
+  fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
+  await waitFor(() => expect(mocks.test).toHaveBeenCalledTimes(2));
+  await act(async () => { completeOld({ ok: true, message: "old result" }); });
+  expect(screen.queryByText("old result")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  await act(async () => { completeNew({ ok: true, message: "current result" }); });
+  expect(await screen.findByText("current result")).toBeVisible();
 });
 
 it("waits for first host-key trust before connecting the selected connection", async () => {

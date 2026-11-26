@@ -2,6 +2,67 @@ import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import { prepareWorkbenchScene } from "./workbench-fixtures";
 
+test("searches older SQL and confirms clearing all workspace history even when filtered", async ({ page }) => {
+  await prepareWorkbenchScene(page, "light");
+  await page.route("**/browser-mocks/database.ts*", async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, body: await response.text() + `
+      const record = handlers.get("database_query_history_record");
+      const entry = { workspaceId: "mock-workspace", connectionId: "workbench-db", connectionName: "Archived reporting DB",
+        id: "old", sql: "SELECT 'rate_%';", status: "success", rowCount: 1, executedAt: "2020-01-02T12:00:00Z" };
+      record({ input: entry });
+      for (let i = 0; i < 25; i++) record({ input: { ...entry, id: "recent-" + i, sql: "SELECT " + i,
+        executedAt: new Date().toISOString(), connectionName: "Atlas PostgreSQL" } });
+      const clear = handlers.get("database_query_history_clear");
+      let firstClear = true;
+      handlers.set("database_query_history_clear", (args) => {
+        if (firstClear) { firstClear = false; throw new Error("History storage is busy"); }
+        return clear(args);
+      });
+      handlers.set("database_script_execute", () => { sessionStorage.setItem("history-executed", "yes"); });
+    ` });
+  });
+  await page.goto("/");
+  await page.getByRole("navigation", { name: "Modules" }).getByRole("button", { name: "Database", exact: true }).click();
+  await page.getByRole("button", { name: "New Query", exact: true }).click();
+  const historyTab = page.getByRole("tab", { name: /History/ });
+  await historyTab.click();
+  const search = page.getByRole("searchbox", { name: "Search SQL history" });
+  const archived = page.getByRole("button", { name: /Archived reporting DB/ });
+  await expect(page.getByRole("button", { name: /SELECT 0.*Atlas PostgreSQL/ })).toBeVisible();
+  await expect(archived).toHaveCount(0);
+  await search.fill("RATE_%");
+  await expect(archived).toBeVisible();
+  const oldDate = await page.evaluate(() =>
+    new Date("2020-01-02T12:00:00Z").toLocaleString("en", { dateStyle: "short", timeStyle: "medium" }));
+  await expect(archived.locator("time")).toHaveText(oldDate);
+  await archived.click();
+  await expect(page.locator(".monaco-editor:visible")).toContainText("rate_%");
+  expect(await page.evaluate(() => sessionStorage.getItem("history-executed"))).toBeNull();
+
+  await historyTab.click();
+  await expect(search).toHaveValue("RATE_%");
+  await expect(archived).toBeVisible();
+  const clear = page.getByRole("button", { name: "Clear History", exact: true });
+  await clear.click();
+  const dialog = page.getByRole("dialog", { name: "Clear workspace SQL history?" });
+  await expect(dialog).toContainText("every connection in “Atlas Development”");
+  await expect(dialog.getByRole("button", { name: "Cancel" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(dialog).toBeHidden();
+  await expect(archived).toBeVisible();
+
+  await clear.click();
+  await dialog.getByRole("button", { name: "Clear History" }).click();
+  await expect(dialog.getByRole("alert")).toContainText("History storage is busy");
+  await dialog.getByRole("button", { name: "Retry" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText("No SQL history matches your search.")).toBeVisible();
+  await search.fill("");
+  await expect(page.getByText("Executed SQL history will appear here.")).toBeVisible();
+  await expect(clear).toBeDisabled();
+});
+
 test("browses and exports the returned rows after one SQL execution", async ({ page }) => {
   await prepareWorkbenchScene(page, "light");
   await page.addInitScript(() => {

@@ -23,14 +23,23 @@ it("selects an active bastion session for the target SSH connection", async () =
   expect(update).toHaveBeenCalledWith({ temporaryHandle: "session-12345678" });
 });
 
-it("prevents editing and closing while a connection save is pending", () => {
+it.each(["save", "test"] as const)("locks the whole connection dialog during %s", (action) => {
   const close = vi.fn();
-  render(<SshConnectionDialog canTest pending open onOpenChange={close}
+  const submit = vi.fn();
+  render(<SshConnectionDialog canTest pending={action === "save"} testing={action === "test"} open onOpenChange={close}
     form={{ workspaceId: "ws", name: "Host", host: "fixture", username: "dev", authKind: "none" }}
-    onSubmit={vi.fn()} onTest={vi.fn()} onUpdate={vi.fn()} />);
+    onSubmit={submit} onTest={vi.fn()} onUpdate={vi.fn()} />);
+  const dialog = screen.getByRole("dialog");
   expect(screen.getByRole("textbox", { name: "Name" })).toBeDisabled();
+  expect(screen.getByRole("combobox", { name: "Network route" })).toBeDisabled();
+  expect(screen.getByRole("radio", { name: "Private key" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: /^Test/ })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
-  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+  fireEvent.submit(dialog.querySelector("form")!);
+  fireEvent.keyDown(dialog, { key: "Escape" });
+  fireEvent.pointerDown(document.querySelector(".u-dialog-overlay")!, { pointerType: "mouse", button: 0 });
+  expect(submit).not.toHaveBeenCalled();
   expect(close).not.toHaveBeenCalled();
 });
 

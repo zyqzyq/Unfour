@@ -2,7 +2,7 @@
 import type { ReactNode } from "react";
 import type { DbQueryHistoryEntry } from "@unfour/command-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 import type { SqlHistoryEntry } from "../model/types";
 
@@ -17,7 +17,7 @@ import {
   listDatabaseQueryHistory,
   recordDatabaseQueryHistory,
 } from "@unfour/command-client";
-import { dbQueryHistoryQueryKey, useQueryHistory } from "./useQueryHistory";
+import { dbQueryHistoryQueryKey, useClearQueryHistory, useQueryHistory } from "./useQueryHistory";
 
 const listMock = vi.mocked(listDatabaseQueryHistory);
 const recordMock = vi.mocked(recordDatabaseQueryHistory);
@@ -65,6 +65,45 @@ describe("dbQueryHistoryQueryKey", () => {
 });
 
 describe("useQueryHistory", () => {
+  it("reads, records and clears local history while offline", async () => {
+    let rows = [persisted()];
+    listMock.mockImplementation(async () => rows);
+    recordMock.mockImplementation(async (entry) => { rows = [entry, ...rows]; });
+    clearMock.mockImplementation(async () => { rows = []; });
+    const { Wrapper } = createWrapper();
+    onlineManager.setOnline(false);
+    try {
+      const { result } = renderHook(() => ({
+        history: useQueryHistory("ws-1", 50), clear: useClearQueryHistory(),
+      }), { wrapper: Wrapper });
+      await waitFor(() => expect(result.current.history.entries).toHaveLength(1));
+      result.current.history.record({ ...result.current.history.entries[0], id: "offline" });
+      await waitFor(() => expect(recordMock).toHaveBeenCalledOnce());
+      await result.current.clear.mutateAsync("ws-1");
+      await waitFor(() => expect(result.current.history.entries).toHaveLength(0));
+      expect(clearMock).toHaveBeenCalledOnce();
+    } finally {
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it("keeps persisted history cached when a late record fails after leaving the workspace", async () => {
+    listMock.mockResolvedValue([persisted()]);
+    let fail!: (reason: Error) => void;
+    recordMock.mockReturnValue(new Promise((_, reject) => { fail = reject; }));
+    const { Wrapper, client } = createWrapper();
+    const { result, rerender } = renderHook(({ workspace }) => useQueryHistory(workspace, 1), {
+      wrapper: Wrapper, initialProps: { workspace: "ws-1" },
+    });
+    await waitFor(() => expect(result.current.entries).toHaveLength(1));
+    result.current.record({ ...result.current.entries[0], id: "failed" });
+    await waitFor(() => expect(recordMock).toHaveBeenCalledOnce());
+    rerender({ workspace: "ws-2" });
+    fail(new Error("history file unavailable"));
+    await waitFor(() => expect(client.isMutating()).toBe(0));
+    expect(client.getQueriesData({ queryKey: dbQueryHistoryQueryKey("ws-1") })[0]?.[1]).toEqual([persisted()]);
+  });
+
   it("retains the original workspace for a late execution callback after switching workspace", async () => {
     listMock.mockResolvedValue([]);
     recordMock.mockResolvedValue(undefined);
@@ -103,7 +142,7 @@ describe("useQueryHistory", () => {
     expect(entry.rowCount).toBeUndefined();
     expect(entry.error).toBeUndefined();
     expect(entry.durationMs).toBe(12);
-    expect(listMock).toHaveBeenCalledWith("ws-1", 50);
+    expect(listMock).toHaveBeenCalledWith("ws-1", 50, undefined);
   });
 
   it("records an entry, mapping optional fields back to null", async () => {
@@ -136,21 +175,28 @@ describe("useQueryHistory", () => {
     );
   });
 
-  it("optimistically empties the cache when clearing history", async () => {
-    listMock.mockResolvedValue([persisted()]);
-    clearMock.mockResolvedValue(undefined);
-    const { Wrapper, client } = createWrapper();
-
-    const { result } = renderHook(() => useQueryHistory("ws-1", 50), {
-      wrapper: Wrapper,
-    });
-    await waitFor(() => expect(result.current.entries).toHaveLength(1));
-
-    result.current.clear();
-
-    await waitFor(() =>
-      expect(client.getQueryData(dbQueryHistoryQueryKey("ws-1"))).toEqual([]),
+  it("keeps failed clears visible and scopes a late successful clear to its initiating workspace", async () => {
+    listMock.mockImplementation(async (workspaceId) => [persisted({ workspaceId, id: workspaceId })]);
+    let finish: () => void;
+    clearMock.mockRejectedValueOnce(new Error("database busy")).mockImplementationOnce(() =>
+      new Promise<void>((resolve) => { finish = resolve; }),
     );
-    expect(clearMock).toHaveBeenCalledWith("ws-1");
+    const { Wrapper, client } = createWrapper();
+    const { result, rerender } = renderHook(({ workspaceId }) => ({
+      history: useQueryHistory(workspaceId, 50), clear: useClearQueryHistory(),
+    }), { wrapper: Wrapper, initialProps: { workspaceId: "ws-1" } });
+    await waitFor(() => expect(result.current.history.entries[0]?.id).toBe("ws-1"));
+    await expect(result.current.clear.mutateAsync("ws-1")).rejects.toThrow("database busy");
+    expect(result.current.history.entries[0]?.id).toBe("ws-1");
+
+    const pending = result.current.clear.mutateAsync("ws-1");
+    await waitFor(() => expect(clearMock).toHaveBeenCalledTimes(2));
+    expect(result.current.history.entries[0]?.id).toBe("ws-1");
+    rerender({ workspaceId: "ws-2" });
+    await waitFor(() => expect(result.current.history.entries[0]?.id).toBe("ws-2"));
+    finish!();
+    await pending;
+    expect(result.current.history.entries[0]?.id).toBe("ws-2");
+    expect(client.getQueriesData({ queryKey: dbQueryHistoryQueryKey("ws-1") })[0]?.[1]).toEqual([]);
   });
 });

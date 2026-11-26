@@ -812,6 +812,8 @@
     "response": {
       "tooLarge": "响应超过 10 MiB 上限。请缩小响应范围后重试。",
       "copyBody": "复制响应正文",
+      "bodyCopied": "已复制响应正文",
+      "copyBodyFailed": "复制响应正文失败。",
       "cancelledDescription": "执行已在请求工作全部完成前停止，本次运行不会写入历史记录。",
       "cancelFailed": "无法确认停止请求，仍在等待本次请求的结果。你可以再次点击停止。",
       "cancelledTitle": "请求已取消",
@@ -948,6 +950,8 @@
     "duplicate": "复制",
     "duplicateEnvironmentName": "当前 Workspace 已存在名为 {name} 的变量环境。",
     "duplicateKeys": "重复变量键：{keys}",
+    "filterByName": "按变量名筛选",
+    "noMatchingNames": "没有匹配的变量名。",
     "empty": "此范围内暂无变量。",
     "enabled": "已启用",
     "enabledShort": "启用",
@@ -1270,7 +1274,11 @@
       "viewRaw": "原始"
     },
     "history": {
+      "clearDescription": "将永久清空「{workspace}」工作区中所有连接的 SQL 历史，包括当前列表未显示的记录。",
+      "clearTitle": "清空工作区的 SQL 历史？",
       "empty": "执行过的 SQL 历史会显示在这里。",
+      "noMatches": "没有匹配的 SQL 历史记录。",
+      "search": "搜索 SQL 历史",
       "failedFallback": "失败",
       "replaceConfirm": "当前 SQL 有未保存的修改。是否用选中的历史记录替换？",
       "replaceTitle": "替换当前 SQL",
@@ -2050,8 +2058,12 @@
         "repairFailed": "无法更新这条 SSH 任务运行记录。",
         "missingInputs": "请填写所有检测到的输入项后再运行。",
         "noInputs": "此 Task 没有临时输入项。",
-        "workspaceDefaults": "已从工作区变量加载匹配项，可在本次运行中修改。",
-        "workspaceDefaultsWithEnv": "已从工作区变量和「{name}」环境加载匹配项，可在本次运行中修改。",
+        "inputSource": {
+          "environment": "环境 · {name}",
+          "missingEnvironment": "原环境不可用",
+          "workspace": "工作区",
+          "manual": "手动输入"
+        },
         "workspaceOnly": "仅使用 Workspace 变量",
         "openLog": "打开日志",
         "resize": "调整运行面板高度",
@@ -2074,6 +2086,8 @@
         "transferProgress": "{direction}: {transferred} / {total} ({speed})",
         "waitingForOutput": "等待 stdout 或 stderr 输出...",
         "followOutput": "跟随最新输出",
+        "jumpToStep": "查看「{name}」的日志",
+        "stepLogUnavailable": "当前日志中没有可定位的步骤记录",
         "output": "任务输出"
       },
       "stepTypes": {

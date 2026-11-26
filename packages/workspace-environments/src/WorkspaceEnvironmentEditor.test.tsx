@@ -16,6 +16,27 @@ it("refreshes clean environment drafts after child-only changes", () => {
   rerender(editor([{...environment, variables: [{...environment.variables[0], value: "external", revision: 2}]}]));
   expect(screen.getByDisplayValue("external")).toBeTruthy();
 });
+
+it("filters only by name and deletes the selected draft row without shifting secret visibility", () => {
+  render(editor([], true, []));
+  for (const [index, key] of ["first", "middle", "last"].entries()) {
+    fireEvent.click(screen.getByRole("button", { name: "Add variable" }));
+    fireEvent.change(screen.getAllByPlaceholderText("Key")[index], { target: { value: key } });
+    fireEvent.click(screen.getAllByRole("checkbox", { name: "Secret" })[index]);
+    fireEvent.change(screen.getAllByPlaceholderText("Value")[index], { target: { value: `content-${key}` } });
+  }
+  fireEvent.click(screen.getAllByRole("button", { name: "Show secret value" })[1]!);
+  const filter = screen.getByRole("textbox", { name: "Filter by variable name" });
+  act(() => filter.focus());
+  fireEvent.change(filter, { target: { value: "content" } });
+  expect(screen.getByText("No variable names match the filter.")).toBeVisible();
+  fireEvent.change(filter, { target: { value: "middle" } });
+  fireEvent.click(screen.getByRole("button", { name: "Delete variable middle" }));
+  fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+  expect(screen.queryByDisplayValue("content-middle")).toBeNull();
+  expect(screen.getByDisplayValue("content-first")).toHaveAttribute("type", "password");
+  expect(screen.getByDisplayValue("content-last")).toHaveAttribute("type", "password");
+});
 it("keeps dirty environment drafts, blocks stale save and explicitly reloads", () => {
   const {rerender} = render(editor());
   fireEvent.change(screen.getByDisplayValue("old"), {target: {value: "local"}});

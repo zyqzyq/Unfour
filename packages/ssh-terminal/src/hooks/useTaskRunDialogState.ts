@@ -219,9 +219,8 @@ export function useTaskRunDialogState({ workspaceId, handleError, onStarted, onA
   const {
     detail = null, connectionId = "", temporaryHandle = null, temporaryExecutionMode = "terminal", terminalReady = false, environmentId = "", environments = [],
     environmentLoadFailed = false, notice = null,
-    values = { inputs: {}, secretNames: [], automaticSecretNames: [], filledFromWorkspace: [] },
+    values = { inputs: {}, sources: {}, secretNames: [], automaticSecretNames: [] },
   } = state ?? {};
-  const environment = workspaceEnvironmentById(environments, environmentId);
   return {
     prepareRun, closeRunDialog, changeRunEnvironment, runMutation, setRunInputs, toggleSecretInput,
     restorePreviousRun: () => state && prepareRun(state.detail.task.id, "latest"),
@@ -257,12 +256,11 @@ export function useTaskRunDialogState({ workspaceId, handleError, onStarted, onA
     runEnvironmentId: environmentId,
     runEnvironments: environments,
     runEnvironmentLoadFailed: environmentLoadFailed,
-    runActiveEnvironmentName: environment?.name ?? null,
     runInputs: values.inputs,
+    runInputSources: values.sources,
     runSecretInputs: values.secretNames,
     runAutomaticSecretInputs: values.automaticSecretNames,
     runInputScopeKey: state?.generation ?? 0,
-    runFilledFromWorkspace: values.filledFromWorkspace.length > 0,
   };
 }
 

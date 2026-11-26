@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import type { DatabaseStatementResult } from "@unfour/command-client";
 import { QueryResultPanel } from "./QueryResultPanel";
@@ -32,8 +33,8 @@ const statements: DatabaseStatementResult[] = [
   { index: 3, start: 30, end: 39, sql: "SELECT 3;", status: "skipped", result: null, error: null },
 ];
 const props: Parameters<typeof QueryResultPanel>[0] = {
-  activeResultIndex: 1, activeTab: "results", error: null, history: [], isPending: false,
-  onClearHistory: vi.fn(), onSelectHistory: vi.fn(), onSelectResultSet: vi.fn(), onSelectTab: vi.fn(),
+  active: true, activeResultIndex: 1, activeTab: "results", error: null, historyCount: 0, isPending: false,
+  workspaceId: "ws", workspaceName: "Workspace", onSelectHistory: vi.fn(), onSelectResultSet: vi.fn(), onSelectTab: vi.fn(),
   pendingConfirmation: false, result: null, results: [statements[0].result!], statements,
 };
 it("shows the failing SQL and lets an earlier successful result remain visible", () => {
@@ -145,7 +146,10 @@ it("copies and exports filtered rows in sorted order, or every returned row in o
   };
   const next = { ...cappedResult, rows: [["next result"]] };
   const panelProps = { ...props, statements: [], results: [result, next] };
-  const panel = render(<QueryResultPanel {...panelProps} activeResultIndex={0} result={result} />);
+  const client = new QueryClient();
+  const panel = render(<QueryResultPanel {...panelProps} activeResultIndex={0} result={result} />, {
+    wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+  });
   const search = screen.getByRole("textbox", { name: "Filter rows" });
   fireEvent.change(search, { target: { value: "active" } });
   fireEvent.click(screen.getByTitle("Sort by id"));

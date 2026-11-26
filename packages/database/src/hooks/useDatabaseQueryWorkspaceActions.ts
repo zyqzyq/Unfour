@@ -1,4 +1,4 @@
-import { type Dispatch, type SetStateAction, useEffect, useRef } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import type {
   DatabaseConnection,
   DatabaseQueryResult,
@@ -28,11 +28,9 @@ type DatabaseQueryWorkspaceActionsOptions = {
   ) => void;
   connections: DatabaseConnection[];
   databaseTabs: ReturnType<typeof useDatabaseTabs>;
-  maxHistoryEntries: number;
   queryHistoryQuery: ReturnType<typeof useQueryHistory>;
   savedSqlQuery: ReturnType<typeof useSavedSql>;
   selectedConnectionId: string | null;
-  setQueryHistory: Dispatch<SetStateAction<SqlHistoryEntry[]>>;
   setSelectedDatabaseConnection: (connectionId: string | null) => void;
   setSelectedTable: Dispatch<SetStateAction<DatabaseTable | null>>;
   t: ReturnType<typeof useI18n>["t"];
@@ -44,17 +42,13 @@ export function useDatabaseQueryWorkspaceActions({
   browseTablePage,
   connections,
   databaseTabs,
-  maxHistoryEntries,
   queryHistoryQuery,
   savedSqlQuery,
   selectedConnectionId,
-  setQueryHistory,
   setSelectedDatabaseConnection,
   setSelectedTable,
   t,
 }: DatabaseQueryWorkspaceActionsOptions) {
-  const currentHistoryWorkspace = useRef(queryHistoryQuery.workspaceId);
-  useEffect(() => { currentHistoryWorkspace.current = queryHistoryQuery.workspaceId; }, [queryHistoryQuery.workspaceId]);
   function startNewQuery(
     connectionId = selectedConnectionId ?? activeQueryTab?.connectionId ?? activeTableTab?.connectionId ?? null,
     catalog?: string,
@@ -119,15 +113,7 @@ export function useDatabaseQueryWorkspaceActions({
       executedAt: now,
       id: `${now}-${Math.random().toString(36).slice(2, 8)}`,
     };
-    if (currentHistoryWorkspace.current === queryHistoryQuery.workspaceId) {
-      setQueryHistory((current) => [historyEntry, ...current].slice(0, maxHistoryEntries));
-    }
     queryHistoryQuery.record(historyEntry);
-  }
-
-  function clearQueryHistory() {
-    setQueryHistory([]);
-    queryHistoryQuery.clear();
   }
 
   function loadHistoryEntry(entry: SqlHistoryEntry) {
@@ -287,7 +273,6 @@ export function useDatabaseQueryWorkspaceActions({
 
 
   return {
-    clearQueryHistory,
     deleteSavedSql,
     designTable,
     handleSelectResultTab,

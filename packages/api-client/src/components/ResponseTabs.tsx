@@ -1,6 +1,7 @@
 import { responseCookies } from "./response-tab-helpers";
-import { AlertCircle, Ban, Clock3, Copy, HardDrive, Send } from "lucide-react";
-import { Button, useI18n } from "@unfour/ui";
+import { useEffect, useRef, useState } from "react";
+import { AlertCircle, Ban, Check, Clock3, Copy, HardDrive, Send } from "lucide-react";
+import { Button, IconButton, useI18n } from "@unfour/ui";
 import { formatByteSize } from "../request-utils";
 import {
   deriveTabResponseState,
@@ -68,15 +69,7 @@ export function ResponseTabs({
               <HardDrive aria-hidden="true" size={11} />
               {responseSize}
             </span>
-            <button
-              aria-label={t("api.response.copyBody")}
-              className="grid h-7 w-7 place-items-center rounded-[var(--u-radius-md)] text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--u-color-focus)_32%,transparent)]"
-              onClick={() => void navigator.clipboard?.writeText(tab.response?.body ?? "")}
-              title={t("api.response.copyBody")}
-              type="button"
-            >
-              <Copy size={14} />
-            </button>
+            <CopyResponseBody key={`${tab.id}:${tab.response.historyId}`} body={tab.response.body} />
           </div>
         )}
       </div>
@@ -205,6 +198,52 @@ export function ResponseTabs({
         )}
       </div>
     </section>
+  );
+}
+
+function CopyResponseBody({ body }: { body: string }) {
+  const { t } = useI18n();
+  const writing = useRef(false);
+  const [status, setStatus] = useState<"idle" | "pending" | "copied" | "failed">("idle");
+  useEffect(() => {
+    if (status !== "copied") return;
+    const timer = window.setTimeout(() => setStatus("idle"), 1800);
+    return () => window.clearTimeout(timer);
+  }, [status]);
+
+  async function copy() {
+    if (writing.current) return;
+    writing.current = true;
+    setStatus("pending");
+    try {
+      await navigator.clipboard.writeText(body);
+      setStatus("copied");
+    } catch {
+      setStatus("failed");
+    } finally {
+      writing.current = false;
+    }
+  }
+
+  return (
+    <>
+      <span role="status" className={status === "failed" ? "text-[var(--u-color-danger)]" : "sr-only"}>
+        {status === "failed" && t("api.response.copyBodyFailed")}
+        {status === "copied" && t("api.response.bodyCopied")}
+      </span>
+      <IconButton
+        aria-busy={status === "pending"}
+        aria-disabled={status === "pending"}
+        className="aria-disabled:opacity-50"
+        label={t("api.response.copyBody")}
+        onClick={() => void copy()}
+        size="compact"
+        tooltip={status === "copied" ? t("api.response.bodyCopied") : undefined}
+        tooltipAlign="end"
+      >
+        {status === "copied" ? <Check size={14} /> : <Copy size={14} />}
+      </IconButton>
+    </>
   );
 }
 

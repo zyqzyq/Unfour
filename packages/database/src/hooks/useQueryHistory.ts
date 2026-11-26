@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   clearDatabaseQueryHistory,
@@ -12,43 +11,62 @@ export function dbQueryHistoryQueryKey(workspaceId: string) {
   return ["db-query-history", workspaceId] as const;
 }
 
+export const MAX_HISTORY_ENTRIES = 25;
+
+function historyEntries(rows: DbQueryHistoryEntry[]) {
+  return rows.map(fromPersistedHistory);
+}
+
+export function useQueryHistoryEntries(workspaceId: string, limit: number, search: string, active: boolean) {
+  const term = search.trim();
+  return useQuery({
+    enabled: Boolean(active && workspaceId),
+    networkMode: "always",
+    queryKey: [...dbQueryHistoryQueryKey(workspaceId), limit, term],
+    queryFn: () => listDatabaseQueryHistory(workspaceId, limit, term || undefined),
+    select: historyEntries,
+  });
+}
+
 export function useQueryHistory(
   workspaceId: string,
   limit: number,
   options?: { active?: boolean },
 ) {
   const queryClient = useQueryClient();
-  const queryKey = dbQueryHistoryQueryKey(workspaceId);
-  const active = options?.active ?? true;
-  const query = useQuery({
-    enabled: Boolean(active && workspaceId),
-    queryKey,
-    queryFn: () => listDatabaseQueryHistory(workspaceId, limit),
-  });
-  const entries = useMemo(() => (query.data ?? []).map(fromPersistedHistory), [query.data]);
+  const query = useQueryHistoryEntries(workspaceId, limit, "", options?.active ?? true);
 
   const recordMutation = useMutation({
-    mutationFn: ({ entry, targetWorkspaceId }: { entry: SqlHistoryEntry; targetWorkspaceId: string }) =>
-      recordDatabaseQueryHistory(toPersistedHistory(targetWorkspaceId, entry)),
-  });
-
-  const clearMutation = useMutation({
-    mutationFn: () => clearDatabaseQueryHistory(workspaceId),
-    onMutate: () => {
-      queryClient.setQueryData(queryKey, []);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey });
+    networkMode: "always",
+    mutationFn: (entry: DbQueryHistoryEntry) => recordDatabaseQueryHistory(entry),
+    onSuccess: async (_result, entry) => {
+      const filters = { queryKey: dbQueryHistoryQueryKey(entry.workspaceId) };
+      // An initial list request may have read the database before this insert.
+      await queryClient.cancelQueries(filters);
+      await queryClient.invalidateQueries(filters);
     },
   });
 
   return {
     ...query,
-    workspaceId,
-    clear: () => clearMutation.mutate(),
-    entries,
-    record: (entry: SqlHistoryEntry) => recordMutation.mutate({ entry, targetWorkspaceId: workspaceId }),
+    entries: query.data ?? [],
+    record: (entry: SqlHistoryEntry) => recordMutation.mutate(toPersistedHistory(workspaceId, entry)),
   };
+}
+
+export function useClearQueryHistory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    networkMode: "always",
+    mutationFn: (workspaceId: string) => clearDatabaseQueryHistory(workspaceId),
+    onSuccess: async (_result, workspaceId) => {
+      const filters = { queryKey: dbQueryHistoryQueryKey(workspaceId) };
+      await queryClient.cancelQueries(filters);
+      queryClient.setQueriesData(filters, []);
+      // A query can finish recording while the clear command is in flight.
+      await queryClient.invalidateQueries(filters);
+    },
+  });
 }
 
 function fromPersistedHistory(entry: DbQueryHistoryEntry): SqlHistoryEntry {

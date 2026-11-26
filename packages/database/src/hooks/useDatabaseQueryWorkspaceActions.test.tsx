@@ -32,10 +32,10 @@ function setup() {
       activeQueryTab: tabs.activeTab?.kind === "query" ? tabs.activeTab : null,
       activeTableTab: tabs.activeTab?.kind === "table" ? tabs.activeTab : null,
       connections: [connection], databaseTabs: tabs, selectedConnectionId: "conn",
-      browseTablePage: vi.fn(), maxHistoryEntries: 100,
+      browseTablePage: vi.fn(),
       queryHistoryQuery: useQueryHistory("ws", 100, { active: false }),
       savedSqlQuery: useSavedSql("ws", { active: false }),
-      setQueryHistory: vi.fn(), setSelectedDatabaseConnection: vi.fn(), setSelectedTable: vi.fn(), t: (key) => key,
+      setSelectedDatabaseConnection: vi.fn(), setSelectedTable: vi.fn(), t: (key) => key,
     });
     return { tabs, actions };
   }, { wrapper });

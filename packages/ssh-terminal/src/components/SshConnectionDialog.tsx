@@ -1,6 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { KeyRound, Lock, Plug, Save, ShieldOff } from "lucide-react";
-import { listTemporaryRoutes, revealConnectionSecret, temporaryRouteOptions, type SshConnectionInput } from "@unfour/command-client";
+import { listTemporaryRoutes, revealConnectionSecret, temporaryRouteOptions, type SshConnectionInput, type SshTestResult } from "@unfour/command-client";
 import {
   Button,
   Dialog,
@@ -21,6 +21,7 @@ import {
   useI18n,
 } from "@unfour/ui";
 import { formatTerminalError } from "../model/errors";
+import { SshTestResultDialog } from "./SshTestResultDialog";
 
 export function SshConnectionDialog({
   canTest,
@@ -35,7 +36,8 @@ export function SshConnectionDialog({
   open,
   pending,
   testing,
-  children,
+  testResult = null,
+  onCloseTestResult,
 }: {
   canTest: boolean;
   externalChange?: boolean;
@@ -49,17 +51,19 @@ export function SshConnectionDialog({
   open: boolean;
   pending?: boolean;
   testing?: boolean;
-  children?: ReactNode;
+  testResult?: SshTestResult | null;
+  onCloseTestResult?: () => void;
 }) {
   const { t } = useI18n();
   const sessions = useLiveOptions(form.workspaceId, listTemporaryRoutes, open);
   const temporary = temporaryRouteOptions(sessions?.items ?? [], form.temporaryHandle, (id) => t("network.temporarySession", { id }), t("network.temporaryUnavailable"));
+  const busy = Boolean(pending || testing);
 
   return (
-    <Dialog onOpenChange={(next) => { if (!pending) onOpenChange(next); }} open={open}>
+    <Dialog onOpenChange={(next) => { if (!busy) onOpenChange(next); }} open={open}>
       <DialogContent>
-        <form className="flex min-h-0 flex-col" onSubmit={(event) => { if (externalChange || pending) event.preventDefault(); else onSubmit(event); }}>
-          <fieldset disabled={pending} className="contents">
+        <form className="flex min-h-0 flex-col" onSubmit={(event) => { if (externalChange || busy) event.preventDefault(); else onSubmit(event); }}>
+          <fieldset aria-busy={busy} disabled={busy} className="contents">
           <DialogHeader>
             <div className="min-w-0">
               <DialogTitle>
@@ -103,7 +107,8 @@ export function SshConnectionDialog({
                 onChange={(event) => onUpdate({ temporaryHandle: event.target.value || null })} />
               {form.temporaryHandle && <span className="text-xs text-[var(--u-color-text-muted)]">{t("network.temporaryHelp")}</span>}
             </FieldGroup>
-            <FieldGroup title={t("ssh.dialog.authentication")}>
+            <fieldset className="min-w-0 space-y-1.5">
+              <legend className="text-[12px] font-medium text-[var(--u-color-text-muted)]">{t("ssh.dialog.authentication")}</legend>
               <SegmentedControl<SshConnectionInput["authKind"]>
                 onChange={(authKind) =>
                   onUpdate({
@@ -132,10 +137,10 @@ export function SshConnectionDialog({
                 ]}
                 value={form.authKind}
               />
-            </FieldGroup>
+            </fieldset>
             {form.authKind === "password" && (
               <FieldGroup title={t("ssh.dialog.authPassword")}>
-                {open && <ConnectionSecretEditor key={`${form.workspaceId}:${form.id ?? "new"}:${form.expectedSnapshot?.credentialRef ?? ""}:${form.authKind}`} form={form} onUpdate={onUpdate} disabled={pending} />}
+                {open && <ConnectionSecretEditor key={`${form.workspaceId}:${form.id ?? "new"}:${form.expectedSnapshot?.credentialRef ?? ""}:${form.authKind}`} form={form} onUpdate={onUpdate} disabled={busy} />}
                 {Boolean(form.id) && (
                   <span className="text-[11.5px] text-[var(--u-color-text-muted)]">
                     {t("ssh.dialog.passwordEditHint")}
@@ -153,7 +158,7 @@ export function SshConnectionDialog({
                   />
                 </FieldGroup>
                 <FieldGroup title={t("ssh.dialog.passphrase")}>
-                  {open && <ConnectionSecretEditor key={`${form.workspaceId}:${form.id ?? "new"}:${form.expectedSnapshot?.credentialRef ?? ""}:${form.authKind}`} form={form} onUpdate={onUpdate} disabled={pending} />}
+                  {open && <ConnectionSecretEditor key={`${form.workspaceId}:${form.id ?? "new"}:${form.expectedSnapshot?.credentialRef ?? ""}:${form.authKind}`} form={form} onUpdate={onUpdate} disabled={busy} />}
                   {Boolean(form.id) && (
                     <span className="text-[11.5px] text-[var(--u-color-text-muted)]">
                       {t("ssh.dialog.passwordEditHint")}
@@ -174,29 +179,30 @@ export function SshConnectionDialog({
             )}
           </DialogBody>
           <DialogFooter>
-            <Button
-              className="mr-auto"
-              disabled={!canTest || testing || pending}
-              onClick={onTest}
-              type="button"
-              variant="outline"
-            >
-              <Plug size={14} />
-              {testing ? t("ssh.dialog.testing") : t("ssh.dialog.test")}
-            </Button>
+            <SshTestResultDialog onClose={onCloseTestResult} result={testResult}>
+              <Button
+                className="mr-auto"
+                disabled={!canTest || busy}
+                onClick={onTest}
+                type="button"
+                variant="outline"
+              >
+                <Plug size={14} />
+                {testing ? t("ssh.dialog.testing") : t("ssh.dialog.test")}
+              </Button>
+            </SshTestResultDialog>
             <DialogClose asChild>
               <Button type="button" variant="outline">
                 {t("ssh.dialog.cancel")}
               </Button>
             </DialogClose>
-            <Button disabled={pending || externalChange} type="submit">
+            <Button disabled={busy || externalChange} type="submit">
               <Save size={14} />
               {t("ssh.dialog.save")}
             </Button>
           </DialogFooter>
           </fieldset>
         </form>
-        {children}
       </DialogContent>
     </Dialog>
   );

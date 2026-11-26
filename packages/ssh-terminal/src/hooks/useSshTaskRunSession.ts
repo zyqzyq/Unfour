@@ -35,6 +35,7 @@ export function useSshTaskRunSession({
   const showCompletionWarning = (run: SshTaskRun) => noteActivityWarning(run.warnings);
   const [activeRun, setActiveRunState] = useState<SshTaskRun | null>(null);
   const [activeRunTask, setActiveRunTask] = useState<SshTaskDetail | null>(null);
+  const [usingStartedDefinition, setUsingStartedDefinition] = useState(false);
   const workspaceScope = useMemo(() => ({ workspaceId }), [workspaceId]);
   const mountedScopeRef = useRef<typeof workspaceScope | null>(null);
   const sessionGenerationRef = useRef(0);
@@ -62,6 +63,7 @@ export function useSshTaskRunSession({
   const dialog = useTaskRunDialogState({ workspaceId, handleError, onAccepted: (run) => trackTemporaryRun(run), onStarted: (run, detail) => {
     setActiveRun(run);
     setActiveRunTask(detail);
+    setUsingStartedDefinition(true);
     showCompletionWarning(run);
   } });
 
@@ -133,6 +135,7 @@ export function useSshTaskRunSession({
         if (!isCurrent()) return;
         setActiveRunState(run);
         setActiveRunTask(detail);
+        setUsingStartedDefinition(false);
 
         await loadHistoryLog(run.id, run.taskId);
       } catch (error) {
@@ -144,7 +147,7 @@ export function useSshTaskRunSession({
 
   return {
     ...dialog,
-    activeRun, activeRunTask, cancelMutation, clearMutation, repairMutation,
+    activeRun, activeRunTask, usingStartedDefinition, cancelMutation, clearMutation, repairMutation,
     eventsByRun, historyLogByRun, historyLogLoading, openHistoryRun,
     setActiveRun, setActiveRunTask, settleSelectedRun, closeRemovedRun,
   };

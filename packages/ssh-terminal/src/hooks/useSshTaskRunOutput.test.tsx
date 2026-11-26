@@ -214,7 +214,7 @@ describe("history read lifecycle and concurrency", () => {
     expect(handleError).not.toHaveBeenCalled();
     await act(async () => { newLog.resolve("new workspace"); await newRead; });
     expect(result.current.historyLogByRun).toEqual({ run: "new workspace" });
-    expect(readSshTaskRunLog).toHaveBeenLastCalledWith("w2", "run");
+    expect(readSshTaskRunLog).toHaveBeenLastCalledWith("w2", "run", true);
   });
 
   it("keeps old reads invalid after switching away and back to the same workspace", async () => {
@@ -241,7 +241,7 @@ describe("history read lifecycle and concurrency", () => {
       oldOutput.clearTaskOutput("task");
       await oldOutput.loadHistoryLog("old-run", "task");
     });
-    expect(readSshTaskRunLog).toHaveBeenCalledExactlyOnceWith("w1", "run");
+    expect(readSshTaskRunLog).toHaveBeenCalledExactlyOnceWith("w1", "run", true);
     expect(result.current.historyLogByRun).toEqual({ run: "history log" });
     expect(result.current.eventsByRun.run[0].data).toBe("current lifecycle");
   });

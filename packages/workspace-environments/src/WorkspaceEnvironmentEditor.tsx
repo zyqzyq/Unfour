@@ -5,7 +5,7 @@ import type {
   WorkspaceVariable,
   WorkspaceVariableInput,
 } from "@unfour/command-client";
-import { Button, Input, VariableTable, useI18n } from "@unfour/ui";
+import { Button, Input, SidebarSearch, VariableTable, useI18n } from "@unfour/ui";
 import { findDuplicateEnvironmentName, formatError, nextEnvironmentName } from "./environment-utils";
 
 export type EnvironmentEditorMode =
@@ -77,6 +77,7 @@ export function WorkspaceEnvironmentEditor({
 }) {
   const { t } = useI18n();
   const [draft, setDraft] = useState<EnvironmentDraft>({ kind: "none" });
+  const [nameFilter, setNameFilter] = useState("");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveConflict, setSaveConflict] = useState(false);
   const latest = useRef({ draft, modeRevision, mounted: true });
@@ -119,6 +120,7 @@ export function WorkspaceEnvironmentEditor({
     // eslint-disable-next-line react-hooks/set-state-in-effect -- an explicit selection resets the editor draft
     setSaveError(null);
     setSaveConflict(false);
+    setNameFilter("");
     if (mode.kind === "new") {
       setDraft({
         kind: "new",
@@ -239,34 +241,19 @@ export function WorkspaceEnvironmentEditor({
     <main className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-[var(--u-color-bg)]">
       <header className="mx-auto w-full max-w-5xl shrink-0 space-y-2 px-4 pt-4">
         <div className="flex items-start justify-between gap-3 border-b border-[var(--u-color-border)] pb-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="truncate text-[14px] font-semibold text-[var(--u-color-text)]">
-                {isWorkspace
-                  ? t("variables.workspaceVariables")
-                  : draft.kind === "new"
-                    ? t("variables.newEnvironment")
-                    : draft.sourceName}
-              </h2>
-              {selectedEnvironment?.isActive && (
-                <span className="inline-flex h-5 items-center gap-1.5 px-1.5 text-[11px] font-medium text-[var(--u-color-primary)]">
-                  <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                  {t("variables.active")}
-                </span>
-              )}
-              {dirty && (
-                <span className="text-[11px] text-[var(--u-color-text-soft)]">
-                  {t("variables.unsaved")}
-                </span>
-              )}
-            </div>
-            <p className="mt-1 text-[12px] text-[var(--u-color-text-muted)]">
-              {isWorkspace
-                ? t("variables.workspaceDescription")
-                : t("variables.environmentDescription", {
-                    count: persistedVariables.length,
-                  })}
-            </p>
+          <EnvironmentHeading
+            draft={draft}
+            active={Boolean(selectedEnvironment?.isActive)}
+            dirty={dirty}
+            count={persistedVariables.length}
+          />
+          <div className="w-44 max-w-[35%]">
+            <SidebarSearch
+              label={t("variables.filterByName")}
+              placeholder={t("variables.filterByName")}
+              value={nameFilter}
+              onChange={setNameFilter}
+            />
           </div>
           <Button
             className="shrink-0"
@@ -319,6 +306,8 @@ export function WorkspaceEnvironmentEditor({
           </div>
         )}
         <VariableTable
+          key={modeRevision}
+          nameFilter={nameFilter}
           items={draft.variables}
           onChange={(variables) =>
             setDraft((current) =>
@@ -340,6 +329,44 @@ export function WorkspaceEnvironmentEditor({
         />
       </div>
     </main>
+  );
+}
+
+function EnvironmentHeading({ draft, active, dirty, count }: {
+  draft: Exclude<EnvironmentDraft, { kind: "none" }>;
+  active: boolean;
+  dirty: boolean;
+  count: number;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="min-w-0 flex-1">
+      <div className="flex items-center gap-2">
+        <h2 className="truncate text-[14px] font-semibold text-[var(--u-color-text)]">
+          {draft.kind === "workspace"
+            ? t("variables.workspaceVariables")
+            : draft.kind === "new"
+              ? t("variables.newEnvironment")
+              : draft.sourceName}
+        </h2>
+        {active && (
+          <span className="inline-flex h-5 items-center gap-1.5 px-1.5 text-[11px] font-medium text-[var(--u-color-primary)]">
+            <span className="h-1.5 w-1.5 rounded-full bg-current" />
+            {t("variables.active")}
+          </span>
+        )}
+        {dirty && (
+          <span className="text-[11px] text-[var(--u-color-text-soft)]">
+            {t("variables.unsaved")}
+          </span>
+        )}
+      </div>
+      <p className="mt-1 text-[12px] text-[var(--u-color-text-muted)]">
+        {draft.kind === "workspace"
+          ? t("variables.workspaceDescription")
+          : t("variables.environmentDescription", { count })}
+      </p>
+    </div>
   );
 }
 

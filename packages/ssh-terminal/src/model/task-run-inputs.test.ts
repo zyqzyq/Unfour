@@ -93,7 +93,6 @@ describe("task run workspace variable defaults", () => {
         API_TOKEN: "secret",
       },
       secretNames: ["API_TOKEN"],
-      filledFromWorkspace: ["source_image", "API_TOKEN"],
     });
   });
 

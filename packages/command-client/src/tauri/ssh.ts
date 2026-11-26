@@ -98,8 +98,8 @@ export function listSshTaskRuns(workspaceId: string, taskId: string) {
   return call<SshTaskRun[]>("ssh_task_runs_list", { workspaceId, taskId });
 }
 
-export function readSshTaskRunLog(workspaceId: string, runId: string) {
-  return call<string>("ssh_task_run_log_read", { workspaceId, runId });
+export function readSshTaskRunLog(workspaceId: string, runId: string, stepNavigation = false) {
+  return call<string>("ssh_task_run_log_read", { workspaceId, runId, stepNavigation });
 }
 
 export function clearSshTaskRuns(input: SshTaskCleanupInput) {

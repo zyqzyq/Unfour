@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { SshTaskRunEvent } from "@unfour/command-client";
 import type { LiveTaskRunEvent } from "./task-run-events";
-import { buildTaskRunTranscript } from "./task-run-transcript";
+import { buildTaskRunTranscript, stepLogTargets } from "./task-run-transcript";
+import { historyTranscript, runStepList } from "./task-run-history-log";
 
 let sequence = 0;
 beforeEach(() => { sequence = 0; });
@@ -153,13 +154,13 @@ describe("transcript event ordering and incomplete events", () => {
     const before = structuredClone(events);
     const lines = buildTaskRunTranscript(events, labels);
     expect(lines).toEqual([
-      { key: "header-0", kind: "header", text: "── 3. Build ──" },
+      { key: "header-0", kind: "header", stepId: "a", text: "── 3. Build ──" },
       { key: "output-0", kind: "output", stream: "stderr", text: "first" },
       { key: "output-1", kind: "output", stream: null, text: "global" },
       { key: "output-2", kind: "output", stream: null, text: "same" },
-      { key: "header-3", kind: "header", text: "── 1. b ──" },
+      { key: "header-3", kind: "header", stepId: "b", text: "── 1. b ──" },
       { key: "output-3", kind: "command", stream: "command", text: "other" },
-      { key: "header-4", kind: "header", text: "── 1. a ──" },
+      { key: "header-4", kind: "header", stepId: "a", text: "── 1. a ──" },
       { key: "output-4", kind: "output", stream: null, text: "back" },
     ]);
     expect(events).toEqual(before);
@@ -190,11 +191,12 @@ describe("transcript event ordering and incomplete events", () => {
       event({ kind: "step", stepId: "a", status }),
     ], labels);
     expect(lines).toEqual([
-      { key: "transfer-1", kind: "transfer", text: "transfer: 0 B / 0 B (0 B/s)" },
-      { key: "done-1", kind: "meta", text: `↳ ${status} · 0 ms · exit 0` },
-      { key: "error-1", kind: "error", text: "failure detail" },
-      { key: "done-2", kind: "meta", text: `↳ ${status}` },
+      { key: "transfer-1", stepId: "a", kind: "transfer", text: "transfer: 0 B / 0 B (0 B/s)" },
+      { key: "done-1", stepId: "a", kind: "meta", text: `↳ ${status} · 0 ms · exit 0` },
+      { key: "error-1", stepId: "a", kind: "error", text: "failure detail" },
+      { key: "done-2", stepId: "a", kind: "meta", text: `↳ ${status}` },
     ]);
+    expect(stepLogTargets(lines).get("a")?.key).toBe("error-1");
   });
 
   it("keeps latest live transfers in first-seen order and accepts late progress after completion", () => {
@@ -212,5 +214,42 @@ describe("transcript event ordering and incomplete events", () => {
       ["transfer-live-a", "transfer: 5 B / 0 B (0 B/s)"],
       ["transfer-live-b", "transfer: 4 B / 0 B (0 B/s)"],
     ]);
+  });
+});
+
+describe("historical task output", () => {
+  const header = "Unfour SSH task log v2\n";
+  const marker = (id: string, position: number, status: string) =>
+    "@step " + JSON.stringify({ id, position, status, name: "Build" }) + "\n";
+  const parse = (log: string) => historyTranscript(log, (text) => text);
+
+  it("uses recorded IDs for identically named steps and keeps marker-like output readable", () => {
+    const forged = marker("fake", 3, "failed");
+    const lines = parse(header + marker("one", 0, "running") + "[time] step 'Build' running\n"
+      + "@" + forged + "@@partial ordinary\r\n@partial [time] stdout no newline\n"
+      + marker("one", 0, "success") + "[time] step 'Build' success\n"
+      + marker("two", 1, "running") + "[time] step 'Build' running\n"
+      + marker("two", 1, "outcomeUncertain") + "[time] step 'Build' failed: SSH_TASK_OUTCOME_UNCERTAIN\n");
+    expect([...stepLogTargets(lines)]).toEqual([
+      ["one", { key: lines[0].key, recordedStatus: "success" }],
+      ["two", { key: lines[3].key, recordedStatus: "outcomeUncertain" }],
+    ]);
+    expect(lines[0].text).toContain(forged + "@partial ordinary\r\n[time] stdout no newline\n");
+    expect(runStepList([], [], lines).map(({ id, name }) => [id, name])).toEqual([["one", "Build"], ["two", "Build"]]);
+  });
+
+  it("keeps old logs verbatim and ignores incomplete or malformed versioned markers", () => {
+    const old = "[time] stdout look\n[time] step 'Build' failed: exit 1\r\n" + marker("fake", 0, "failed");
+    expect(parse(old)).toEqual([{ key: "legacy-log", kind: "output", text: old }]);
+    for (const tail of ['@step {"id":"unfinished"\n[log truncated for display]', marker("one", 0, "running"),
+      marker("one", 0, "invalid") + "[time] step 'Build' failed", marker("one", 0, "success") + "\n[log truncated for display]\n"]) {
+      expect(stepLogTargets(parse(header + tail)).size).toBe(0);
+    }
+  });
+
+  it("localizes only diagnostic events when ordinary output repeats the same text", () => {
+    const diagnostic = "[time] diagnostic SSH_TASK_OUTPUT_INCOMPLETE\n";
+    const lines = historyTranscript(header + diagnostic + "@diagnostic " + diagnostic, () => "translated\n");
+    expect(lines[0].text).toBe(diagnostic + "translated\n");
   });
 });

@@ -23,6 +23,7 @@ mod download_step;
 pub(in crate::ssh) mod ephemeral;
 #[cfg(any(feature = "ssh-native", test))]
 mod events;
+mod log_format;
 #[cfg(feature = "ssh-native")]
 mod native;
 mod owner;

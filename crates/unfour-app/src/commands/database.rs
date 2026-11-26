@@ -172,11 +172,12 @@ pub async fn database_query_history_record(
 pub async fn database_query_history_list(
     workspace_id: String,
     limit: Option<i64>,
+    search: Option<String>,
     state: State<'_, AppState>,
 ) -> AppResult<Vec<DbQueryHistoryEntry>> {
     state
         .command_bus
-        .list_database_query_history(workspace_id, limit)
+        .list_database_query_history(workspace_id, limit, search)
         .await
 }
 

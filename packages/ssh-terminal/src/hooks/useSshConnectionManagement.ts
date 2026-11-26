@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getSshHostFingerprint,
@@ -8,6 +8,7 @@ import {
   type SshConnection,
   type SshConnectionInput,
   type SshHostFingerprintInfo,
+  type SshTestResult,
 } from "@unfour/command-client";
 import { useWorkspaceStore } from "@unfour/workspace-core";
 import { useFeedback, useFeedbackErrorHandler, useI18n } from "@unfour/ui";
@@ -17,26 +18,26 @@ import {
   sshConnectionContent,
 } from "../model/ssh-connection-state";
 import { formatTerminalError } from "../model/errors";
+import { sshConnectionsQueryKey } from "./sshWorkspaceQueries";
 
 /** Owns connection drafts and trust dialogs; session execution stays with orchestration. */
 export function useSshConnectionManagement({
   connections,
   connectMutation,
   workspaceId,
-  workspaceScope,
 }: {
   connections: SshConnection[];
   connectMutation: { error: unknown; reset: () => void; mutate: (connectionId: string) => void };
   workspaceId: string;
-  workspaceScope: RefObject<string | null>;
 }) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const feedback = useFeedback();
   const handleError = useFeedbackErrorHandler();
   const { selectedSshConnectionId: selectedConnectionId, setSelectedSshConnection } = useWorkspaceStore();
-  const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<"new" | "edit" | null>(null);
+  const dialogOpen = dialogMode !== null;
+  const editorBusy = useRef(false);
   const [trustDialogState, setTrustDialogState] = useState<{
     open: boolean;
     connectionId: string | null;
@@ -55,10 +56,7 @@ export function useSshConnectionManagement({
   const [form, setForm] = useState<SshConnectionInput>(() =>
     defaultSshConnectionInput(workspaceId),
   );
-  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(
-    null,
-  );
-
+  const [tested, setTested] = useState<{ form: SshConnectionInput; result: SshTestResult } | null>(null);
   const selectedConnection = useMemo(
     () => connections.find((item) => item.id === selectedConnectionId) ?? null,
     [connections, selectedConnectionId],
@@ -73,14 +71,14 @@ export function useSshConnectionManagement({
       return;
     }
 
-    if (dialogMode === "new" || (dialogOpen && dialogMode === "edit")) {
+    if (dialogOpen) {
       return;
     }
 
     if (!selectedConnectionId || !connections.some((connection) => connection.id === selectedConnectionId)) {
       setSelectedSshConnection(connections[0].id);
     }
-  }, [connections, selectedConnectionId, setSelectedSshConnection, dialogMode, dialogOpen]);
+  }, [connections, selectedConnectionId, setSelectedSshConnection, dialogOpen]);
 
   const latestFormConnection = connections.find((item) => item.id === form.id) ?? null;
   const formBaseline = form.expectedSnapshot;
@@ -99,18 +97,15 @@ export function useSshConnectionManagement({
   }
 
   const saveMutation = useMutation({
+    networkMode: "always",
     mutationFn: saveSshConnection,
-    onError: (_error, input) => { void queryClient.invalidateQueries({ queryKey: ["ssh-connections", input.workspaceId] }); },
+    onError: (_error, input) => { void queryClient.invalidateQueries({ queryKey: sshConnectionsQueryKey(input.workspaceId) }); },
     onSuccess: async (connection) => {
-      const queryKey = ["ssh-connections", connection.workspaceId];
+      const queryKey = sshConnectionsQueryKey(connection.workspaceId);
       await queryClient.cancelQueries({ queryKey, exact: true });
       queryClient.setQueryData<SshConnection[]>(queryKey, (current = []) =>
         [...current.filter((item) => item.id !== connection.id), connection]);
       void queryClient.invalidateQueries({ queryKey });
-      if (workspaceScope.current !== connection.workspaceId) return;
-      setSelectedSshConnection(connection.id);
-      setDialogOpen(false);
-      setDialogMode(null);
     },
   });
 
@@ -120,18 +115,20 @@ export function useSshConnectionManagement({
   // override, so a newly typed password/passphrase is honored as well. The
   // endpoint spins up and tears down its own throwaway session.
   const testMutation = useMutation({
-    mutationFn: async ({
-      form,
-    }: {
-      form: SshConnectionInput;
-    }) => {
-      return testSshConnection({ ...form, workspaceId });
-    },
-    onSuccess: (result) =>
-      setTestResult({ ok: result.ok, message: result.message }),
-    onError: (error) =>
-      setTestResult({ ok: false, message: formatTerminalError(error, t) }),
+    networkMode: "always",
+    mutationFn: (input: SshConnectionInput) => testSshConnection(input),
   });
+  const { reset: resetTest } = testMutation;
+  const { reset: resetSave } = saveMutation;
+  const resetEditorActions = useCallback(() => {
+    editorBusy.current = false;
+    setTested(null);
+    resetTest();
+    resetSave();
+  }, [resetSave, resetTest]);
+  // Detach per-call dialog callbacks on target changes and unmount. The save
+  // mutation's cache update still runs for its original workspace.
+  useLayoutEffect(() => resetEditorActions, [form.id, workspaceId, resetEditorActions]);
 
   // Reset a previously trusted host key (e.g. after a mismatch) and then
   // re-attempt the connection. Surfaces failures via the feedback toast.
@@ -163,53 +160,32 @@ export function useSshConnectionManagement({
   }
 
   function updateForm(patch: Partial<SshConnectionInput>) {
+    if (editorBusy.current) return;
     setForm((current) => ({ ...current, ...patch, workspaceId }));
   }
 
+  function openEditor(target: SshConnection | null) {
+    connectMutation.reset();
+    resetEditorActions();
+    if (target) setSelectedSshConnection(target.id);
+    setForm(target ? sshConnectionToInput(target, workspaceId) : defaultSshConnectionInput(workspaceId));
+    setDialogMode(target ? "edit" : "new");
+    setTrustDialogState((prev) => ({ ...prev, open: false }));
+  }
+
   function newConnection() {
-    connectMutation.reset();
-    testMutation.reset();
-    setTestResult(null);
-    saveMutation.reset();
     setSelectedSshConnection(null);
-    setForm(defaultSshConnectionInput(workspaceId));
-    setTrustDialogState((prev) => ({ ...prev, open: false }));
-    setDialogMode("new");
-    setDialogOpen(true);
+    openEditor(null);
   }
 
-  function openConnectionSettings(connection?: SshConnection | null) {
-    connectMutation.reset();
-    testMutation.reset();
-    setTestResult(null);
-    saveMutation.reset();
-    const target = connection ?? selectedConnection;
-    if (target) {
-      setSelectedSshConnection(target.id);
-      setForm(sshConnectionToInput(target, workspaceId));
-      setDialogMode("edit");
-    } else {
-      setForm(defaultSshConnectionInput(workspaceId));
-      setDialogMode("new");
-    }
-    setTrustDialogState((prev) => ({ ...prev, open: false }));
-    setDialogOpen(true);
-  }
-
-  function editConnection(connection: SshConnection) {
-    connectMutation.reset();
-    testMutation.reset();
-    setTestResult(null);
-    saveMutation.reset();
-    setSelectedSshConnection(connection.id);
-    setForm(sshConnectionToInput(connection, workspaceId));
-    setTrustDialogState((prev) => ({ ...prev, open: false }));
-    setDialogMode("edit");
-    setDialogOpen(true);
+  function finishEditorAction() {
+    editorBusy.current = false;
   }
 
   function submitConnection(event: FormEvent) {
     event.preventDefault();
+    if (!dialogOpen || editorBusy.current || externalChange) return;
+    editorBusy.current = true;
     saveMutation.mutate({
       ...form,
       workspaceId,
@@ -218,13 +194,24 @@ export function useSshConnectionManagement({
       // Preserve the secret verbatim (passwords may contain spaces); an empty
       // field means "keep the saved password".
       secret: form.secret ? form.secret : null,
+    }, {
+      onSuccess: (connection) => {
+        setSelectedSshConnection(connection.id);
+        setDialogMode(null);
+      },
+      onSettled: finishEditorAction,
     });
   }
 
   function testConnection() {
-    testMutation.reset();
-    setTestResult(null);
-    testMutation.mutate({ form });
+    if (!dialogOpen || editorBusy.current || !canTest) return;
+    // Guard both actions synchronously, before the disabled fieldset is painted.
+    editorBusy.current = true;
+    testMutation.mutate(form, {
+      onSuccess: (result) => setTested({ form, result }),
+      onError: (error) => setTested({ form, result: { ok: false, message: formatTerminalError(error, t) } }),
+      onSettled: finishEditorAction,
+    });
   }
 
   function connectSelectedConnection() {
@@ -291,17 +278,16 @@ export function useSshConnectionManagement({
   }, [connectMutation.error, selectedConnection]);
 
   function reloadForm() {
+    if (editorBusy.current) return;
     if (latestFormConnection) setForm(sshConnectionToInput(latestFormConnection, workspaceId));
-    else { setDialogOpen(false); setDialogMode(null); }
-    saveMutation.reset();
+    else setDialogMode(null);
+    resetEditorActions();
   }
 
   function changeDialogOpen(open: boolean) {
-    setDialogOpen(open);
-    if (!open) {
-      setDialogMode(null);
-      setTestResult(null);
-    }
+    if (open || editorBusy.current) return;
+    setDialogMode(null);
+    resetEditorActions();
   }
 
   const canTest =
@@ -316,22 +302,22 @@ export function useSshConnectionManagement({
     confirmTrustAndConnect,
     connectSelectedConnection,
     dialogOpen,
-    editConnection,
+    editConnection: openEditor,
     externalChange,
     form,
     newConnection,
-    openConnectionSettings,
+    openConnectionSettings: (target?: SshConnection | null) => openEditor(target ?? selectedConnection),
     reloadForm,
     resetHostAndReconnect,
     resetHostKeyMutation,
     saveMutation,
     selectedConnection,
-    setTestResult,
+    closeTestResult: () => setTested(null),
     setTrustDialogState,
     submitConnection,
     testConnection,
     testMutation,
-    testResult,
+    testResult: tested?.form === form ? tested.result : null,
     trustDialogState,
     updateForm,
   };

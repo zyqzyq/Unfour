@@ -1,10 +1,14 @@
-import type { SshTaskRunEvent } from "@unfour/command-client";
+import type { SshTaskRunEvent, SshTaskStep } from "@unfour/command-client";
 import { taskDisplayStatus } from "./errors";
 import { formatFileSize } from "./sftp-format";
 import type { LiveTaskRunEvent } from "./task-run-events";
 
 export type TaskRunTranscriptLine = {
   key: string;
+  stepId?: string;
+  /** Final status recorded in a saved log, when a complete marker is available. */
+  recordedStatus?: string;
+  recordedStep?: Pick<SshTaskStep, "id" | "position" | "name">;
   kind: "header" | "command" | "output" | "meta" | "transfer" | "error";
   stream?: SshTaskRunEvent["stream"];
   text: string;
@@ -31,6 +35,7 @@ function headerLine(
 ): TaskRunTranscriptLine {
   return {
     key,
+    stepId,
     kind: "header",
     text: labels.stepHeader((event.position ?? 0) + 1, event.stepName?.trim() || stepId),
   };
@@ -43,6 +48,7 @@ function transferLine(
 ): TaskRunTranscriptLine {
   return {
     key,
+    stepId: event.stepId ?? undefined,
     kind: "transfer",
     text: labels.transfer(
       event.direction ?? "transfer",
@@ -85,11 +91,12 @@ function appendStep(
   }
   state.lines.push({
     key: `done-${event.sequence}`,
+    stepId: event.stepId,
     kind: "meta",
     text: labels.stepDone(taskDisplayStatus(event.status, event.error), stepDetails(event)),
   });
   if (event.error) {
-    state.lines.push({ key: `error-${event.sequence}`, kind: "error", text: labels.stepError(event.error) });
+    state.lines.push({ key: `error-${event.sequence}`, stepId: event.stepId, kind: "error", text: labels.stepError(event.error) });
   }
 }
 
@@ -139,4 +146,16 @@ export function buildTaskRunTranscript(
     state.lines.push(transferLine(transfer, `transfer-live-${stepId}`, labels));
   }
   return state.lines;
+}
+
+export function stepLogTargets(lines: TaskRunTranscriptLine[]) {
+  const targets = new Map<string, { key: string; recordedStatus?: string }>();
+  for (const { stepId, kind, key, recordedStatus } of lines) {
+    if (!stepId) continue;
+    const previous = targets.get(stepId);
+    if (!previous || kind === "error" || recordedStatus) {
+      targets.set(stepId, { key: recordedStatus === "success" && previous ? previous.key : key, recordedStatus });
+    }
+  }
+  return targets;
 }

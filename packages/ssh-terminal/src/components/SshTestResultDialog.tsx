@@ -1,4 +1,6 @@
 import { CheckCircle2, XCircle } from "lucide-react";
+import type { ReactElement } from "react";
+import type { SshTestResult } from "@unfour/command-client";
 import {
   Button,
   Dialog,
@@ -8,6 +10,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
   useI18n,
 } from "@unfour/ui";
 
@@ -17,17 +20,20 @@ import {
  * rendered here in a scrollable, wrapping body.
  */
 export function SshTestResultDialog({
-  onOpenChange,
+  children,
+  onClose,
   result,
 }: {
-  onOpenChange: (open: boolean) => void;
-  result: { ok: boolean; message: string } | null;
+  children: ReactElement;
+  onClose?: () => void;
+  result: SshTestResult | null;
 }) {
   const { t } = useI18n();
   const title = result?.ok ? t("ssh.dialog.testSuccess") : t("ssh.dialog.testFailed");
 
   return (
-    <Dialog onOpenChange={onOpenChange} open={result !== null}>
+    <Dialog onOpenChange={(open) => { if (!open) onClose?.(); }} open={result !== null}>
+      <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="w-[min(460px,calc(100vw-32px))]" title={title}>
         <DialogHeader>
           <DialogTitle>

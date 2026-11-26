@@ -63,9 +63,9 @@ describe("TaskRunDialog", () => {
     const detail = task();
     detail.steps = [{ id: "step", workspaceId: "workspace", taskId: "task", name: "Command", stepType: "command", position: 0, enabled: true, configVersion: 1,
       configJson: { command: "echo {{VERSION}}" }, createdAt: "", updatedAt: "", deletedAt: null }];
-    render(<TaskRunDialog activeEnvironmentName={null} automaticSecretInputNames={[]} inputScopeKey={0} connectionId="connection" connections={missing === "connection" ? [] : [connection()]}
+    render(<TaskRunDialog automaticSecretInputNames={[]} inputScopeKey={0} connectionId="connection" connections={missing === "connection" ? [] : [connection()]}
       environmentId={missing === "environment" ? "deleted" : ""} environmentLoadFailed={false} environments={[]} error={null}
-      filledFromWorkspace={false} inputValues={{ VERSION: missing === "inputs" ? "" : "v1" }} onConnectionChange={vi.fn()} onEnvironmentChange={vi.fn()}
+      inputSources={{ VERSION: "manual" }} inputValues={{ VERSION: missing === "inputs" ? "" : "v1" }} onConnectionChange={vi.fn()} onEnvironmentChange={vi.fn()}
       onInputChange={vi.fn()} onOpenChange={vi.fn()} onRun={onRun} onUsePrevious={onUsePrevious} open pending={missing === "pending"} secretInputNames={[]} task={detail} />);
     expect(screen.getByRole("button", { name: t(missing === "pending" ? "ssh.tasks.run.starting" : "ssh.tasks.actions.run") })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: t("ssh.tasks.run.usePrevious") }));
@@ -76,7 +76,6 @@ describe("TaskRunDialog", () => {
     const onEnvironmentChange = vi.fn();
     render(
       <TaskRunDialog
-        activeEnvironmentName="Dev"
         automaticSecretInputNames={[]}
         inputScopeKey={0}
         connectionId="connection"
@@ -88,7 +87,7 @@ describe("TaskRunDialog", () => {
           { id: "prod", name: "Prod" },
         ]}
         error={new Error("SSH_TASK_INPUTS_CHANGED")}
-        filledFromWorkspace
+        inputSources={{}}
         inputValues={{}}
         onConnectionChange={vi.fn()}
         onEnvironmentChange={onEnvironmentChange}
@@ -182,9 +181,9 @@ function inputProps(name = "VERSION"): DialogProps {
   const detail = task();
   detail.steps = [{ id: "step", workspaceId: "workspace", taskId: "task", name: "Command", stepType: "command", position: 0, enabled: true, configVersion: 1,
     configJson: { command: `echo {{${name}}}` }, createdAt: "", updatedAt: "", deletedAt: null }];
-  return { activeEnvironmentName: null, automaticSecretInputNames: [], inputScopeKey: 0,
+  return { automaticSecretInputNames: [], inputScopeKey: 0,
     connectionId: "connection", connections: [connection()], environmentId: "", environmentLoadFailed: false, environments: [], error: null,
-    filledFromWorkspace: false, inputValues: { [name]: "v1" }, onConnectionChange: vi.fn(), onEnvironmentChange: vi.fn(), onInputChange: vi.fn(),
+    inputSources: { [name]: "manual" }, inputValues: { [name]: "v1" }, onConnectionChange: vi.fn(), onEnvironmentChange: vi.fn(), onInputChange: vi.fn(),
     onOpenChange: vi.fn(), onRun: vi.fn(), onToggleSecret: vi.fn(), open: true, pending: false, secretInputNames: [], task: detail };
 }
 

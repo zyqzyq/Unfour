@@ -5,7 +5,6 @@ import { ConfirmDialog, useI18n } from "@unfour/ui";
 import { TerminalWorkspace } from "./components/TerminalWorkspace";
 import { SshConnectionTree } from "./components/SshConnectionTree";
 import { SshConnectionDialog } from "./components/SshConnectionDialog";
-import { SshTestResultDialog } from "./components/SshTestResultDialog";
 import { HostKeyTrustDialog } from "./components/HostKeyTrustDialog";
 import { useSshConnections } from "./hooks/useSshConnections";
 import { useSshConnectionManagement } from "./hooks/useSshConnectionManagement";
@@ -51,7 +50,6 @@ export function SshConnectionsPage({
     connections,
     connectMutation: terminal.connectMutation,
     workspaceId,
-    workspaceScope,
   });
   const { activeSessionId, setActiveSessionId, visibleSessions } = terminal;
 
@@ -189,12 +187,9 @@ export function SshConnectionsPage({
         open={connection.dialogOpen}
         pending={connection.saveMutation.isPending}
         testing={connection.testMutation.isPending}
-      >
-        <SshTestResultDialog
-          onOpenChange={(open) => !open && connection.setTestResult(null)}
-          result={connection.testResult}
-        />
-      </SshConnectionDialog>
+        testResult={connection.testResult}
+        onCloseTestResult={connection.closeTestResult}
+      />
       <ConfirmDialog
         confirmLabel={t("ssh.actions.closeSession")}
         description={

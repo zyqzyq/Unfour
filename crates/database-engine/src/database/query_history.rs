@@ -80,6 +80,7 @@ impl DatabaseService {
         &self,
         workspace_id: String,
         limit: Option<i64>,
+        search: Option<String>,
     ) -> AppResult<Vec<DbQueryHistoryEntry>> {
         validate_workspace_id(&workspace_id)?;
         let limit = limit.unwrap_or(200).clamp(1, 200);
@@ -92,12 +93,14 @@ impl DatabaseService {
               created_at AS executed_at, catalog, schema
             FROM db_query_history
             WHERE workspace_id = ?1
+              AND (?3 = '' OR instr(lower(sql), lower(?3)) > 0)
             ORDER BY created_at DESC
             LIMIT ?2
             "#,
         )
         .bind(workspace_id)
         .bind(limit)
+        .bind(search.as_deref().unwrap_or_default().trim())
         .fetch_all(self.db.pool())
         .await?;
 

@@ -1,4 +1,4 @@
-import { connectionTemporaryHandle, temporarySshLabel, type TemporarySshRoute, type TemporaryTaskExecutionMode, type SshConnection, type SshTaskDetail } from "@unfour/command-client";
+import { connectionTemporaryHandle, temporarySshLabel, type TemporarySshRoute, type TemporaryTaskExecutionMode, type SshConnection, type SshTaskDetail, type SshTaskInputSource } from "@unfour/command-client";
 import { Lock, LockOpen } from "lucide-react";
 import { useId, type ChangeEvent } from "react";
 import {
@@ -22,7 +22,6 @@ import { formatTaskRunError } from "../model/errors";
 import { TemporaryTaskExecutionControls } from "./TemporaryTaskExecutionControls";
 
 export function TaskRunDialog({
-  activeEnvironmentName,
   automaticSecretInputNames,
   connectionId,
   connections,
@@ -37,7 +36,7 @@ export function TaskRunDialog({
   environmentLoadFailed,
   environments,
   error,
-  filledFromWorkspace,
+  inputSources,
   inputValues,
   inputScopeKey,
   onConnectionChange,
@@ -54,7 +53,6 @@ export function TaskRunDialog({
   secretInputNames,
   task,
 }: {
-  activeEnvironmentName: string | null;
   automaticSecretInputNames: string[];
   connectionId: string;
   connections: SshConnection[];
@@ -70,7 +68,7 @@ export function TaskRunDialog({
   environmentLoadFailed: boolean;
   environments: Array<{ id: string; name: string }>;
   error: Error | null;
-  filledFromWorkspace: boolean;
+  inputSources: Record<string, SshTaskInputSource>;
   inputValues: Record<string, string>;
   inputScopeKey: number;
   onConnectionChange: (connectionId: string) => void;
@@ -93,7 +91,8 @@ export function TaskRunDialog({
   const targetValue = temporaryHandle ? `temporary:${temporaryHandle}` : connectionId;
   const temporaryLabel = (item: TemporarySshRoute) => temporarySshLabel(item, t("network.temporarySession", { id: item.handle.slice(-8) }));
   const parent = connection && connectionTemporaryHandle("ssh", connection.workspaceId, connection.id);
-  const missingEnvironment = Boolean(environmentId && !environments.some((env) => env.id === environmentId));
+  const environment = environments.find((env) => env.id === environmentId);
+  const missingEnvironment = Boolean(environmentId && !environment);
   const missing = detectedInputs.some((name) => !inputValues[name]?.trim());
   const commandOnly = !task?.steps.some((step) => step.enabled && step.stepType !== "command");
   const terminalBlocked = temporaryHandle && temporaryExecutionMode === "terminal" && (!terminalReady || !commandOnly || temporary?.terminalRecoveryRequired);
@@ -175,15 +174,6 @@ export function TaskRunDialog({
               <h3 className="mb-2 text-[12px] font-semibold text-[var(--u-color-text)]">
                 {t("ssh.tasks.run.inputs")}
               </h3>
-              {filledFromWorkspace && (
-                <p className="mb-2 text-[11px] text-[var(--u-color-text-muted)]">
-                  {activeEnvironmentName
-                    ? t("ssh.tasks.run.workspaceDefaultsWithEnv", {
-                        name: activeEnvironmentName,
-                      })
-                    : t("ssh.tasks.run.workspaceDefaults")}
-                </p>
-              )}
               {detectedInputs.length ? (
                 <div className="grid grid-cols-2 gap-2">
                   {detectedInputs.map((name, index) => (
@@ -197,6 +187,9 @@ export function TaskRunDialog({
                       onToggleSecret={onToggleSecret}
                       pending={pending}
                       secret={secretNames.has(name)}
+                      sourceLabel={inputSources[name] === "environment" && !environment
+                        ? t("ssh.tasks.run.inputSource.missingEnvironment")
+                        : t(`ssh.tasks.run.inputSource.${inputSources[name] ?? "manual"}`, { name: environment?.name ?? "" })}
                       value={inputValues[name] ?? ""}
                     />
                   ))}
@@ -250,7 +243,7 @@ export function TaskRunDialog({
   );
 }
 
-function TaskRunInputField({ automatic, autoFocus, inputScopeKey, name, onChange, onToggleSecret, pending, secret, value }: {
+function TaskRunInputField({ automatic, autoFocus, inputScopeKey, name, onChange, onToggleSecret, pending, secret, sourceLabel, value }: {
   automatic: boolean;
   autoFocus: boolean;
   inputScopeKey: number;
@@ -259,6 +252,7 @@ function TaskRunInputField({ automatic, autoFocus, inputScopeKey, name, onChange
   onToggleSecret?: (name: string) => void;
   pending: boolean;
   secret: boolean;
+  sourceLabel: string;
   value: string;
 }) {
   const { t } = useI18n();
@@ -266,7 +260,7 @@ function TaskRunInputField({ automatic, autoFocus, inputScopeKey, name, onChange
   const sensitive = automatic || secret;
   const action = t(automatic ? "ssh.tasks.run.secretInput" : sensitive ? "ssh.tasks.run.unmarkSensitive" : "ssh.tasks.run.markSensitive");
   const tooltip = automatic ? t("ssh.tasks.run.automaticSensitive") : action;
-  const inputProps = { id, "aria-label": name, autoComplete: "off", autoFocus, disabled: pending, value,
+  const inputProps = { id, "aria-label": name, "aria-describedby": `${id}-source`, autoComplete: "off", autoFocus, disabled: pending, value,
     onChange: (event: ChangeEvent<HTMLInputElement>) => onChange(event.target.value) };
 
   return (
@@ -286,6 +280,7 @@ function TaskRunInputField({ automatic, autoFocus, inputScopeKey, name, onChange
         >
           {sensitive ? <Lock aria-hidden="true" size={12} /> : <LockOpen aria-hidden="true" size={12} />}
         </IconButton>
+        <span className="ml-auto max-w-[50%] truncate text-[11px] text-[var(--u-color-text-muted)]" id={`${id}-source`} title={sourceLabel}>{sourceLabel}</span>
       </div>
       {sensitive ? <SecretInput {...inputProps} key={inputScopeKey} /> : <Input {...inputProps} className="min-w-0" type="text" />}
     </div>

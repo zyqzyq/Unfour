@@ -17,7 +17,7 @@ impl MemoryTaskRecord {
         if self.truncated {
             return;
         }
-        let line = format_task_log_event(event);
+        let line = log_format::encode_event(event);
         let available = MAX_MEMORY_LOG.saturating_sub(self.log.len());
         if line.len() <= available {
             self.log.push_str(&line);
@@ -100,7 +100,7 @@ impl SshService {
             MemoryTaskRecord {
                 run: run.clone(),
                 cancel: cancel.clone(),
-                log: String::new(),
+                log: log_format::HEADER.to_owned(),
                 truncated: false,
             },
             mode == "terminal",

@@ -43,9 +43,11 @@ for (const sourceState of ["shadowed", "removed", "public"] as const) {
     const region = () => dialog.getByLabel("REGION", { exact: true });
     const environment = dialog.getByRole("combobox", { name: "Variable environment", exact: true });
     await expect(region()).toHaveValue("environment-public");
+    await expect(region()).toHaveAccessibleDescription("Environment · Public environment");
     await expect(region()).toHaveAttribute("type", "text");
     await dialog.getByRole("button", { name: "Use previous parameters" }).click();
     await expect(region()).toHaveValue(sourceState === "removed" ? "" : `workspace-${sourceState === "public" ? "public" : "private"}`);
+    await expect(region()).toHaveAccessibleDescription("Workspace");
     await expect(region()).toHaveAttribute("type", "password");
     const lock = dialog.getByRole("button", { name: "REGION: Sensitive input (never saved)", exact: true });
     await expect(lock).toBeDisabled();
@@ -55,12 +57,14 @@ for (const sourceState of ["shadowed", "removed", "public"] as const) {
     await expect(region()).toHaveAttribute("type", "password");
     // A manual source edit must keep the secret provenance, including partial edits.
     await region().fill("edited-private");
+    await expect(region()).toHaveAccessibleDescription("Manual input");
     await expect(lock).toBeDisabled();
     await expect(region()).toHaveAttribute("type", "password");
     await dialog.getByRole("button", { name: "Show secret value", exact: true }).click();
     await expect(region()).toHaveAttribute("type", "text");
     await environment.selectOption("private-env");
     await expect(region()).toHaveValue("environment-private");
+    await expect(region()).toHaveAccessibleDescription("Environment · Private environment");
     await expect(region()).toHaveAttribute("type", "password");
     await expect(lock).toBeDisabled();
     await dialog.getByRole("button", { name: "Show secret value", exact: true }).click();

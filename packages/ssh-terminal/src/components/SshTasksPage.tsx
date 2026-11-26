@@ -92,13 +92,12 @@ export function SshTasksPage({
     historyLogLoading,
     openHistoryRun,
     prepareRun,
-    runActiveEnvironmentName,
     runConnectionId,
     runDialogTask,
     runEnvironmentId,
     runEnvironmentLoadFailed,
     runEnvironments,
-    runFilledFromWorkspace,
+    runInputSources,
     runInputs,
     runMutation,
     runSecretInputs,
@@ -578,12 +577,12 @@ export function SshTasksPage({
             }}
             run={activeRun}
             task={activeRunTask}
+            usingStartedDefinition={runSession.usingStartedDefinition}
           />
         )}
       </main>
 
       <TaskRunDialog
-        activeEnvironmentName={runActiveEnvironmentName}
         automaticSecretInputNames={runAutomaticSecretInputs}
         connectionId={runConnectionId}
         connections={connections}
@@ -599,7 +598,7 @@ export function SshTasksPage({
         environmentLoadFailed={runEnvironmentLoadFailed}
         environments={runEnvironments.map(({ id, name }) => ({ id, name }))}
         error={runMutation.error}
-        filledFromWorkspace={runFilledFromWorkspace}
+        inputSources={runInputSources}
         inputValues={runInputs}
         inputScopeKey={runInputScopeKey}
         onConnectionChange={setRunConnectionId}

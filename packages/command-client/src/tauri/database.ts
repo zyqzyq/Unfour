@@ -140,8 +140,8 @@ export function recordDatabaseQueryHistory(input: DbQueryHistoryEntry) {
   return call<void>("database_query_history_record", { input });
 }
 
-export function listDatabaseQueryHistory(workspaceId: string, limit = 200) {
-  return call<DbQueryHistoryEntry[]>("database_query_history_list", { workspaceId, limit });
+export function listDatabaseQueryHistory(workspaceId: string, limit = 200, search?: string) {
+  return call<DbQueryHistoryEntry[]>("database_query_history_list", { workspaceId, limit, search });
 }
 
 export function clearDatabaseQueryHistory(workspaceId: string) {

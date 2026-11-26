@@ -11,15 +11,19 @@ pub(super) struct TaskLogWriter {
 
 impl TaskLogWriter {
     pub(super) fn create(path: &std::path::Path) -> AppResult<Self> {
-        let file = std::fs::OpenOptions::new()
+        let mut file = std::fs::OpenOptions::new()
             .create(true)
             .truncate(true)
             .write(true)
             .open(path)
             .map_err(|error| AppError::Config(format!("failed to create SSH task log: {error}")))?;
+        file.write_all(log_format::HEADER.as_bytes())
+            .map_err(|error| {
+                AppError::Config(format!("failed to initialize SSH task log: {error}"))
+            })?;
         Ok(Self {
             file,
-            bytes_written: 0,
+            bytes_written: log_format::HEADER.len() as u64,
             truncated: false,
         })
     }
@@ -28,7 +32,7 @@ impl TaskLogWriter {
         if self.truncated {
             return;
         }
-        let line = format_task_log_event(event);
+        let line = log_format::encode_event(event);
         self.write_bounded(line.as_bytes());
     }
 

@@ -17,6 +17,7 @@ export type VariableTableItem = {
 
 export function VariableTable<T extends VariableTableItem>({
   items,
+  nameFilter = "",
   onChange,
   overridingKeys,
   renderDecoration,
@@ -24,6 +25,7 @@ export function VariableTable<T extends VariableTableItem>({
   title,
 }: {
   items: T[];
+  nameFilter?: string;
   onChange: (items: T[]) => void;
   overridingKeys?: ReadonlySet<string>;
   renderDecoration?: (item: T) => ReactNode;
@@ -38,6 +40,12 @@ export function VariableTable<T extends VariableTableItem>({
 }) {
   const { t } = useI18n();
   const [revealedIds, setRevealedIds] = useState<Set<string>>(() => new Set());
+  const [editingRows, setEditingRows] = useState<Set<number>>(() => new Set());
+  const query = nameFilter.trim().toLowerCase();
+  // Keep edited rows in place while moving between controls in the table.
+  const visibleRows = items.map((item, index) => ({ item, index })).filter(
+    ({ item, index }) => item.key.toLowerCase().includes(query) || editingRows.has(index),
+  );
   const duplicateKeys = findDuplicateKeys(items);
   const normalizedOverridingKeys = new Set(
     [...(overridingKeys ?? [])].map((key) => key.trim().toLowerCase()).filter(Boolean),
@@ -46,6 +54,9 @@ export function VariableTable<T extends VariableTableItem>({
     "h-[32px] rounded-none border-0 bg-transparent px-0 text-[12px] hover:border-0 focus:border-0 focus:ring-0 focus-visible:outline-none disabled:bg-transparent disabled:text-[var(--u-color-text-soft)]";
 
   function update(index: number, patch: Partial<T>) {
+    if (patch.key !== undefined && !patch.key.toLowerCase().includes(query) && !editingRows.has(index)) {
+      setEditingRows((current) => new Set(current).add(index));
+    }
     onChange(
       items.map((item, itemIndex) =>
         itemIndex === index ? ({ ...item, ...patch } as T) : item,
@@ -54,10 +65,22 @@ export function VariableTable<T extends VariableTableItem>({
   }
 
   function remove(index: number) {
+    setEditingRows(new Set());
+    // Unsaved rows use position-based keys. Keep each reveal with its own row after deletion.
+    setRevealedIds((current) => {
+      const next = new Set<string>();
+      items.forEach((item, position) => {
+        if (position === index || !current.has(item.id ?? `new-${position}`)) return;
+        const nextPosition = position < index ? position : position - 1;
+        next.add(item.id ?? `new-${nextPosition}`);
+      });
+      return next;
+    });
     onChange(items.filter((_, itemIndex) => itemIndex !== index));
   }
 
   function add() {
+    setEditingRows((current) => new Set(current).add(items.length));
     onChange([
       ...items,
       {
@@ -72,7 +95,14 @@ export function VariableTable<T extends VariableTableItem>({
   }
 
   return (
-    <div className="space-y-1.5">
+    <div
+      className="space-y-1.5"
+      onBlur={(event) => {
+        if (editingRows.size && !event.currentTarget.contains(event.relatedTarget)) {
+          setEditingRows(new Set());
+        }
+      }}
+    >
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold uppercase text-[var(--u-color-text-muted)]">
           {title}
@@ -99,12 +129,12 @@ export function VariableTable<T extends VariableTableItem>({
           {renderDecoration && <span />}
           <span />
         </div>
-        {items.length === 0 ? (
-          <div className="px-3 py-5 text-center text-[12px] text-[var(--u-color-text-muted)]">
-            {t("variables.empty")}
+        {visibleRows.length === 0 ? (
+          <div role="status" className="px-3 py-5 text-center text-[12px] text-[var(--u-color-text-muted)]">
+            {t(items.length ? "variables.noMatchingNames" : "variables.empty")}
           </div>
         ) : (
-          items.map((item, index) => {
+          visibleRows.map(({ item, index }) => {
             const rowId = item.id ?? `new-${index}`;
             const revealed = revealedIds.has(rowId);
             const presentation = valuePresentation?.(item);
@@ -131,6 +161,7 @@ export function VariableTable<T extends VariableTableItem>({
                 />
                 <div className="min-w-0">
                   <Input
+                    autoFocus={!item.id && editingRows.has(index)}
                     aria-invalid={
                       duplicateKeys.has(item.key.trim().toLowerCase()) || undefined
                     }

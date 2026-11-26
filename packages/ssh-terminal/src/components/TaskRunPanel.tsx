@@ -4,13 +4,15 @@ import type {
   SshTaskRunEvent,
 } from "@unfour/command-client";
 import { isTemporarySshTaskRun } from "@unfour/command-client";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Button, StatusBadge, useI18n } from "@unfour/ui";
 import { CircleStop, FolderOpen, X } from "lucide-react";
 import { formatTaskHistoryLog, formatTaskRunError, taskDisplayStatus } from "../model/errors";
-import { buildTaskRunTranscript } from "../model/task-run-transcript";
+import { buildTaskRunTranscript, stepLogTargets } from "../model/task-run-transcript";
+import { historyTranscript, runStepList } from "../model/task-run-history-log";
+import { taskVersion } from "../model/task-run-context";
 import type { LiveTaskRunEvent } from "../model/task-run-events";
 
 const HEIGHT_KEY = "unfour.ssh.task-run-panel-height";
@@ -28,6 +30,7 @@ export function TaskRunPanel({
   onRerun,
   run,
   task,
+  usingStartedDefinition = false,
 }: {
   cancelling: boolean;
   events: LiveTaskRunEvent[];
@@ -38,17 +41,20 @@ export function TaskRunPanel({
   onRerun?: () => void;
   run: SshTaskRun;
   task: SshTaskDetail;
+  usingStartedDefinition?: boolean;
 }) {
   const { t } = useI18n();
   const [height, setHeight] = useState(readStoredHeight);
   const dragRef = useRef<{ startY: number; startHeight: number } | null>(null);
   const outputRef = useRef<HTMLPreElement | null>(null);
-  const [outputFollow, setOutputFollow] = useState({ runId: run.id, following: true });
+  const outputId = useId();
+  type FollowMode = "following" | "reading" | "step";
+  const [outputFollow, setOutputFollow] = useState<{ runId: string; mode: FollowMode }>({ runId: run.id, mode: "following" });
   // A short log may never dispatch scroll; reset on identity change itself.
   if (outputFollow.runId !== run.id) {
-    setOutputFollow({ runId: run.id, following: true });
+    setOutputFollow({ runId: run.id, mode: "following" });
   }
-  const following = outputFollow.following;
+  const following = outputFollow.mode === "following";
 
   useEffect(() => {
     localStorage.setItem(HEIGHT_KEY, String(height));
@@ -94,7 +100,7 @@ export function TaskRunPanel({
     .reverse()
     .find((event) => event.status === "running");
 
-  const transcript = useMemo(
+  const liveTranscript = useMemo(
     () =>
       buildTaskRunTranscript(events, {
         stepHeader: (position, name) => t("ssh.tasks.run.stepHeader", { position, name }),
@@ -124,15 +130,30 @@ export function TaskRunPanel({
     [events, t],
   );
 
-  const hasLiveTranscript = transcript.length > 0;
-  const historyLog = formatTaskHistoryLog((logText ?? "").trim(), t);
-  const showHistoryLog = !hasLiveTranscript && !running && Boolean(historyLog);
+  const transcript = useMemo(() => {
+    if (liveTranscript.length || logLoading || !logText) return liveTranscript;
+    return historyTranscript(logText, (text) => formatTaskHistoryLog(text, t));
+  }, [liveTranscript, logLoading, logText, t]);
+  const steps = useMemo(() => {
+    const sameTask = run.context?.taskVersion ? run.context.taskVersion === taskVersion(task) : usingStartedDefinition;
+    return runStepList(sameTask ? task.steps : [], events, transcript);
+  }, [events, run.context, task, transcript, usingStartedDefinition]);
+  const targets = useMemo(() => stepLogTargets(transcript), [transcript]);
+
+  function showStepLog(stepId: string) {
+    const output = outputRef.current;
+    const target = output?.ownerDocument.getElementById(`${outputId}-${targets.get(stepId)?.key}`);
+    if (!output || !target) return;
+    setOutputFollow({ runId: run.id, mode: "step" });
+    output.scrollTop += target.getBoundingClientRect().top - output.getBoundingClientRect().top;
+    output.focus({ preventScroll: true });
+  }
 
   useLayoutEffect(() => {
     const node = outputRef.current;
     if (!node || !following) return;
     node.scrollTop = node.scrollHeight;
-  }, [transcript, historyLog, logLoading, following, run.id]);
+  }, [transcript, logLoading, following, run.id]);
 
   return (
     <section
@@ -157,7 +178,7 @@ export function TaskRunPanel({
             {t(`ssh.tasks.run.status.${status}`)}
           </StatusBadge>
           {isTemporarySshTaskRun(run) && <span className="text-[11px] text-[var(--u-color-text-muted)]" title={t("ssh.tasks.run.temporaryHelp")}>{t("ssh.tasks.run.memoryOnly")}</span>}
-          {currentStep && (
+          {running && currentStep && (
             <span className="truncate text-[11px] text-[var(--u-color-text-muted)]">
               {t("ssh.tasks.run.currentStep", { name: currentStep.stepName ?? "" })}
             </span>
@@ -165,7 +186,7 @@ export function TaskRunPanel({
         </div>
         <div className="flex items-center gap-1">
           {!following && <Button onClick={() => {
-            setOutputFollow({ runId: run.id, following: true });
+            setOutputFollow({ runId: run.id, mode: "following" });
             outputRef.current?.focus({ preventScroll: true });
           }} size="sm" variant="secondary">{t("ssh.tasks.run.followOutput")}</Button>}
           {!running && onRerun && <Button onClick={onRerun} size="sm" variant="secondary">{t("ssh.tasks.actions.rerun")}</Button>}
@@ -193,14 +214,14 @@ export function TaskRunPanel({
           )}
         </div>
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-[300px_minmax(0,1fr)]">
-        <ol className="min-h-0 overflow-y-auto border-r border-[var(--u-color-border)] bg-[var(--u-color-surface)] p-2">
-          {task.steps
-            .filter((step) => step.enabled)
-            .map((step) => {
+      <div className={`grid min-h-0 flex-1 ${steps.length ? "grid-cols-[300px_minmax(0,1fr)]" : "grid-cols-1"}`}>
+        {steps.length > 0 && <ol className="min-h-0 overflow-y-auto border-r border-[var(--u-color-border)] bg-[var(--u-color-surface)] p-2">
+          {steps.map((step) => {
               const event = stepEvents.get(step.id);
               const transfer = transfers.get(step.id);
-              const stepStatus = taskDisplayStatus(event?.status ?? "pending", event?.error);
+              const observedStatus = event?.status ?? targets.get(step.id)?.recordedStatus;
+              const stepStatus = taskDisplayStatus(observedStatus ?? "pending", event?.error);
+              const showStatus = running || (observedStatus && observedStatus !== "running");
               const progress = transfer?.totalBytes
                 ? Math.min(
                     100,
@@ -208,60 +229,73 @@ export function TaskRunPanel({
                   )
                 : null;
               return (
-                <li className="mb-1 rounded-[var(--u-radius-md)] border border-[var(--u-color-border)] bg-[var(--u-color-canvas)] px-2 py-2.5" key={step.id}>
-                  <div className="flex items-center gap-2 text-[12px]">
-                    <span className="w-5 text-right font-mono text-[var(--u-color-text-soft)]">
-                      {step.position + 1}
+                <li className="mb-1 rounded-[var(--u-radius-md)] border border-[var(--u-color-border)] bg-[var(--u-color-canvas)]" key={step.id}>
+                  <button
+                    aria-controls={outputId}
+                    className="block w-full rounded-[var(--u-radius-md)] px-2 py-2.5 text-left enabled:cursor-pointer enabled:hover:bg-[var(--u-color-surface-hover)] focus-visible:outline-2 focus-visible:outline-[var(--u-color-focus)]"
+                    disabled={!targets.has(step.id)}
+                    onClick={() => showStepLog(step.id)}
+                    title={targets.has(step.id) ? t("ssh.tasks.run.jumpToStep", { name: step.name }) : t("ssh.tasks.run.stepLogUnavailable")}
+                    type="button"
+                  >
+                    <span className="flex items-center gap-2 text-[12px]">
+                      <span className="w-5 text-right font-mono text-[var(--u-color-text-soft)]">
+                        {step.position + 1}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[var(--u-color-text)]">
+                        {step.name}
+                      </span>
+                      {showStatus && <StatusBadge tone={statusTone(stepStatus)}>
+                        {t(`ssh.tasks.run.status.${stepStatus}`)}
+                      </StatusBadge>}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-[var(--u-color-text)]">
-                      {step.name}
-                    </span>
-                    <StatusBadge tone={statusTone(stepStatus)}>
-                      {t(`ssh.tasks.run.status.${stepStatus}`)}
-                    </StatusBadge>
-                  </div>
-                  {event?.durationMs != null || event?.exitCode != null ? (
-                    <div className="ml-7 mt-0.5 text-[10px] text-[var(--u-color-text-soft)]">
-                      {event?.durationMs !== null && event?.durationMs !== undefined
-                        ? `${event.durationMs} ms`
-                        : ""}
-                      {event?.exitCode !== null && event?.exitCode !== undefined
-                        ? ` · ${t("ssh.tasks.run.exitCode", { code: event.exitCode })}`
-                        : ""}
-                    </div>
-                  ) : null}
-                  {progress !== null && (
-                    <div className="ml-7 mt-1 h-1 overflow-hidden bg-[var(--u-color-surface-muted)]">
-                      <div
-                        className="h-full bg-[var(--u-color-primary)] transition-[width] duration-150"
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
-                  )}
+                    {event?.durationMs != null || event?.exitCode != null ? (
+                      <span className="ml-7 mt-0.5 block text-[10px] text-[var(--u-color-text-soft)]">
+                        {event?.durationMs !== null && event?.durationMs !== undefined
+                          ? `${event.durationMs} ms`
+                          : ""}
+                        {event?.exitCode !== null && event?.exitCode !== undefined
+                          ? ` · ${t("ssh.tasks.run.exitCode", { code: event.exitCode })}`
+                          : ""}
+                      </span>
+                    ) : null}
+                    {progress !== null && (
+                      <span className="ml-7 mt-1 block h-1 overflow-hidden bg-[var(--u-color-surface-muted)]">
+                        <span
+                          className="block h-full bg-[var(--u-color-primary)] transition-[width] duration-150"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </span>
+                    )}
+                  </button>
                   {event?.error && (
-                    <p className="ml-7 mt-1 select-text text-[10px] text-[var(--u-color-danger)]">
+                    <p className="ml-9 mr-2 pb-2 select-text text-[10px] text-[var(--u-color-danger)]">
                       {formatTaskRunError(event.error, t)}
                     </p>
                   )}
                 </li>
               );
             })}
-        </ol>
+        </ol>}
         <pre
           aria-label={t("ssh.tasks.run.output")}
+          id={outputId}
           className="min-h-0 overflow-auto whitespace-pre-wrap break-words bg-[var(--u-color-canvas)] p-4 font-mono text-[12px] leading-6 text-[var(--u-color-text)]"
           onScroll={(event) => {
             const node = event.currentTarget;
             // Kept-alive modules have no viewport while hidden.
             if (!node.clientHeight) return;
             const atBottom = node.scrollHeight - node.scrollTop - node.clientHeight <= 24;
-            setOutputFollow((current) => current.runId === run.id && current.following === atBottom
-              ? current : { runId: run.id, following: atBottom });
+            const mode = atBottom ? "following" : "reading";
+            // A jump to the last step can land at the bottom. Only the Follow
+            // button should restart automatic scrolling after a step jump.
+            setOutputFollow((current) => current.runId === run.id && (current.mode === "step" || current.mode === mode)
+              ? current : { runId: run.id, mode });
           }}
           ref={outputRef}
           tabIndex={0}
         >
-          {hasLiveTranscript ? (
+          {transcript.length ? (
             transcript.map((line) => (
               <span
                 className={
@@ -276,6 +310,7 @@ export function TaskRunPanel({
                           : undefined
                 }
                 key={line.key}
+                id={line.stepId && targets.get(line.stepId)?.key === line.key ? `${outputId}-${line.key}` : undefined}
               >
                 {line.kind === "header" || line.kind === "meta" || line.kind === "transfer"
                   ? `${line.text}\n`
@@ -284,8 +319,6 @@ export function TaskRunPanel({
             ))
           ) : logLoading ? (
             t("ssh.tasks.run.loadingLog")
-          ) : showHistoryLog ? (
-            historyLog
           ) : error ? (
             <span className="text-[var(--u-color-danger)]">{formatTaskRunError(error, t)}</span>
           ) : running || stepEvents.size > 0 ? (

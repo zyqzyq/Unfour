@@ -1,5 +1,45 @@
 import { expect, test } from "@playwright/test";
 
+test("copies the response body and shows clipboard feedback in the response toolbar", async ({ page }) => {
+  let finishWrite!: () => void;
+  const firstWrite = new Promise<void>((resolve) => { finishWrite = resolve; });
+  await page.exposeFunction("waitForFirstCopy", () => firstWrite);
+  await page.addInitScript(() => {
+    localStorage.setItem("unfour.locale", "en");
+    let attempts = 0;
+    Object.defineProperty(navigator, "clipboard", { value: {
+      async writeText(value: string) {
+        sessionStorage.setItem("copy-attempts", String(++attempts));
+        if (attempts === 1) {
+          await (window as unknown as { waitForFirstCopy: () => Promise<void> }).waitForFirstCopy();
+          throw new DOMException("Denied", "NotAllowedError");
+        }
+        sessionStorage.setItem("test-clipboard", value);
+      },
+    } });
+  });
+  const body = '{ "message": "original spacing" }';
+  await page.route("https://example.test/copy", (route) => route.fulfill({ contentType: "application/json", body }));
+  await page.goto("/");
+  await page.getByRole("textbox", { name: "Request URL" }).fill("https://example.test/copy");
+  await page.getByRole("button", { name: "Send", exact: true }).first().click();
+  const copy = page.getByRole("button", { name: "Copy response body" });
+  await copy.focus();
+  await page.keyboard.press("Enter");
+  await expect(copy).toHaveAttribute("aria-busy", "true");
+  await expect(copy).toBeFocused();
+  await page.keyboard.press("Enter");
+  expect(await page.evaluate(() => sessionStorage.getItem("copy-attempts"))).toBe("1");
+  finishWrite();
+  await expect(page.getByText("Could not copy the response body.")).toBeVisible();
+  await expect(copy).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(copy).toHaveAttribute("title", "Response body copied");
+  expect(await page.evaluate(() => sessionStorage.getItem("test-clipboard"))).toBe(body);
+  await expect(copy).toBeFocused();
+  await expect(copy).toHaveAttribute("title", "Copy response body");
+});
+
 test("request history folds down and gives its space back to collections", async ({ page }, testInfo) => {
   await page.addInitScript(() => localStorage.setItem("unfour.locale", "zh-CN"));
   await page.setViewportSize({ width: 1024, height: 640 });

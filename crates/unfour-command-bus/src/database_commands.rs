@@ -282,8 +282,11 @@ impl CommandBus {
         &self,
         workspace_id: String,
         limit: Option<i64>,
+        search: Option<String>,
     ) -> AppResult<Vec<DbQueryHistoryEntry>> {
-        self.database.list_query_history(workspace_id, limit).await
+        self.database
+            .list_query_history(workspace_id, limit, search)
+            .await
     }
 
     pub async fn clear_database_query_history(&self, workspace_id: String) -> AppResult<()> {

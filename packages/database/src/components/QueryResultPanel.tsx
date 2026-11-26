@@ -1,8 +1,7 @@
-import { Info, Trash2 } from "lucide-react";
+import { Info } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { DatabaseQueryResult, DatabaseStatementResult } from "@unfour/command-client";
 import {
-  Button,
   EmptyState,
   ErrorState,
   LoadingState,
@@ -16,18 +15,21 @@ import type { DatabaseResultTab, SqlHistoryEntry } from "../model/types";
 import { describeDatabaseError } from "../result-utils";
 import { QueryResultOutputActions, type QueryResultOutputScope } from "./QueryResultOutputActions";
 import { DatabaseErrorDetails } from "./DatabaseErrorDetails";
+import { QueryHistoryPanel } from "./QueryHistoryPanel";
 import { TableDataGrid } from "./TableDataGrid";
 import { SqlBatchMessages } from "./SqlBatchMessages";
 import { filterQueryResultRows, type QueryResultView } from "./query-result-view";
 import type { SortState } from "./table-data-grid-helpers";
 
 export function QueryResultPanel({
+  active,
   activeResultIndex,
   activeTab,
   error,
-  history,
+  historyCount,
+  workspaceId,
+  workspaceName,
   isPending,
-  onClearHistory,
   onSelectHistory,
   onSelectResultSet,
   onSelectTab,
@@ -41,9 +43,11 @@ export function QueryResultPanel({
   activeResultIndex: number;
   activeTab: DatabaseResultTab;
   error: unknown;
-  history: SqlHistoryEntry[];
+  active: boolean;
+  historyCount: number;
+  workspaceId: string;
+  workspaceName: string;
   isPending: boolean;
-  onClearHistory: () => void;
   onSelectHistory: (entry: SqlHistoryEntry) => void;
   onSelectResultSet: (index: number) => void;
   onSelectTab: (tab: DatabaseResultTab) => void;
@@ -61,6 +65,7 @@ export function QueryResultPanel({
   const skipped = statement?.status === "skipped";
   const displayResult = pendingConfirmation || isPending || selectedError || skipped ? null : result;
   const [scope, setScope] = useState<QueryResultOutputScope>("view");
+  const [historySearch, setHistorySearch] = useState("");
   const [filter, setFilter] = useState("");
   const [sort, setSort] = useState<SortState | null>(null);
   const [page, setPage] = useState(0);
@@ -92,12 +97,12 @@ export function QueryResultPanel({
           { id: "logs", title: t("database.result.tabLogs") },
           {
             id: "history",
-            meta: <span className="text-[length:var(--u-font-size-caption)] text-[var(--u-color-text-muted)]">{history.length}</span>,
+            meta: <span className="text-[length:var(--u-font-size-caption)] text-[var(--u-color-text-muted)]">{historyCount}</span>,
             title: t("database.history.tab"),
           },
         ]}
       />
-      <Toolbar className="h-auto min-h-10 flex-wrap gap-y-2 px-3 py-1.5">
+      {activeTab !== "history" && <Toolbar className="h-auto min-h-10 flex-wrap gap-y-2 px-3 py-1.5">
         <ToolbarGroup className="flex-wrap gap-2">
           {pendingConfirmation ? (
             <StatusBadge tone="warning">{t("database.batch.confirmationRequired")}</StatusBadge>
@@ -127,16 +132,9 @@ export function QueryResultPanel({
           ) : null}
         </ToolbarGroup>
         <ToolbarGroup>
-          {activeTab === "history" ? (
-            <Button disabled={!history.length} onClick={onClearHistory} size="sm" type="button" variant="outline">
-              <Trash2 size={13} />
-              {t("database.actions.clearHistory")}
-            </Button>
-          ) : (
-            <QueryResultOutputActions result={displayResult} view={queryView} scope={scope} onScopeChange={setScope} />
-          )}
+          <QueryResultOutputActions result={displayResult} view={queryView} scope={scope} onScopeChange={setScope} />
         </ToolbarGroup>
-      </Toolbar>
+      </Toolbar>}
       {executionNotice ? <div role="status" className="px-2 py-1 text-[12px] text-[var(--u-color-text-muted)]">{executionNotice}</div> : null}
       {displayResult?.truncated ? (
         <div role="status" className="px-2 py-1 text-[12px] text-[var(--u-color-text-muted)]">
@@ -182,7 +180,17 @@ export function QueryResultPanel({
         ? renderResults({ error: executionError, isPending, result: null, t })
         : statements.length ? <SqlBatchMessages statements={statements} /> : <Messages results={results} result={result} t={t} />)}
       {activeTab === "logs" && !pendingConfirmation && (statements.length ? <SqlBatchMessages statements={statements} /> : <Logs error={executionError} isPending={isPending} results={results} result={result} t={t} />)}
-      {activeTab === "history" && <History entries={history} onSelect={onSelectHistory} />}
+      {activeTab === "history" && (
+        <QueryHistoryPanel
+          active={active}
+          hasHistory={historyCount > 0}
+          onSearch={setHistorySearch}
+          onSelect={onSelectHistory}
+          search={historySearch}
+          workspaceId={workspaceId}
+          workspaceName={workspaceName}
+        />
+      )}
     </section>
   );
 }
@@ -366,53 +374,4 @@ function Logs({
             : t("database.result.noLogs")}
     </pre>
   );
-}
-
-function History({
-  entries,
-  onSelect,
-}: {
-  entries: SqlHistoryEntry[];
-  onSelect: (entry: SqlHistoryEntry) => void;
-}) {
-  const { t } = useI18n();
-
-  if (!entries.length) {
-    return <EmptyState className="m-2 min-h-0 flex-1">{t("database.history.empty")}</EmptyState>;
-  }
-
-  return (
-    <div className="min-h-0 flex-1 overflow-auto text-[12px]">
-      {entries.map((entry) => (
-        <button
-          className="grid w-full cursor-pointer grid-cols-[72px_80px_minmax(0,1fr)_100px] items-center gap-3 border-b border-[var(--u-color-border)] px-3 py-3 text-left transition-colors hover:bg-[var(--u-color-surface-hover)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--u-color-focus)]"
-          key={entry.id}
-          onClick={() => onSelect(entry)}
-          title={entry.sql}
-          type="button"
-        >
-          <span className="text-[var(--u-color-text-soft)]">{formatHistoryTime(entry.executedAt)}</span>
-          <StatusBadge tone={entry.status === "success" ? "success" : "danger"}>
-            {entry.status === "success"
-              ? t("database.history.statusSuccess")
-              : t("database.history.statusFailed")}
-          </StatusBadge>
-          <span className="truncate font-mono text-[var(--u-color-text)]">{entry.sql}</span>
-          <span className="truncate text-right text-[var(--u-color-text-soft)]">
-            {entry.status === "success"
-              ? t("database.history.rows", { count: entry.rowCount ?? entry.affectedRows ?? 0 })
-              : entry.error ?? t("database.history.failedFallback")}
-          </span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function formatHistoryTime(value: string) {
-  return new Date(value).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
 }

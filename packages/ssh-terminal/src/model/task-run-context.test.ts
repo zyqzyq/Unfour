@@ -28,7 +28,7 @@ describe("task run recall", () => {
     const restored = restoreTaskRunInputs(names, variables, environment, run);
     expect(restored.inputs).toEqual({ region: "new-env", custom: "rotated", version: "saved", credential: "", privateValue: "", newInput: "" });
     expect(restored.secretNames).toEqual(expect.arrayContaining(["custom", "credential", "privateValue"]));
-    expect(restored.filledFromWorkspace).toEqual(["region", "custom"]);
+    expect(restored.sources).toEqual({ region: "environment", custom: "environment", version: "manual", credential: "manual", privateValue: "manual", newInput: "manual" });
   });
   it("does not fall back to workspace when an environment input disappears", () => {
     expect(restoreTaskRunInputs(names, variables, null, run).inputs.region).toBe("");

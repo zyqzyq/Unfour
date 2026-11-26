@@ -32,7 +32,7 @@ async fn saved_and_history_context_round_trip_and_legacy_default() {
             .unwrap();
             service.record_query_history(history).await.unwrap();
             let history = service
-                .list_query_history(workspace.clone(), None)
+                .list_query_history(workspace.clone(), None, None)
                 .await
                 .unwrap();
             let entry = history.iter().find(|row| row.id == saved.id).unwrap();

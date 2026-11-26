@@ -16,16 +16,13 @@ import { useDatabaseConnections } from "./hooks/useDatabaseConnections";
 import { useDatabaseConnectionMutations } from "./hooks/useDatabaseConnectionMutations";
 import { useDatabaseWorkspaceController } from "./hooks/useDatabaseWorkspaceController";
 import { useDatabaseTabs } from "./hooks/useDatabaseTabs";
-import { useQueryHistory } from "./hooks/useQueryHistory";
+import { MAX_HISTORY_ENTRIES, useQueryHistory } from "./hooks/useQueryHistory";
 import { useSavedSql } from "./hooks/useSavedSql";
 import { useTableStructure } from "./hooks/useTableStructure";
 import { useDatabaseQueryContext, useDatabaseTabSelection } from "./hooks/useDatabaseTabSynchronization";
 import { EMPTY_CONNECTION_STATES, useDatabaseConnectionStore } from "./model/database-connection-state";
 import { emptyDatabaseConnectionForm } from "./model/database-credentials";
-import type {
-  DatabaseConnectionSessionState,
-  SqlHistoryEntry,
-} from "./model/types";
+import type { DatabaseConnectionSessionState } from "./model/types";
 import { useDatabaseConnectionForm } from "./hooks/useDatabaseConnectionForm";
 import type { DatabasePageProps } from "./model/database-page";
 import { useDatabaseActiveContext, useDatabaseActiveTableEditing, useDatabaseContextOptions } from "./hooks/useDatabaseActiveContext";
@@ -34,7 +31,6 @@ import { useDatabaseTreeController, useDatabaseTreeRootLoading, useDatabaseTreeS
 import { useRedisWorkspace } from "./redis/useRedisWorkspace";
 
 const DEFAULT_PREVIEW_PAGE_SIZE = 100;
-const MAX_HISTORY_ENTRIES = 25;
 
 export function DatabasePage({
   active = true,
@@ -69,7 +65,6 @@ export function DatabasePage({
     [setConnectionStateAction, workspaceId],
   );
   const removeConnection = (connectionId: string) => removeConnectionAction(workspaceId, connectionId);
-  const [queryHistory, setQueryHistory] = useState<SqlHistoryEntry[]>([]);
   const [selectedTable, setSelectedTable] = useState<DatabaseTable | null>(null);
   const connectionsQuery = useDatabaseConnections(workspaceId, { active });
   const queryHistoryQuery = useQueryHistory(workspaceId, MAX_HISTORY_ENTRIES, { active });
@@ -141,11 +136,6 @@ export function DatabasePage({
     }
   }, [connections, selectedConnectionId, setSelectedDatabaseConnection, workspaceId, pruneConnectionsAction]);
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing persisted query history into local optimistic UI state
-    setQueryHistory(queryHistoryQuery.entries.slice(0, MAX_HISTORY_ENTRIES));
-  }, [queryHistoryQuery.entries]);
-
   useDatabaseTreeSynchronization(tree, {
     schemaEnabled: context.schemaEnabled,
     selectedConnectionId,
@@ -215,7 +205,6 @@ export function DatabasePage({
     browseTablePage,
     canTest,
     changeQueryContext,
-    clearQueryHistory,
     clearSql,
     connectConnection,
     deleteSavedSql,
@@ -263,7 +252,6 @@ export function DatabasePage({
     editorOpen,
     form,
     hydrateFormFromConnection,
-    maxHistoryEntries: MAX_HISTORY_ENTRIES,
     password,
     queryClient,
     queryHistoryQuery,
@@ -278,7 +266,6 @@ export function DatabasePage({
     setEditorOpen,
     setForm,
     setPassword,
-    setQueryHistory,
     setSelectedDatabaseConnection,
     setSelectedTable,
     setTestResult,
@@ -392,12 +379,12 @@ export function DatabasePage({
           activeTabId={databaseTabs.activeTabId}
           connections={connections}
           executePending={executePending}
-          history={queryHistory}
+          historyCount={queryHistoryQuery.entries.length}
+          workspaceName={workspaceName ?? workspaceId}
           catalogOptions={catalogOptions}
           onChangeQueryContext={changeQueryContext}
           onClearSql={clearSql}
           onCloseTab={databaseTabs.closeTab}
-          onClearHistory={clearQueryHistory}
           onPreviewSelectedTable={previewSelectedTable}
           onRefreshSchema={refreshActiveSchema}
           onReorderTabs={databaseTabs.reorderTabs}

@@ -130,8 +130,15 @@ pub async fn ssh_task_runs_list(
 pub async fn ssh_task_run_log_read(
     workspace_id: String,
     run_id: String,
+    step_navigation: Option<bool>,
     state: State<'_, AppState>,
 ) -> AppResult<String> {
+    if step_navigation.unwrap_or(false) {
+        return state
+            .command_bus
+            .read_ssh_task_run_log_for_navigation(workspace_id, run_id)
+            .await;
+    }
     state
         .command_bus
         .read_ssh_task_run_log(workspace_id, run_id)

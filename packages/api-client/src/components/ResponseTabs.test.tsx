@@ -5,7 +5,7 @@ import type {
   ApiResponse,
   RequestExecutionResult,
 } from "@unfour/command-client";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { createTranslator, I18nProvider } from "@unfour/ui";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createNewRequestTab, emptyApiTabsState, type ApiRequestTab } from "../model/request-tabs";
@@ -17,7 +17,10 @@ vi.mock("@monaco-editor/react", () => ({
   ),
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 function withI18n(children: ReactNode) {
   return <I18nProvider initialLocale="en">{children}</I18nProvider>;
@@ -29,6 +32,33 @@ function baseTab(overrides: Partial<ApiRequestTab> = {}): ApiRequestTab {
 }
 
 describe("ResponseTabs", () => {
+  it("reports clipboard failures in place and can retry the original response body", async () => {
+    const writeText = vi.fn().mockRejectedValueOnce(new Error("denied")).mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    const body = '{ "ok":true }';
+    render(withI18n(<ResponseTabs onOpenAuthSettings={vi.fn()} onResponseTabChange={vi.fn()} onRetry={vi.fn()}
+      tab={baseTab({ response: response({ body }) })} />));
+    const copy = screen.getByRole("button", { name: "Copy response body" });
+    fireEvent.click(copy);
+    expect(await screen.findByText("Could not copy the response body.")).toBeVisible();
+    await act(async () => { fireEvent.click(copy); });
+    expect(copy).toHaveAttribute("title", "Response body copied");
+    expect(writeText.mock.calls).toEqual([[body], [body]]);
+    expect(screen.queryByText("Could not copy the response body.")).not.toBeInTheDocument();
+  });
+
+  it("ignores a late clipboard result after selecting a different request", async () => {
+    let finish!: () => void;
+    vi.stubGlobal("navigator", { clipboard: { writeText: () => new Promise<void>((resolve) => { finish = resolve; }) } });
+    const view = (id: string) => withI18n(<ResponseTabs onOpenAuthSettings={vi.fn()} onResponseTabChange={vi.fn()} onRetry={vi.fn()}
+      tab={baseTab({ id, response: response({ historyId: "", body: id }) })} />);
+    const { rerender } = render(view("first"));
+    fireEvent.click(screen.getByRole("button", { name: "Copy response body" }));
+    rerender(view("second"));
+    await act(async () => { finish(); });
+    expect(screen.getByRole("button", { name: "Copy response body" })).toHaveAttribute("title", "Copy response body");
+  });
+
   it("keeps a failed cancellation visible without claiming the pending request has ended", () => {
     render(withI18n(<ResponseTabs onOpenAuthSettings={vi.fn()} onResponseTabChange={vi.fn()} onRetry={vi.fn()}
       tab={baseTab({ sending: true, cancelling: false, cancelError: "Cancellation was not confirmed. Try Stop again." })} />));

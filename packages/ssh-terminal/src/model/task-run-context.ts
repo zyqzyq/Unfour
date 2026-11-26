@@ -65,7 +65,6 @@ export function restoreTaskRunInputs(names: string[], variables: WorkspaceVariab
   defaults.automaticSecretNames = names.filter((name) => sensitiveTaskInput(name) || context.inputs[name]?.secret ||
     (defaults.sources[name] === "workspace" && workspace.secretNames.includes(name)) ||
     (defaults.sources[name] === "environment" && environmentDefaults.secretNames.includes(name)));
-  defaults.filledFromWorkspace = names.filter((name) => defaults.sources[name] !== "manual" && Boolean(defaults.inputs[name]));
   return defaults;
 }
 

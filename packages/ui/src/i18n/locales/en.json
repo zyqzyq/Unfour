@@ -812,6 +812,8 @@
     "response": {
       "tooLarge": "Response exceeds the 10 MiB limit. Reduce the response size and try again.",
       "copyBody": "Copy response body",
+      "bodyCopied": "Response body copied",
+      "copyBodyFailed": "Could not copy the response body.",
       "cancelledDescription": "Execution stopped before all request work completed. No history entry was written for this run.",
       "cancelFailed": "Stopping the request could not be confirmed. Still waiting for its result; you can try Stop again.",
       "cancelledTitle": "Request cancelled",
@@ -948,6 +950,8 @@
     "duplicate": "Duplicate",
     "duplicateEnvironmentName": "A variable environment named {name} already exists in this workspace.",
     "duplicateKeys": "Duplicate variable keys: {keys}",
+    "filterByName": "Filter by variable name",
+    "noMatchingNames": "No variable names match the filter.",
     "empty": "No variables in this scope.",
     "enabled": "Enabled",
     "enabledShort": "On",
@@ -1271,7 +1275,11 @@
       "viewRaw": "Raw"
     },
     "history": {
+      "clearDescription": "This will permanently delete SQL history for every connection in “{workspace}”, including entries outside the current view.",
+      "clearTitle": "Clear workspace SQL history?",
       "empty": "Executed SQL history will appear here.",
+      "noMatches": "No SQL history matches your search.",
+      "search": "Search SQL history",
       "failedFallback": "failed",
       "replaceConfirm": "The current SQL has unsaved changes. Replace it with the selected history entry?",
       "replaceTitle": "Replace Current SQL",
@@ -2052,8 +2060,12 @@
         "repairFailed": "Could not update this SSH task run.",
         "missingInputs": "Fill in every detected input before running.",
         "noInputs": "This task has no temporary inputs.",
-        "workspaceDefaults": "Matching values were loaded from workspace variables. Edit them for this run only.",
-        "workspaceDefaultsWithEnv": "Matching values were loaded from workspace variables and \"{name}\". Edit them for this run only.",
+        "inputSource": {
+          "environment": "Environment · {name}",
+          "missingEnvironment": "Original environment unavailable",
+          "workspace": "Workspace",
+          "manual": "Manual input"
+        },
         "workspaceOnly": "Workspace variables only",
         "openLog": "Open log",
         "resize": "Resize run panel",
@@ -2076,6 +2088,8 @@
         "transferProgress": "{direction}: {transferred} / {total} ({speed})",
         "waitingForOutput": "Waiting for stdout or stderr...",
         "followOutput": "Follow latest output",
+        "jumpToStep": "Show log for {name}",
+        "stepLogUnavailable": "No matching step entry in the available log",
         "output": "Task output"
       },
       "stepTypes": {

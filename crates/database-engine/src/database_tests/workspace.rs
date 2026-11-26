@@ -36,7 +36,7 @@ async fn query_history_is_workspace_scoped_ordered_limited_and_clearable() {
             workspace_id: workspace_id.clone(),
             connection_id: Some(connection.id.clone()),
             connection_name: "Local SQLite".to_string(),
-            sql: "select 1".to_string(),
+            sql: "select 'rate_%'".to_string(),
             status: "success".to_string(),
             classification: Some("read".to_string()),
             row_count: Some(1),
@@ -87,7 +87,7 @@ async fn query_history_is_workspace_scoped_ordered_limited_and_clearable() {
         .expect("record other workspace history");
 
     let listed = service
-        .list_query_history(workspace_id.clone(), Some(10))
+        .list_query_history(workspace_id.clone(), Some(10), None)
         .await
         .expect("list history");
     assert_eq!(listed.len(), 2);
@@ -96,24 +96,36 @@ async fn query_history_is_workspace_scoped_ordered_limited_and_clearable() {
     assert_eq!(listed[1].id, "history-old");
 
     let limited = service
-        .list_query_history(workspace_id.clone(), Some(1))
+        .list_query_history(workspace_id.clone(), Some(1), None)
         .await
         .expect("list limited history");
     assert_eq!(limited.len(), 1);
     assert_eq!(limited[0].id, "history-new");
+
+    for (term, expected) in [
+        ("  RATE_%  ", Some("history-old")),
+        ("2%", None),
+        ("other", None),
+    ] {
+        let matches = service
+            .list_query_history(workspace_id.clone(), Some(1), Some(term.to_string()))
+            .await
+            .expect("search workspace history");
+        assert_eq!(matches.first().map(|entry| entry.id.as_str()), expected);
+    }
 
     service
         .clear_query_history(workspace_id.clone())
         .await
         .expect("clear workspace history");
     let cleared = service
-        .list_query_history(workspace_id, Some(10))
+        .list_query_history(workspace_id, Some(10), None)
         .await
         .expect("list cleared history");
     assert!(cleared.is_empty());
 
     let other = service
-        .list_query_history(other_workspace_id, Some(10))
+        .list_query_history(other_workspace_id, Some(10), None)
         .await
         .expect("list other workspace history");
     assert_eq!(other.len(), 1);

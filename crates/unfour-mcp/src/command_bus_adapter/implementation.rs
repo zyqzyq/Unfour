@@ -338,7 +338,7 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
     ) -> Result<Vec<unfour_core::models::DbQueryHistoryEntry>, CommandBusAdapterError> {
         self.run(
             self.bus
-                .list_database_query_history(workspace_id.into(), Some(limit)),
+                .list_database_query_history(workspace_id.into(), Some(limit), None),
         )
         .map_err(|e| {
             CommandBusAdapterError::from_database_app_error("Database history read failed.", &e)

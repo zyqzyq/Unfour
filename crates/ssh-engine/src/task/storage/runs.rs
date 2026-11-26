@@ -49,6 +49,16 @@ impl SshService {
         workspace_id: String,
         run_id: String,
     ) -> AppResult<String> {
+        self.read_task_run_log_for_navigation(workspace_id, run_id)
+            .await
+            .map(log_format::plain_text)
+    }
+
+    pub async fn read_task_run_log_for_navigation(
+        &self,
+        workspace_id: String,
+        run_id: String,
+    ) -> AppResult<String> {
         validate_workspace_id(&workspace_id)?;
         #[cfg(feature = "ssh-native")]
         if let Some(log) = self.temporary_task_log(&workspace_id, &run_id)? {

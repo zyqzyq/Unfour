@@ -611,6 +611,16 @@ impl CommandBus {
         self.ssh.read_task_run_log(workspace_id, run_id).await
     }
 
+    pub async fn read_ssh_task_run_log_for_navigation(
+        &self,
+        workspace_id: String,
+        run_id: String,
+    ) -> AppResult<String> {
+        self.ssh
+            .read_task_run_log_for_navigation(workspace_id, run_id)
+            .await
+    }
+
     pub async fn clear_ssh_task_runs(
         &self,
         input: SshTaskCleanupInput,

@@ -1,6 +1,6 @@
 import type {
   DatabaseBrowseInput, DatabaseConnectionInput, DatabaseQueryInput,
-  DatabaseRowMutationInput, DatabaseTableStructureInput, SavedSqlInput,
+  DatabaseRowMutationInput, DatabaseTableStructureInput, DbQueryHistoryEntry, SavedSqlInput,
 } from "../../types";
 import {
   deleteMockDatabaseConnection, listMockDatabaseConnections,
@@ -25,6 +25,16 @@ function connectionId(args: MockArgs) {
   return String(args?.connectionId ?? "");
 }
 
+function listHistory(args: MockArgs) {
+  const workspace = workspaceId(args);
+  const search = String(args?.search ?? "").trim().toLowerCase();
+  const limit = Math.max(1, Math.min(200, Number(args?.limit ?? 200)));
+  return mockStore.databaseQueryHistory
+    .filter((entry) => entry.workspaceId === workspace && entry.sql.toLowerCase().includes(search))
+    .sort((left, right) => right.executedAt.localeCompare(left.executedAt))
+    .slice(0, limit);
+}
+
 function unsupportedScript() {
   // Browser fixtures cannot guarantee physical-session SQL semantics.
   throw { code: "UNSUPPORTED_OPERATION", message: "SQL script execution requires the desktop database engine." };
@@ -41,9 +51,15 @@ const handlers = new Map<string, (args: MockArgs) => unknown>([
   ["database_connection_test", (args) => testMockDatabaseConnection(connectionId(args))],
   ["database_catalogs_list", (args) => listMockDatabaseCatalogs(connectionId(args))],
   ["database_schema_get", (args) => getMockDatabaseSchema(connectionId(args), args?.catalog ? String(args.catalog) : null)],
-  ["database_query_history_list", () => []],
-  ["database_query_history_record", () => undefined],
-  ["database_query_history_clear", () => undefined],
+  ["database_query_history_list", listHistory],
+  ["database_query_history_record", (args) => {
+    const entry = args?.input as DbQueryHistoryEntry;
+    mockStore.databaseQueryHistory.push(structuredClone(entry));
+  }],
+  ["database_query_history_clear", (args) => {
+    const workspace = workspaceId(args);
+    mockStore.databaseQueryHistory = mockStore.databaseQueryHistory.filter((entry) => entry.workspaceId !== workspace);
+  }],
   ["database_saved_sql_list", (args) => listMockSavedSql(workspaceId(args))],
   ["database_saved_sql_save", (args) => saveMockSavedSql(args?.input as SavedSqlInput)],
   ["database_saved_sql_delete", (args) => deleteMockSavedSql(workspaceId(args), String(args?.id ?? ""))],

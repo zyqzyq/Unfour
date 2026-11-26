@@ -37,9 +37,8 @@ export function DatabaseWorkspace({
   onRefreshRedisConnections,
   onCreateRedisFlow,
   executePending,
-  history,
+  historyCount,
   onChangeQueryContext,
-  onClearHistory,
   onClearSql,
   onCloseTab,
   onPreviewSelectedTable,
@@ -73,6 +72,7 @@ export function DatabaseWorkspace({
   tableEditing,
   tabs,
   workspaceId,
+  workspaceName,
 }: {
   active: boolean;
   activeTabId: DatabaseWorkspaceTabId;
@@ -85,9 +85,8 @@ export function DatabaseWorkspace({
   onRefreshRedisConnections?: () => Promise<unknown>;
   onCreateRedisFlow?: (intent: RedisFlowIntent) => void;
   executePending: boolean;
-  history: SqlHistoryEntry[];
+  historyCount: number;
   onChangeQueryContext: (patch: { catalog?: string | null; schema?: string | null }) => void;
-  onClearHistory: () => void;
   onClearSql: () => void;
   onCloseTab: (tabId: DatabaseWorkspaceTabId) => void;
   onPreviewSelectedTable: () => void;
@@ -121,6 +120,7 @@ export function DatabaseWorkspace({
   tableEditing?: TableEditing | null;
   tabs: DatabaseWorkspaceTab[];
   workspaceId: string;
+  workspaceName: string;
 }) {
   const { t } = useI18n();
   const [pendingCloseId, setPendingCloseId] = useState<DatabaseWorkspaceTabId | null>(null);
@@ -285,12 +285,15 @@ export function DatabaseWorkspace({
                 workspaceId={workspaceId}
               />
               <QueryResultPanel
+                key={workspaceId}
                 activeResultIndex={renderQuery.activeResultIndex}
                 activeTab={renderQuery.resultTab}
                 error={renderQuery.error}
-                history={history}
+                active={active && showQuery}
+                historyCount={historyCount}
+                workspaceId={workspaceId}
+                workspaceName={workspaceName}
                 isPending={Boolean(renderQuery.loading)}
-                onClearHistory={onClearHistory}
                 onSelectHistory={onSelectHistory}
                 onSelectResultSet={onSelectResultSet}
                 onSelectTab={onSelectResultTab}

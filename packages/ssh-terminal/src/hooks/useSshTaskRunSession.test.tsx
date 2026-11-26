@@ -316,7 +316,7 @@ describe("task run history cache", () => {
     expect(result.current.historyLogLoading).toBe(false);
     expect(result.current.historyLogByRun).toEqual({ run: "" });
     await act(async () => { await result.current.openHistoryRun(run()); });
-    expect(readSshTaskRunLog).toHaveBeenCalledExactlyOnceWith("w1", "run");
+    expect(readSshTaskRunLog).toHaveBeenCalledExactlyOnceWith("w1", "run", true);
   });
 
   it("uses committed live events instead of fetching a historical log", async () => {
@@ -495,7 +495,7 @@ describe("task history selection and cleanup races", () => {
     await act(async () => { oldDetail.resolve(detail); await opening; });
     expect(result.current.activeRun?.id).toBe("new");
     expect(result.current.activeRunTask?.task.id).toBe("new-task");
-    expect(readSshTaskRunLog).toHaveBeenCalledExactlyOnceWith("w1", "new");
+    expect(readSshTaskRunLog).toHaveBeenCalledExactlyOnceWith("w1", "new", true);
   });
 
   it("allows another task's pending selection to finish after cleanup", async () => {
@@ -509,7 +509,7 @@ describe("task history selection and cleanup races", () => {
     await act(async () => { taskDetail.resolve(otherDetail); await opening; });
     expect(result.current.activeRun?.id).toBe("other-run");
     expect(result.current.activeRunTask).toEqual(otherDetail);
-    expect(readSshTaskRunLog).toHaveBeenCalledExactlyOnceWith("w1", "other-run");
+    expect(readSshTaskRunLog).toHaveBeenCalledExactlyOnceWith("w1", "other-run", true);
   });
 
   it.each([

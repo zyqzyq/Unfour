@@ -115,7 +115,7 @@ export function useSshTaskRunHistory({
     requestsRef.current.set(request, { runId, taskId });
     setLoadingRuns(historyLoadingRuns(requestsRef.current));
     try {
-      cacheLog(await readSshTaskRunLog(workspaceId, runId));
+      cacheLog(await readSshTaskRunLog(workspaceId, runId, true));
     } catch (error) {
       if (!isCurrent()) return;
       handleError(error, { key: "feedback.ssh.taskLogLoadFailed" });

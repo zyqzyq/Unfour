@@ -52,6 +52,35 @@ it("pauses output follow while reading, resumes explicitly, and resets for a dif
   expect(screen.queryByRole("button", { name: "Follow latest output" })).not.toBeInTheDocument();
 });
 
+it("jumps to the original step after a definition change and displays older logs as text", () => {
+  const step = { id: "step", workspaceId: "ws", taskId: "task", name: "Renamed", position: 2, enabled: true,
+    stepType: "command" as const, configVersion: 1, configJson: {}, createdAt: "", updatedAt: "", deletedAt: null };
+  const run = { ...props.run, status: "failed" as const, context: { version: 1, environmentId: null,
+    taskVersion: "previous", environmentUpdatedAt: null, inputs: {} } };
+  const task = { ...props.task, steps: [step] };
+  const legacy = "[2026-11-26T09:10:02Z] step 'Build' failed: exit 1";
+  const logText = 'Unfour SSH task log v2\n@step {"id":"step","name":"Build","position":0,"status":"failed"}\n' + legacy;
+  const { rerender } = render(<TaskRunPanel {...props} run={run} task={task} logText={logText} />);
+  const output = screen.getByLabelText("Task output");
+  const failure = screen.getByText(/step 'Build' failed: exit 1/);
+  vi.spyOn(failure, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 360, 80, 20));
+  fireEvent.click(screen.getByRole("button", { name: /Build.*Failed/ }));
+  expect(output.scrollTop).toBe(360);
+  expect(output).toHaveFocus();
+  expect(screen.queryByRole("button", { name: /Renamed/ })).toBeNull();
+  rerender(<TaskRunPanel {...props} run={run} task={task} logText={legacy} />);
+  expect(screen.queryByRole("button", { name: /Build|Renamed/ })).toBeNull();
+  expect(output).toHaveTextContent(legacy);
+
+  const started = { sequence: 1, runId: "run", taskId: "task", kind: "step", stepId: "removed",
+    stepName: "Old build", stepType: "command", position: 1, status: "running", stream: null, data: null,
+    exitCode: null, durationMs: null, direction: null, transferredBytes: null, totalBytes: null,
+    bytesPerSecond: null, error: null, createdAt: "now" } as const;
+  rerender(<TaskRunPanel {...props} run={{ ...run, status: "running" }} task={task} events={[started]} />);
+  expect(screen.getByRole("button", { name: /Old build.*Running/ })).toBeEnabled();
+  expect(screen.queryByRole("button", { name: /Renamed/ })).toBeNull();
+});
+
 it("offers rerun after a terminal completion event even before history polling updates the run", () => {
   const onRerun = vi.fn();
   const { rerender } = render(<TaskRunPanel {...props} onRerun={onRerun} />);
@@ -66,6 +95,16 @@ it("offers rerun after a terminal completion event even before history polling u
   expect(screen.getByText("Cancelled")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Run again" }));
   expect(onRerun).toHaveBeenCalledOnce();
+});
+
+it("opens recorded output of an active run without implying a final status after an interrupted log", () => {
+  const logText = 'Unfour SSH task log v2\n@step {"id":"s","name":"Compile","position":1,"status":"running"}\n[time] step \'Compile\' running\n';
+  const { rerender } = render(<TaskRunPanel {...props} logText={logText} />);
+  expect(screen.getByRole("button", { name: /Compile.*Running/ })).toBeEnabled();
+  rerender(<TaskRunPanel {...props} run={{ ...props.run, status: "failed" }} logText={logText} />);
+  const step = screen.getByRole("button", { name: /Compile/ });
+  expect(step).toBeEnabled();
+  expect(step).not.toHaveTextContent(/Failed|Running|Pending/);
 });
 
 it("resets follow when returning from a short run that emitted no scroll event", () => {

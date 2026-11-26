@@ -144,4 +144,22 @@ test("SSH task output preserves a scrolled reading position until following late
   await expect(output.getByText("after rollover", { exact: true })).toBeInViewport();
   expect(await retained!.evaluate((node) => node.isConnected && node.textContent === "burst 4998\n")).toBe(true);
   await expect(page.getByRole("listitem").filter({ hasText: "Read output" }).getByText("Running", { exact: true })).toBeVisible();
+  const stepButton = page.getByRole("button", { name: /Read output.*Running/ });
+  await stepButton.press("Enter");
+  await expect(output).toBeFocused();
+  await expect(output.getByText("── Step 1: Read output ──", { exact: true }).first()).toBeInViewport();
+  await expect(page.getByRole("button", { name: "Follow latest output" })).toBeVisible();
+  await page.evaluate(() => {
+    const send = (window as unknown as { __ueTaskEvent: (event: unknown) => void }).__ueTaskEvent;
+    send({ runId: "ue-run", taskId: "task", stepId: "step", stepName: "Read output", position: 0,
+      kind: "step", status: "failed", error: "fixture step failure", createdAt: "now" });
+  });
+  const failure = output.getByText("fixture step failure", { exact: true });
+  await expect(failure).not.toBeInViewport();
+  await page.getByRole("button", { name: /Read output.*Failed/ }).click();
+  await expect(failure).toBeInViewport();
+  await emit(Array.from({ length: 100 }, (_, i) => `later output ${i}\n`).join(""));
+  await expect(output).toContainText("later output 99");
+  await expect(failure).toBeInViewport();
+  await expect(page.getByRole("button", { name: "Follow latest output" })).toBeVisible();
 });

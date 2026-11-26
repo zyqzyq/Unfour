@@ -236,11 +236,17 @@ function handleTaskRunLogReadMock<T>(
   );
   if (!run) throw new Error("SSH task run not found");
   const started = run.startedAt;
+  const marker = (status: string) => args?.stepNavigation
+    ? [`@step ${JSON.stringify({ id: "mock-command", name: "Mock command", position: 0, status })}`]
+    : [];
   return [
+    ...(args?.stepNavigation ? ["Unfour SSH task log v2"] : []),
     `[${started}] run running`,
+    ...marker("running"),
     `[${started}] step 'Mock command' running`,
     `[${started}] command $ echo hello from mock task run`,
     `[${started}] stdout hello from mock task run`,
+    ...marker("success"),
     `[${started}] step 'Mock command' success`,
     `[${run.finishedAt ?? started}] run ${run.status}`,
   ].join("\n") as T;

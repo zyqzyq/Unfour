@@ -10,6 +10,7 @@ const connectionInput: DatabaseConnectionInput = {
 };
 
 beforeEach(() => {
+  mockStore.databaseQueryHistory = [];
   mockStore.databaseConnections = [];
   mockStore.savedSql = [];
   mockStore.credentials = {};
@@ -18,6 +19,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  mockStore.databaseQueryHistory = [];
   mockStore.databaseConnections = [];
   mockStore.savedSql = [];
   mockStore.credentials = {};
@@ -29,9 +31,23 @@ describe("database browser command routing", () => {
     expect(handleDatabaseMock("unknown")).toBe(UNHANDLED);
     expect(handleDatabaseMock("toString")).toBe(UNHANDLED);
     await expect(mockInvoke("database_query_history_list")).resolves.toEqual([]);
-    await expect(mockInvoke("database_query_history_record")).resolves.toBeUndefined();
     await expect(mockInvoke("database_query_history_clear")).resolves.toBeUndefined();
     await expect(mockInvoke("database_unknown")).rejects.toThrow("Mock command is not implemented");
+  });
+
+  it("searches literal SQL before limiting results and clears only the requested workspace", async () => {
+    const input = { id: "old", workspaceId: "w1", executedAt: "2026-01-01", sql: "select 'rate_%'" };
+    for (const entry of [input, { ...input, id: "new", executedAt: "2026-02-01", sql: "select 2" },
+      { ...input, id: "other", workspaceId: "w2" }]) {
+      await expect(mockInvoke("database_query_history_record", { input: entry })).resolves.toBeUndefined();
+    }
+    const args = { workspaceId: "w1", limit: 1 };
+    await expect(mockInvoke("database_query_history_list", args)).resolves.toMatchObject([{ id: "new" }]);
+    await expect(mockInvoke("database_query_history_list", { ...args, search: " RATE_% " })).resolves.toEqual([input]);
+    await expect(mockInvoke("database_query_history_list", { ...args, search: "2%" })).resolves.toEqual([]);
+    await mockInvoke("database_query_history_clear", args);
+    await expect(mockInvoke("database_query_history_list", args)).resolves.toEqual([]);
+    await expect(mockInvoke("database_query_history_list", { workspaceId: "w2" })).resolves.toMatchObject([{ id: "other" }]);
   });
 
   it.each(["database_script_execute", "database_script_stop"])("keeps %s unsupported", async (command) => {

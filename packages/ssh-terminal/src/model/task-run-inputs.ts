@@ -66,11 +66,9 @@ export function defaultTaskRunInputs(
 ): {
   inputs: Record<string, string>;
   secretNames: string[];
-  filledFromWorkspace: string[];
 } {
   const inputs: Record<string, string> = {};
   const secretNames: string[] = [];
-  const filledFromWorkspace: string[] = [];
 
   for (const name of detectedNames) {
     const match = variables.get(lookupKey(name));
@@ -79,11 +77,10 @@ export function defaultTaskRunInputs(
       continue;
     }
     inputs[name] = match.value;
-    filledFromWorkspace.push(name);
     if (match.isSecret) secretNames.push(name);
   }
 
-  return { inputs, secretNames, filledFromWorkspace };
+  return { inputs, secretNames };
 }
 
 export function activeWorkspaceEnvironmentName(

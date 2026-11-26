@@ -26,7 +26,6 @@ import type {
   DatabaseConnectionStatus,
   DatabaseQueryWorkspaceTab,
   DatabaseTableWorkspaceTab,
-  SqlHistoryEntry,
 } from "../model/types";
 
 type SaveMutation = {
@@ -51,7 +50,6 @@ type DatabaseWorkspaceControllerOptions = {
   editorOpen: boolean;
   form: DatabaseConnectionInput;
   hydrateFormFromConnection: (connection: DatabaseConnection) => void;
-  maxHistoryEntries: number;
   password: string;
   queryClient: QueryClient;
   queryHistoryQuery: ReturnType<typeof useQueryHistory>;
@@ -69,7 +67,6 @@ type DatabaseWorkspaceControllerOptions = {
   setEditorOpen: Dispatch<SetStateAction<boolean>>;
   setForm: Dispatch<SetStateAction<DatabaseConnectionInput>>;
   setPassword: Dispatch<SetStateAction<string>>;
-  setQueryHistory: Dispatch<SetStateAction<SqlHistoryEntry[]>>;
   setSelectedDatabaseConnection: (connectionId: string | null) => void;
   setSelectedTable: Dispatch<SetStateAction<DatabaseTable | null>>;
   setTestResult: Dispatch<SetStateAction<DatabaseTestResult | null>>;
@@ -94,7 +91,6 @@ export function useDatabaseWorkspaceController({
   editorOpen,
   form,
   hydrateFormFromConnection,
-  maxHistoryEntries,
   password,
   queryClient,
   queryHistoryQuery,
@@ -109,7 +105,6 @@ export function useDatabaseWorkspaceController({
   setEditorOpen,
   setForm,
   setPassword,
-  setQueryHistory,
   setSelectedDatabaseConnection,
   setSelectedTable,
   setTestResult,
@@ -265,7 +260,6 @@ export function useDatabaseWorkspaceController({
   });
 
   const {
-    clearQueryHistory,
     deleteSavedSql,
     designTable,
     handleSelectResultTab,
@@ -291,11 +285,9 @@ export function useDatabaseWorkspaceController({
     browseTablePage,
     connections,
     databaseTabs,
-    maxHistoryEntries,
     queryHistoryQuery,
     savedSqlQuery,
     selectedConnectionId,
-    setQueryHistory,
     setSelectedDatabaseConnection,
     setSelectedTable,
     t,
@@ -370,7 +362,6 @@ export function useDatabaseWorkspaceController({
     browseTablePage,
     canTest,
     changeQueryContext,
-    clearQueryHistory,
     clearSql,
     connectConnection,
     deleteSavedSql,

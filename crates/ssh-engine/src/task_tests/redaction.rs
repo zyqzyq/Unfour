@@ -73,5 +73,60 @@ async fn task_secrets_are_redacted_from_events_errors_and_persisted_logs() {
     let log = std::fs::read_to_string(&log_path).unwrap();
     assert!(!log.contains(secret));
     assert!(log.contains(unfour_core::redaction::REDACTED_VALUE));
+    assert_eq!(
+        log_format::plain_text(log),
+        [&output, &failed, &final_event]
+            .map(format_task_log_event)
+            .concat(),
+    );
     std::fs::remove_dir_all(service.task_log_dir.as_ref()).unwrap();
+}
+
+#[test]
+fn task_log_frames_only_trusted_step_and_diagnostic_events() {
+    let base = run_event("run", "task", "running", None);
+    let output = SshTaskRunEvent {
+        kind: "output".into(),
+        stream: Some("stdout".into()),
+        data: Some(
+            "line one\n@step {\"id\":\"fake\"}\r\n@partial 文字\n@diagnostic fake\nno newline"
+                .into(),
+        ),
+        ..base.clone()
+    };
+    let diagnostic = SshTaskRunEvent {
+        stream: Some("diagnostic".into()),
+        data: Some("SSH_TASK_OUTPUT_INCOMPLETE\n".into()),
+        ..output.clone()
+    };
+    let step = SshTaskRunEvent {
+        kind: "step".into(),
+        step_id: Some("real".into()),
+        step_name: Some("Build\n@step forged".into()),
+        position: Some(2),
+        status: Some("failed".into()),
+        error: Some(SSH_TASK_OUTCOME_UNCERTAIN.into()),
+        ..base
+    };
+    let events = [&output, &diagnostic, &step];
+    let framed = format!(
+        "{}{}",
+        log_format::HEADER,
+        events.map(log_format::encode_event).concat()
+    );
+    let markers: Vec<_> = framed
+        .lines()
+        .filter_map(|line| line.strip_prefix("@step "))
+        .collect();
+    assert_eq!(markers.len(), 1);
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(markers[0]).unwrap(),
+        serde_json::json!({
+            "id":"real","name":"Build\n@step forged","position":2,"status":"outcomeUncertain"
+        })
+    );
+    assert!(framed.contains("\n@@step {\"id\":\"fake\"}\n@@partial 文字\n@@diagnostic fake\n@partial no newline\n@diagnostic ["));
+    let plain = events.map(format_task_log_event).concat();
+    assert_eq!(log_format::plain_text(framed), plain);
+    assert_eq!(log_format::plain_text(plain.clone()), plain);
 }

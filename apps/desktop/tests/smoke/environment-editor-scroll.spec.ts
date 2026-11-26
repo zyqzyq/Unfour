@@ -50,3 +50,42 @@ test("keeps the environment title, Save and save errors in view while editing th
   await expect(lastValue).toBeInViewport();
   await expect(lastValue).toHaveValue("edited at the bottom");
 });
+
+test("filters by variable name and saves hidden edits alongside visible ones", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("unfour.locale", "en"));
+  await page.goto("/");
+  await page.getByRole("button", { name: "Active variable environment" }).click();
+  await page.getByRole("menuitem", { name: "Manage variables" }).click();
+  const filter = page.getByRole("textbox", { name: "Filter by variable name" });
+  const keys = page.getByRole("textbox", { name: "Key", exact: true });
+  const values = page.getByRole("textbox", { name: "Value", exact: true });
+  await expect(keys).toHaveCount(2);
+  await values.first().fill("hidden edit");
+  await filter.fill(" SOURCE ");
+  await expect(keys).toHaveCount(1);
+  await expect(keys).toHaveValue("source");
+  await keys.fill("renamed");
+  await keys.press("Tab");
+  await expect(values).toBeFocused();
+  await values.fill("visible edit");
+  await filter.focus();
+  await expect(page.getByText("No variable names match the filter.")).toBeVisible();
+  await page.getByRole("button", { name: "Add variable" }).click();
+  await expect(keys).toBeFocused();
+  await keys.fill("source_image");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Clear search" }).click();
+  await expect(keys).toHaveCount(3);
+  await expect(values.nth(0)).toHaveValue("hidden edit");
+  await expect(values.nth(1)).toHaveValue("visible edit");
+  await expect(keys.nth(2)).toHaveValue("source_image");
+
+  await filter.fill("e");
+  await keys.first().fill("url");
+  await page.getByRole("button", { name: "Delete variable renamed" }).click();
+  await expect(page.getByRole("button", { name: "Delete variable renamed" })).toHaveCount(0);
+  await filter.focus();
+  await expect(keys).toHaveCount(1);
+  await expect(keys).toHaveValue("source_image");
+});
