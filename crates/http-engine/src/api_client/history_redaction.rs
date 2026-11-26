@@ -1,3 +1,4 @@
+use super::helpers::is_sensitive_http_field;
 use super::*;
 use unfour_core::redaction::{
     is_sensitive_key, redact_json_body, redact_sensitive_lines, REDACTED_VALUE,
@@ -32,10 +33,22 @@ pub(super) fn sanitize_with_secrets(
     Ok(SafeHistory {
         name: input.name.as_deref().map(&scrub),
         url: scrub(&super::domain::export_url(&scrub(&input.url))),
-        headers: redact_rows(&input.headers, &scrub)?,
-        query: redact_rows(&input.query, &scrub)?,
+        headers: serde_json::to_string(&redacted_rows(
+            &input.headers,
+            &scrub,
+            is_sensitive_http_field,
+        ))?,
+        query: serde_json::to_string(&redacted_rows(
+            &input.query,
+            &scrub,
+            is_sensitive_http_field,
+        ))?,
         body: redact_request_body(input, &scrub),
-        response_headers: redact_rows(response_headers, &scrub)?,
+        response_headers: serde_json::to_string(&redacted_rows(
+            response_headers,
+            &scrub,
+            is_sensitive_response_header,
+        ))?,
         // Redact the complete JSON first: truncation can cut a credential or
         // make otherwise valid JSON impossible to sanitize structurally.
         response_body: scrub(&safe_body(response_body))
@@ -56,19 +69,21 @@ pub(crate) fn scrub_values(value: &str, secrets: &[String]) -> String {
     unfour_core::redaction::scrub_secret_values(value, secrets)
 }
 
-fn redact_rows(items: &[KeyValue], scrub: &impl Fn(&str) -> String) -> AppResult<String> {
-    Ok(serde_json::to_string(&redacted_rows(items, scrub))?)
+fn is_sensitive_response_header(key: &str) -> bool {
+    is_sensitive_key(key) || key.trim().eq_ignore_ascii_case("set-cookie")
 }
 
-fn redacted_rows(items: &[KeyValue], scrub: &impl Fn(&str) -> String) -> Vec<KeyValue> {
+fn redacted_rows(
+    items: &[KeyValue],
+    scrub: &impl Fn(&str) -> String,
+    sensitive: fn(&str) -> bool,
+) -> Vec<KeyValue> {
     items
         .iter()
         .map(|item| KeyValue {
             key: scrub(&item.key),
             enabled: item.enabled,
-            value: if is_sensitive_key(&item.key)
-                || item.key.trim().eq_ignore_ascii_case("set-cookie")
-            {
+            value: if sensitive(&item.key) {
                 REDACTED_VALUE.into()
             } else {
                 scrub(&item.value)
@@ -84,7 +99,7 @@ pub(super) fn diagnostic_response(
 ) -> unfour_core::models::ApiResponseDiagnosticProjection {
     let scrub = |value: &str| scrub_values(value, secrets);
     unfour_core::models::ApiResponseDiagnosticProjection {
-        headers: redacted_rows(headers, &scrub),
+        headers: redacted_rows(headers, &scrub, is_sensitive_response_header),
         body: scrub(&safe_body(body)),
     }
 }

@@ -1,4 +1,5 @@
 import { redactHeaders, redactJsonBody, resolveInput } from "./helpers";
+import { mockHistoryRequest } from "./api-history";
 import { mockApiRoutes, requireDirectBrowserRoute, writeMockRequestRoute, updateMockRequestRoute } from "./api-routes";
 import {
   assertMockCollection,
@@ -222,7 +223,8 @@ export async function handleApiRequestMock<T>(
       ? globalThis.setTimeout(() => controller.abort("API_TIMEOUT"), timeoutMs)
       : null;
     try {
-      const resolved = resolveInput(input, mockActiveEnvVariables(input.workspaceId));
+      const variables = mockActiveEnvVariables(input.workspaceId);
+      const resolved = resolveInput(input, variables);
       const url = new URL(resolved.url);
       resolved.query
         .filter((item) => item.enabled && item.key)
@@ -254,13 +256,14 @@ export async function handleApiRequestMock<T>(
         body,
         durationMs: Math.round(performance.now() - started),
       };
+      const historyRequest = mockHistoryRequest(input, variables);
       mockStore.history = [
         {
           id: result.historyId,
           workspaceId: input.workspaceId,
           name: input.name ?? null,
           method: resolved.method,
-          url: resolved.url,
+          url: historyRequest.url,
           status: result.status,
           durationMs: result.durationMs,
           createdAt: new Date().toISOString(),
@@ -278,9 +281,7 @@ export async function handleApiRequestMock<T>(
           workspaceId: input.workspaceId,
           name: input.name ?? null,
           method: resolved.method,
-          url: resolved.url,
-          requestHeadersJson: JSON.stringify(redactHeaders(input.headers)),
-          requestQueryJson: JSON.stringify(input.query),
+          ...historyRequest,
           requestBodyKind: input.bodyKind,
           requestBody: redactJsonBody(input.body),
           status: result.status,

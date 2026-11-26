@@ -1,4 +1,4 @@
-import { redactKeyValues, responseStateLabel } from "./response-tab-helpers";
+import { responseStateLabel } from "./response-tab-helpers";
 import { useState, type ReactNode } from "react";
 import Editor from "@monaco-editor/react";
 import { AlertCircle, CheckCircle2, Loader2, WifiOff } from "lucide-react";
@@ -187,9 +187,6 @@ export function RequestSnapshot({ request }: { request: ApiExecutedRequestSnapsh
     return <EmptyState className="m-3 h-[calc(100%-24px)]">{t("api.response.noRequest")}</EmptyState>;
   }
 
-  const headers = redactKeyValues(request.headers);
-  const query = redactKeyValues(request.query);
-
   return (
     <div className="h-full overflow-auto p-3 text-[12px] text-[var(--u-color-text)]">
       <p className="mb-2 text-[var(--u-color-text-soft)]">{t("api.response.request.snapshotNotice")}</p>
@@ -208,12 +205,12 @@ export function RequestSnapshot({ request }: { request: ApiExecutedRequestSnapsh
       </div>
       <RequestKeyValueReadout
         emptyLabel={t("api.keyValue.empty")}
-        items={query}
+        items={request.query}
         title={t("api.response.request.query")}
       />
       <RequestKeyValueReadout
         emptyLabel={t("api.response.noHeaders")}
-        items={headers}
+        items={request.headers}
         title={t("api.response.request.headers")}
       />
       <section className="mt-3">

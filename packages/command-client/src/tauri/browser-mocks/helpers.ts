@@ -19,7 +19,7 @@ export function resolveInput(input: ApiRequestInput, variables: KeyValue[]) {
   };
 }
 
-function resolveTemplate(value: string, variables: KeyValue[]) {
+export function resolveTemplate(value: string, variables: KeyValue[]) {
   return variables
     .filter((item) => item.enabled && item.key)
     .reduce(

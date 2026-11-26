@@ -459,8 +459,9 @@ async fn history_redacts_credentials_without_changing_runtime_payloads() {
 #[tokio::test]
 async fn legacy_history_is_redacted_on_read_and_repaired_idempotently() {
     let service = service().await;
-    sqlx::query("INSERT INTO api_history (id,workspace_id,method,url,request_headers_json,request_body,response_body_preview,created_at,updated_at) VALUES ('legacy','workspace-a','POST','https://example.test?token=url-secret',?,? ,?,'now','now')")
-        .bind(r#"[{"key":"Cookie","value":"session=header-secret","enabled":true}]"#)
+    sqlx::query("INSERT INTO api_history (id,workspace_id,method,url,request_headers_json,request_query_json,request_body,response_body_preview,created_at,updated_at) VALUES ('legacy','workspace-a','POST','https://example.test?auth=url-secret',?,?,?,?,'now','now')")
+        .bind(r#"[{"key":"Cookie","value":"session=header-secret","enabled":true},{"key":"X-Company-Token","value":"disabled-secret","enabled":false}]"#)
+        .bind(r#"[{"key":"X-Auth","value":"disabled-query-secret","enabled":false},{"key":"author","value":"alice","enabled":true}]"#)
         .bind(r#"{"password":"body-secret","ordinary":"keep"}"#)
         .bind(r#"{"token":"truncated-secret"#)
         .execute(service.db.pool()).await.unwrap();
@@ -469,6 +470,10 @@ async fn legacy_history_is_redacted_on_read_and_repaired_idempotently() {
         .await
         .unwrap();
     assert!(!serde_json::to_string(&detail).unwrap().contains("-secret"));
+    let query: Vec<KeyValue> = serde_json::from_str(&detail.request_query_json).unwrap();
+    assert!(!query[0].enabled);
+    assert_eq!(query[0].value, "<redacted>");
+    assert_eq!(query[1].value, "alice");
     let version: i64 =
         sqlx::query_scalar("SELECT redaction_version FROM api_history WHERE id='legacy'")
             .fetch_one(service.db.pool())

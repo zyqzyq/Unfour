@@ -301,8 +301,8 @@ export function assertMockEnvironmentNameAvailable(
   }
 }
 
-export function mockActiveEnvVariables(workspaceId: string): KeyValue[] {
-  const values = new Map<string, KeyValue>();
+export function mockActiveEnvVariables(workspaceId: string) {
+  const values = new Map<string, KeyValue & { isSecret: boolean }>();
   for (const variable of mockStore.workspaceVariables) {
     if (
       variable.workspaceId === workspaceId &&
@@ -312,6 +312,7 @@ export function mockActiveEnvVariables(workspaceId: string): KeyValue[] {
       values.set(variable.key, {
         key: variable.key,
         value: variable.value,
+        isSecret: variable.isSecret,
         enabled: true,
       });
     }
@@ -327,6 +328,7 @@ export function mockActiveEnvVariables(workspaceId: string): KeyValue[] {
       values.set(variable.key, {
         key: variable.key,
         value: variable.value,
+        isSecret: variable.isSecret,
         enabled: true,
       });
     }

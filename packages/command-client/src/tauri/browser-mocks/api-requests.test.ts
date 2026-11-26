@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ApiClientPreferences, ApiRequestInput, RequestExecutionResult } from "../../types";
 import { handleApiRequestMock } from "./api-requests";
+import * as state from "./state";
 import { mockStore, mockWorkspace } from "./state";
 
 describe("API request browser mock execution control", () => {
@@ -76,6 +77,45 @@ describe("API request browser mock execution control", () => {
     await handleApiRequestMock("api_cancel_request", { executionId: "unlimited" });
 
     expect((await execution).httpErrorCode).toBe("API_CANCELLED");
+  });
+
+  it("keeps ordinary history parameters and masks credentials before the Request panel reads them", async () => {
+    vi.spyOn(state, "mockActiveEnvVariables").mockReturnValue([
+      { key: "person", value: "alice", enabled: true, isSecret: false },
+      { key: "session", value: "private-value", enabled: true, isSecret: true },
+      { key: "slot", value: "client", enabled: true, isSecret: false },
+      { key: "alias", value: "header-secret", enabled: true, isSecret: false },
+    ]);
+    const fetchRequest = vi.fn().mockResolvedValue(new Response("ok"));
+    vi.stubGlobal("fetch", fetchRequest);
+    const request = input("https://example.test/books?author={{person}}&access_token=inline-secret", 0);
+    request.headers = [
+      { key: "Authorization", value: "Bearer header-secret", enabled: true },
+      { key: "X-Author-Id", value: "42", enabled: true },
+    ];
+    request.authJson = JSON.stringify({ type: "api-key", addTo: "query", key: "{{slot}}", value: "query-secret" });
+    request.query = [
+      { key: "client", value: "query-secret", enabled: true },
+      { key: "ref", value: "id-{{session}}", enabled: true },
+      { key: "context", value: "{{alias}}", enabled: true },
+    ];
+
+    expect((await send("history", request)).httpErrorCode).toBeNull();
+    expect(fetchRequest.mock.calls[0][0].searchParams.get("access_token")).toBe("inline-secret");
+    expect(fetchRequest.mock.calls[0][0].searchParams.get("ref")).toBe("id-private-value");
+    const [detail] = mockStore.historyDetails;
+    expect(detail.url).toBe("https://example.test/books");
+    expect(JSON.parse(detail.requestQueryJson)).toEqual([
+      { key: "author", value: "alice", enabled: true },
+      { key: "access_token", value: "<redacted>", enabled: true },
+      { key: "client", value: "<redacted>", enabled: true },
+      { key: "ref", value: "id-<redacted>", enabled: true },
+      { key: "context", value: "<redacted>", enabled: true },
+    ]);
+    expect(JSON.parse(detail.requestHeadersJson)).toEqual([
+      { key: "Authorization", value: "<redacted>", enabled: true },
+      { key: "X-Author-Id", value: "42", enabled: true },
+    ]);
   });
 
   it("classifies an inherited positive timeout without writing history", async () => {

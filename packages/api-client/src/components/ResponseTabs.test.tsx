@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
 import type {
-  ApiRequestInput,
+  ApiExecutedRequestSnapshot,
   ApiResponse,
   RequestExecutionResult,
 } from "@unfour/command-client";
@@ -139,7 +139,21 @@ describe("ResponseTabs", () => {
     expect(screen.getByText("curl time to first byte").nextElementSibling).toHaveTextContent("198 ms");
   });
 
-  it("shows the latest request snapshot next to the response", () => {
+  it("shows ordinary values and credential masks exactly as supplied by the request snapshot", () => {
+    const snapshot: ApiExecutedRequestSnapshot = {
+      method: "POST",
+      url: "https://api.test/users?author=alice&access_token=%3Credacted%3E",
+      query: [
+        { enabled: true, key: "author", value: "alice" },
+        { enabled: true, key: "access_token", value: "<redacted>" },
+      ],
+      headers: [
+        { enabled: true, key: "X-Author-Id", value: "42" },
+        { enabled: true, key: "Authorization", value: "<redacted>" },
+      ],
+      body: '{"name":"Ada"}',
+      bodyKind: "json",
+    };
     render(
       withI18n(
         <ResponseTabs
@@ -147,7 +161,7 @@ describe("ResponseTabs", () => {
           onResponseTabChange={vi.fn()}
           onRetry={vi.fn()}
           tab={baseTab({
-            lastRequest: requestInput(),
+            lastRequest: snapshot,
             response: response({ body: "{}" }),
             responseTab: "request",
           })}
@@ -157,9 +171,11 @@ describe("ResponseTabs", () => {
 
     expect(screen.getByRole("button", { name: "Request" })).toBeInTheDocument();
     expect(screen.getByText("POST")).toBeInTheDocument();
-    expect(screen.getByText("https://api.test/users")).toBeInTheDocument();
-    expect(screen.getByText("Authorization")).toBeInTheDocument();
-    expect(screen.getByText("<redacted>")).toBeInTheDocument();
+    expect(screen.getByText(snapshot.url)).toBeInTheDocument();
+    expect(screen.getByText("author").nextElementSibling?.textContent).toBe("alice");
+    expect(screen.getByText("access_token").nextElementSibling?.textContent).toBe("<redacted>");
+    expect(screen.getByText("X-Author-Id").nextElementSibling?.textContent).toBe("42");
+    expect(screen.getByText("Authorization").nextElementSibling?.textContent).toBe("<redacted>");
     expect(screen.getByText('{"name":"Ada"}')).toBeInTheDocument();
   });
 
@@ -281,25 +297,6 @@ function response(overrides: Partial<ApiResponse> = {}): ApiResponse {
     body: "",
     durationMs: 12,
     ...overrides,
-  };
-}
-
-function requestInput(): ApiRequestInput {
-  return {
-    workspaceId: "ws-1",
-    name: "Create user",
-    parentFolderId: null,
-    collectionId: null,
-    method: "POST",
-    url: "https://api.test/users",
-    headers: [
-      { enabled: true, key: "Authorization", value: "Bearer secret" },
-      { enabled: true, key: "Content-Type", value: "application/json" },
-    ],
-    query: [{ enabled: true, key: "page", value: "1" }],
-    body: '{"name":"Ada"}',
-    bodyKind: "json",
-    timeoutMs: 60_000,
   };
 }
 

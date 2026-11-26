@@ -6,7 +6,6 @@ import {
   savedRequestToInput,
   buildApiCollectionTree,
   collectTreeRequests,
-  isSensitiveKey,
   formatByteSize,
   queryFromUrl,
   stripUrlQuery,
@@ -285,24 +284,6 @@ describe("buildApiCollectionTree", () => {
 
     expect(groups[0].tree.folders).toEqual([]);
     expect(groups[0].tree.rootRequests[0].name).toBe("Root Request");
-  });
-});
-
-describe("isSensitiveKey", () => {
-  it("matches sensitive patterns", () => {
-    expect(isSensitiveKey("authorization")).toBe(true);
-    expect(isSensitiveKey("x-api-key")).toBe(true);
-    expect(isSensitiveKey("Authorization")).toBe(true);
-    expect(isSensitiveKey("secret_key")).toBe(true);
-    expect(isSensitiveKey("password")).toBe(true);
-    expect(isSensitiveKey("auth_token")).toBe(true);
-    expect(isSensitiveKey("credential")).toBe(true);
-  });
-
-  it("does not match non-sensitive keys", () => {
-    expect(isSensitiveKey("Content-Type")).toBe(false);
-    expect(isSensitiveKey("Accept")).toBe(false);
-    expect(isSensitiveKey("base_url")).toBe(false);
   });
 });
 

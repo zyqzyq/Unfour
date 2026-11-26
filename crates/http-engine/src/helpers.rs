@@ -8,6 +8,15 @@ use reqwest::{Method, Url};
 use unfour_core::models::{ApiCollection, KeyValue};
 use unfour_core::{AppError, AppResult};
 
+/// Credential names used in HTTP execution snapshots and local diagnostics.
+pub(super) fn is_sensitive_http_field(key: &str) -> bool {
+    let key = key.trim().to_ascii_lowercase();
+    unfour_core::redaction::is_sensitive_key(&key)
+        || unfour_core::redaction::is_sensitive_flow_name(&key)
+        || key.contains("signature")
+        || matches!(key.as_str(), "auth" | "x-auth" | "sig")
+}
+
 pub(super) fn parse_method(method: &str) -> AppResult<Method> {
     Method::from_bytes(method.trim().to_uppercase().as_bytes())
         .map_err(|_| AppError::Validation(format!("invalid HTTP method: {}", method)))

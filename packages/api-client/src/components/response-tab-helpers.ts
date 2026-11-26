@@ -1,12 +1,5 @@
 import type { ApiResponse, KeyValue } from "@unfour/command-client";
-import { isSensitiveKey } from "../request-utils";
 import type { deriveTabResponseState } from "../model/request-tabs";
-
-export function redactKeyValues(items: KeyValue[]): KeyValue[] {
-  return items.map((item) =>
-    isSensitiveKey(item.key) ? { ...item, value: "<redacted>" } : item,
-  );
-}
 
 export function responseCookies(response: ApiResponse | null) {
   return (

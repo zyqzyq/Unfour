@@ -111,10 +111,6 @@ export function parseRequestSettings(value: unknown): { timeoutMs: number | null
 
 export * from "./request-utils/collection-tree";
 
-export function isSensitiveKey(key: string) {
-  return /(token|secret|password|passwd|api[_-]?key|auth|credential)/i.test(key);
-}
-
 export function formatByteSize(bytes: number) {
   if (bytes < 1024) {
     return `${bytes} B`;

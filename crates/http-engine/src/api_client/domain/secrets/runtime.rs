@@ -2,10 +2,10 @@ use super::{
     decode_query_component, is_auth_plain_field, is_form_urlencoded, split_url_query,
     userinfo_password_span,
 };
+use crate::api_client::helpers::is_sensitive_http_field;
 use serde_json::Value;
 use unfour_core::{
     models::{ApiRequestInput, KeyValue},
-    redaction::is_sensitive_key,
     AppResult,
 };
 
@@ -33,7 +33,7 @@ pub fn runtime_request_secret_values(request: &ApiRequestInput) -> AppResult<Vec
                         row.key.trim().eq_ignore_ascii_case(key)
                     }
                 });
-            if sensitive(&row.key) || custom {
+            if is_sensitive_http_field(&row.key) || custom {
                 secrets.push(row.value.clone());
                 if !query
                     && matches!(
@@ -73,7 +73,7 @@ pub fn runtime_request_secret_values(request: &ApiRequestInput) -> AppResult<Vec
             if let Ok(rows) = serde_json::from_str::<Vec<KeyValue>>(body) {
                 secrets.extend(
                     rows.into_iter()
-                        .filter(|row| row.enabled && sensitive(&row.key))
+                        .filter(|row| row.enabled && is_sensitive_http_field(&row.key))
                         .map(|row| row.value),
                 );
             } else {
@@ -90,28 +90,10 @@ pub fn runtime_request_secret_values(request: &ApiRequestInput) -> AppResult<Vec
     Ok(secrets)
 }
 
-fn sensitive(key: &str) -> bool {
-    // Reuse shared credential naming, adding signature and compact spellings
-    // for execution/history without changing portable template contracts.
-    is_sensitive_key(key)
-        || unfour_core::redaction::is_sensitive_flow_name(key)
-        || key.to_ascii_lowercase().contains("signature")
-        || matches!(
-            key.trim().to_ascii_lowercase().as_str(),
-            "apikey"
-                | "accesstoken"
-                | "refreshtoken"
-                | "privatekey"
-                | "licensekey"
-                | "passphrase"
-                | "sig"
-        )
-}
-
 fn collect_pairs(pairs: &str, custom_key: Option<&str>, secrets: &mut Vec<String>) {
     for component in pairs.split('&') {
         if let Some((key, value)) = decode_query_component(component) {
-            if sensitive(&key) || custom_key == Some(key.as_str()) {
+            if is_sensitive_http_field(&key) || custom_key == Some(key.as_str()) {
                 secrets.push(value);
                 if let Some((_, raw)) = component.split_once('=') {
                     secrets.push(raw.to_owned());
@@ -131,7 +113,7 @@ fn collect_json(value: &Value, secret: bool, auth: bool, secrets: &mut Vec<Strin
                         || if auth {
                             !is_auth_plain_field(key)
                         } else {
-                            sensitive(key)
+                            is_sensitive_http_field(key)
                         },
                     auth,
                     secrets,
