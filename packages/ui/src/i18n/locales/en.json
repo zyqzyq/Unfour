@@ -216,6 +216,7 @@
     "import": "Import Workspace from File…",
     "export": "Export Current Workspace…",
     "importCommand": "Workspace: Import from File…",
+    "importInstead": "Already have a workspace file? Import it…",
     "exportCommand": "Workspace: Export Current Workspace…",
     "current": "Current: {name}",
     "exportTitle": "Export Workspace",
@@ -278,7 +279,7 @@
       "PASSWORD_LENGTH": "The backup password must have at least 12 characters.",
       "CREDENTIAL_UNAVAILABLE": "A saved credential is unavailable. Restore it in the source Workspace or export without credentials.",
       "CLEANUP_PENDING": "Import failed and credential cleanup is pending. No new Workspace was created.",
-      "TOO_LARGE": "This backup exceeds the supported file size."
+      "TOO_LARGE": "This workspace file exceeds the supported size."
     },
     "reconfigure": "Needs configuration ({count})",
     "issues": {
@@ -503,7 +504,6 @@
     },
     "workspace": {
       "loadFailed": "Could not load workspaces. Retry to restore your workbench.",
-      "createToStart": "Create a workspace from the workspace menu to get started.",
       "changeEnvironment": "Workspace security settings",
       "deleteCurrent": "Delete current",
       "defaultBadge": "default",
@@ -627,6 +627,8 @@
       "body": "Body",
       "preview": "Preview",
       "confirm": "Create request",
+      "apply": "Apply to this request",
+      "pasteDescription": "Review the parsed command, then apply it to this request.",
       "errors": {
         "CURL_SYNTAX": "Unsupported quoting, shell syntax, expansion or template variables, or input exceeds 262144 characters. Use one literal curl command. Cmd percent expansion and complex backslash escapes are not supported; try Copy as cURL (bash).",
         "CURL_OPTION": "Unsupported option. V1 accepts only -X/--request, -H/--header, -d/--data, --data-raw, --data-binary, -G/--get, -b/--cookie (inline only) and --url. Remove other options only if their behavior is unnecessary.",
@@ -786,7 +788,8 @@
         "zeroUnlimited": "Milliseconds. Set 0 for no timeout."
       },
       "url": "Request URL",
-      "urlPlaceholder": "https://api.example.com/resource"
+      "urlPlaceholder": "https://api.example.com/resource",
+      "urlOrCurl": "Enter a URL or paste a cURL command"
     },
     "scripts": {
       "console": "Console",

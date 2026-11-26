@@ -31,6 +31,7 @@ function DesktopWorkbench({ extensions }: DesktopAppProps) {
   const queryClient = useQueryClient();
   const [bottomPanelCollapsed, setBottomPanelCollapsed] = useState(true);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState("general");
   function openSettings(section?: "mcp") {
@@ -102,6 +103,8 @@ function DesktopWorkbench({ extensions }: DesktopAppProps) {
         workspaceId={activeWorkspace.id}
       /> : undefined}
       globalToolbar={<AppTitleBar
+        createWorkspaceOpen={createWorkspaceOpen}
+        onCreateWorkspaceOpenChange={setCreateWorkspaceOpen}
         environmentSwitching={workspace.environmentSwitching}
         activeEnvironmentId={activeEnvironment?.id ?? null}
         activeWorkspace={activeWorkspace}
@@ -138,6 +141,7 @@ function DesktopWorkbench({ extensions }: DesktopAppProps) {
         rightAccessory={statusBarRightAccessory}
       />}
       main={<DesktopWorkspaceContent
+        onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
         activeTab={activeTab}
         workspace={workspace}
         navigation={navigation}

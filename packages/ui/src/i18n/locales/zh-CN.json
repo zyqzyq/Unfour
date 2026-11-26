@@ -216,6 +216,7 @@
     "import": "从文件导入 Workspace…",
     "export": "导出当前 Workspace…",
     "importCommand": "Workspace：从文件导入…",
+    "importInstead": "已有工作区文件？从文件导入…",
     "exportCommand": "Workspace：导出当前 Workspace…",
     "current": "当前：{name}",
     "exportTitle": "导出 Workspace",
@@ -278,7 +279,7 @@
       "PASSWORD_LENGTH": "备份密码至少需要 12 个字符。",
       "CREDENTIAL_UNAVAILABLE": "有已保存的凭据无法读取。请在原 Workspace 中修复，或取消包含凭据后导出。",
       "CLEANUP_PENDING": "导入失败，凭据清理尚未完成。未创建新 Workspace。",
-      "TOO_LARGE": "备份文件超过支持的大小。"
+      "TOO_LARGE": "工作区文件过大，超出支持的大小。"
     },
     "reconfigure": "需要重新配置（{count} 项）",
     "issues": {
@@ -503,7 +504,6 @@
     },
     "workspace": {
       "loadFailed": "无法加载工作区，请重试以恢复工作台。",
-      "createToStart": "从左上角工作区菜单新建工作区以开始使用。",
       "changeEnvironment": "工作区安全设置",
       "deleteCurrent": "删除当前工作区",
       "defaultBadge": "默认",
@@ -627,6 +627,8 @@
       "body": "请求体",
       "preview": "预览",
       "confirm": "创建请求",
+      "apply": "填入当前请求",
+      "pasteDescription": "核对解析结果后，即可填入当前请求。",
       "errors": {
         "CURL_SYNTAX": "不支持此引号、Shell 语法、变量展开或模板变量，或内容超过 262144 个字符。请粘贴一条字面量 curl 命令。暂不支持 cmd 百分号展开及复杂反斜杠转义，可尝试复制为 cURL (bash)。",
         "CURL_OPTION": "存在不支持的参数。V1 仅支持 -X/--request、-H/--header、-d/--data、--data-raw、--data-binary、-G/--get、-b/--cookie（仅内联值）和 --url。请仅在不需要其他参数的行为时移除它们。",
@@ -786,7 +788,8 @@
         "zeroUnlimited": "单位为毫秒。设为 0 表示不限制超时。"
       },
       "url": "请求 URL",
-      "urlPlaceholder": "https://api.example.com/resource"
+      "urlPlaceholder": "https://api.example.com/resource",
+      "urlOrCurl": "输入 URL 或粘贴 cURL 命令"
     },
     "scripts": {
       "console": "控制台",

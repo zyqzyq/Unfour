@@ -37,6 +37,7 @@ function mount(action: Action, leave = vi.fn((run: () => void) => run())) {
     return <I18nProvider initialLocale="en"><QueryClientProvider client={client}>
       <WorkspaceLeaveContext.Provider value={leave}>
         <WorkspaceDialogs activeWorkspace={workspace} workspaces={[workspace, fallback]}
+          importBusy={false} onImportFromFile={vi.fn()}
           createOpen={action === "create" && open} deleteOpen={action === "delete" && open} environmentOpen={false} renameOpen={false}
           onCreateClose={onClose} onDeleteClose={onClose} onEnvironmentClose={vi.fn()} onRenameClose={vi.fn()} />
       </WorkspaceLeaveContext.Provider>

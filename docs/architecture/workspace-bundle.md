@@ -64,8 +64,10 @@ policy-editing tools.
 The adapter (`crates/unfour-app`) selects/saves files and calls CommandBus. It
 contains no remapping, reference validation, or feature-table reads. Frontend
 business state and preview live in `packages/workspace-local`. Its exchange
-provider owns one shared dialog for the Workspace menu and command palette;
-app-shell only wires the provider, entry points, and activation callback.
+provider owns one shared preview for the Workspace menu, command palette,
+empty workbench, and new-workspace form. Cancelling the file picker preserves
+the creation form. The app shell wires the provider, entry points, and activation
+callback.
 The switcher groups creation/import separately from current-Workspace actions
 (export, rename, security settings, and extensions such as Cloud Sync), with deletion
 last. Export confirmation identifies the selected Workspace and retains that

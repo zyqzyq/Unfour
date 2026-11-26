@@ -2,17 +2,19 @@
 
 ## Behavior and ownership
 
-The request-tab toolbar opens the existing shared Dialog. Parsing and preview
-are frontend-only. Confirmation passes a RequestDraft to the existing
-newRequest action, creating a workspace-scoped, unsaved tab with empty scripts,
-no response, and no execution. Editing source invalidates preview. Parse errors
+The request-tab toolbar opens the shared cURL preview. Confirmation creates a
+workspace-scoped, unsaved tab. Pasting a command into a blank request's URL
+field opens the same preview and applies the confirmed draft to that tab.
+Ordinary URLs use native paste. Parsing and preview are frontend-only.
+Editing source invalidates preview. Parse errors
 retain source; cancellation/success clears it. No import IPC, persistence,
 activity logging, command execution, or network request is introduced.
 
 Sensitive headers use the same classification and SecretInput as the request
 editor. Values stay in the transient draft; explicit later Save/Send uses the
-existing backend credential-reference and redaction path. The source textarea
-necessarily shows the pasted command. Errors contain only fixed categories,
+existing backend credential-reference and redaction path. The source editor
+shows the raw command during manual entry or correction. A valid URL-field
+paste opens directly on the parsed preview. Errors contain only fixed categories,
 never source, parameter values, URLs or credentials.
 
 ## V1 support

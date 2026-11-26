@@ -13,7 +13,7 @@ afterEach(cleanup);
 const workspace: Workspace = { id: "w", name: "Old", environmentType: "dev", mcpPolicy: "auto", isDefault: true, lastOpenedAt: null, createdAt: "t", updatedAt: "t", deletedAt: null, revision: 1 };
 function mount() {
   const client = new QueryClient();
-  const view = (activeWorkspace: Workspace) => <I18nProvider initialLocale="en"><QueryClientProvider client={client}><WorkspaceDialogs activeWorkspace={activeWorkspace} workspaces={[activeWorkspace]} createOpen={false} deleteOpen={false} environmentOpen={false} renameOpen onCreateClose={vi.fn()} onDeleteClose={vi.fn()} onEnvironmentClose={vi.fn()} onRenameClose={vi.fn()} /></QueryClientProvider></I18nProvider>;
+  const view = (activeWorkspace: Workspace) => <I18nProvider initialLocale="en"><QueryClientProvider client={client}><WorkspaceDialogs activeWorkspace={activeWorkspace} workspaces={[activeWorkspace]} createOpen={false} deleteOpen={false} environmentOpen={false} renameOpen importBusy={false} onImportFromFile={vi.fn()} onCreateClose={vi.fn()} onDeleteClose={vi.fn()} onEnvironmentClose={vi.fn()} onRenameClose={vi.fn()} /></QueryClientProvider></I18nProvider>;
   const rendered = render(view(workspace));
   return () => rendered.rerender(view({ ...workspace, name: "External", revision: 2 }));
 }
@@ -50,6 +50,7 @@ it.each(["create", "delete"])("routes %s through the leave gate before issuing a
   render(<I18nProvider initialLocale="en"><QueryClientProvider client={new QueryClient()}>
     <WorkspaceLeaveContext.Provider value={leave}>
       <WorkspaceDialogs activeWorkspace={{ ...workspace, isDefault: false }} workspaces={[workspace, { ...workspace, id: "other" }]}
+        importBusy={false} onImportFromFile={vi.fn()}
         createOpen={action === "create"} deleteOpen={action === "delete"} environmentOpen={false} renameOpen={false}
         onCreateClose={vi.fn()} onDeleteClose={vi.fn()} onEnvironmentClose={vi.fn()} onRenameClose={vi.fn()} />
     </WorkspaceLeaveContext.Provider>

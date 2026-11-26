@@ -1,5 +1,48 @@
 import { expect, test } from "@playwright/test";
 
+test("pasting cURL previews and fills the current blank request", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.addInitScript(() => localStorage.setItem("unfour.locale", "en"));
+  await page.goto("/");
+  const url = page.getByRole("textbox", { name: "Request URL", exact: true });
+  const paste = async (text: string) => {
+    await url.focus();
+    await page.evaluate(value => navigator.clipboard.writeText(value), text);
+    await url.press("Control+v");
+  };
+  const dialog = page.getByRole("dialog");
+  const command = `"curl.exe" 'https://example.test/api?a=1' -H 'Authorization: Bearer fixture' -d 'a=2'`;
+  const tabs = page.getByRole("tab", { name: /Untitled Request/i });
+  await expect(tabs).toHaveCount(1);
+  await paste("https://example.test/plain");
+  await expect(url).toHaveValue("https://example.test/plain");
+  await page.getByRole("button", { name: "New Request", exact: true }).click();
+  await expect(url).toHaveValue("");
+  await paste(command);
+  await expect(dialog.getByLabel("HTTP Method")).toHaveValue("POST");
+  await expect(dialog.getByLabel("Authorization")).toHaveAttribute("type", "password");
+  await expect(dialog.getByLabel("cURL command")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(url).toBeFocused();
+  await expect(url).toHaveValue("");
+
+  await paste("curl --unsupported https://example.test");
+  await expect(dialog.getByRole("alert")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Apply to this request" })).toBeDisabled();
+  await dialog.getByLabel("cURL command").fill(command);
+  await dialog.getByRole("button", { name: "Preview" }).click();
+  await expect(dialog.getByLabel("cURL command")).toHaveCount(0);
+  await expect(dialog.getByLabel("Authorization")).toHaveAttribute("type", "password");
+  await dialog.getByRole("button", { name: "Apply to this request" }).click();
+  await expect(url).toHaveValue("https://example.test/api?a=1");
+  await expect(url).toBeFocused();
+  await expect(page.getByRole("combobox", { name: "HTTP method", exact: true })).toHaveValue("POST");
+  await expect(tabs).toHaveCount(2);
+  await expect(page.getByText("No response yet")).toBeVisible();
+  await tabs.first().click();
+  await expect(url).toHaveValue("https://example.test/plain");
+});
+
 test("cURL preview creates an unsaved request without execution", async ({ page }, testInfo) => {
   await page.addInitScript(() => localStorage.setItem("unfour.locale", "en"));
   const unexpectedRequests: string[] = [];

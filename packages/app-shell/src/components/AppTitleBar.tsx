@@ -21,6 +21,8 @@ import type {
 } from "../extensions";
 
 export function AppTitleBar({
+  createWorkspaceOpen,
+  onCreateWorkspaceOpenChange,
   activeWorkspace,
   activeEnvironmentId = null,
   environments = [],
@@ -39,6 +41,8 @@ export function AppTitleBar({
   workspaceMenuFooterActions,
   workspaces,
 }: {
+  createWorkspaceOpen: boolean;
+  onCreateWorkspaceOpenChange: (open: boolean) => void;
   activeWorkspace?: Workspace;
   activeEnvironmentId?: string | null;
   environments?: WorkspaceEnvironment[];
@@ -72,6 +76,8 @@ export function AppTitleBar({
         left={
           <div className="flex min-w-0 items-center gap-2">
             <WorkspaceMenu
+              createOpen={createWorkspaceOpen}
+              onCreateOpenChange={onCreateWorkspaceOpenChange}
               activeWorkspace={activeWorkspace}
               decoration={workspaceDecoration}
               extensionContext={extensionContext}

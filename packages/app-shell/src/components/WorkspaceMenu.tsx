@@ -1,7 +1,7 @@
 import { useWorkspaceBundleActions } from "@unfour/workspace-local";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { ChevronDown, Folder, Import, Pencil, Plus, ShieldCheck, Trash2, Upload } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState, type RefObject } from "react";
 import type { Workspace } from "@unfour/command-client";
 import { resolveWorkspaceMcpPolicy } from "@unfour/workspace-core";
 import { Badge, Button, cn, useFeedbackErrorHandler, useI18n } from "@unfour/ui";
@@ -18,6 +18,8 @@ import { WorkspaceDialogs } from "./WorkspaceDialogs";
 const workspaceMenuItemClass = "flex min-h-8 cursor-pointer items-center gap-2 rounded px-2 py-1 outline-none hover:bg-[var(--u-color-surface-hover)] focus:bg-[var(--u-color-surface-hover)] data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50";
 
 export function WorkspaceMenu({
+  createOpen,
+  onCreateOpenChange,
   activeWorkspace,
   className,
   decoration: Decoration,
@@ -28,6 +30,8 @@ export function WorkspaceMenu({
   workspaceMenuFooterActions = [],
   workspaces,
 }: {
+  createOpen: boolean;
+  onCreateOpenChange: (open: boolean) => void;
   activeWorkspace?: Workspace;
   className?: string;
   decoration?: DesktopAppWorkspaceDecoration;
@@ -41,7 +45,7 @@ export function WorkspaceMenu({
   const { t } = useI18n();
   const handleError = useFeedbackErrorHandler();
   const bundleExchange = useWorkspaceBundleActions();
-  const [createOpen, setCreateOpen] = useState(false);
+  const menuTrigger = useRef<HTMLButtonElement>(null);
   const [renameOpen, setRenameOpen] = useState(false);
   const [environmentOpen, setEnvironmentOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -80,6 +84,7 @@ export function WorkspaceMenu({
     <>
       <DropdownMenu.Root>
         <WorkspaceMenuTrigger
+          triggerRef={menuTrigger}
           activeWorkspace={activeWorkspace}
           className={className}
           decoration={Decoration}
@@ -110,11 +115,11 @@ export function WorkspaceMenu({
               </div>
             )}
             <DropdownMenu.Separator className="my-1 h-px bg-[var(--u-color-border)]" />
-            <DropdownMenu.Item className={workspaceMenuItemClass} onSelect={() => setCreateOpen(true)}>
+            <DropdownMenu.Item className={workspaceMenuItemClass} onSelect={() => onCreateOpenChange(true)}>
               <Plus size={14} />
               {t("app.workspace.new")}
             </DropdownMenu.Item>
-            <DropdownMenu.Item aria-label={t("workspaceBundle.import")} className={workspaceMenuItemClass} disabled={bundleExchange.busy} onSelect={() => void bundleExchange.pick()}>
+            <DropdownMenu.Item aria-label={t("workspaceBundle.import")} className={workspaceMenuItemClass} disabled={bundleExchange.busy} onSelect={() => void bundleExchange.pick({ returnFocusTo: menuTrigger.current })}>
               <Import size={14} />
               <span className="min-w-0">
                 <span className="block">{t("workspaceBundle.import")}</span>
@@ -197,11 +202,14 @@ export function WorkspaceMenu({
       </DropdownMenu.Root>
 
       <WorkspaceDialogs
+        menuTrigger={menuTrigger}
         activeWorkspace={activeWorkspace}
         createOpen={createOpen}
         deleteOpen={deleteOpen}
         environmentOpen={environmentOpen}
-        onCreateClose={() => setCreateOpen(false)}
+        onCreateClose={() => onCreateOpenChange(false)}
+        importBusy={bundleExchange.busy}
+        onImportFromFile={(returnFocusTo) => void bundleExchange.pick({ returnFocusTo, onPicked: () => onCreateOpenChange(false) })}
         onDeleteClose={() => setDeleteOpen(false)}
         onEnvironmentClose={() => setEnvironmentOpen(false)}
         onRenameClose={() => setRenameOpen(false)}
@@ -213,11 +221,13 @@ export function WorkspaceMenu({
 }
 
 export function WorkspaceMenuTrigger({
+  triggerRef,
   activeWorkspace,
   className,
   decoration: Decoration,
   extensionContext,
 }: {
+  triggerRef?: RefObject<HTMLButtonElement | null>;
   activeWorkspace?: Workspace;
   className?: string;
   decoration?: DesktopAppWorkspaceDecoration;
@@ -228,6 +238,7 @@ export function WorkspaceMenuTrigger({
   return (
     <DropdownMenu.Trigger asChild>
       <Button
+        ref={triggerRef}
         aria-description={typeHelp}
         className={cn(
           "w-[220px] justify-start gap-1 border-transparent bg-[var(--u-color-surface)] px-2 font-semibold shadow-none hover:bg-[var(--u-color-surface-hover)]",

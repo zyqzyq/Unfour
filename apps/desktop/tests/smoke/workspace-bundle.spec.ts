@@ -1,5 +1,70 @@
 import { expect, test } from "@playwright/test";
 
+test("opens the same import preview from an empty workbench and a new workspace form", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("unfour.locale", "en"));
+  await page.route("**/browser-mocks/workspace.ts*", async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, body: await response.text() + `
+      import { mockState } from "./state.ts";
+      mockState.workspaces = [];
+      mockState.activeWorkspaceId = null;
+      const file = { content: "fixture", preview: { name: "Imported project", environmentType: "dev", counts: {}, reconfigure: [] } };
+      const selections = [null, file, null, new Error("WORKSPACE_BUNDLE_TOO_LARGE"), file, file, file];
+      handlers.set("workspace_bundle_pick", () => {
+        const selection = selections.shift();
+        if (selection instanceof Error) throw selection;
+        return selection;
+      });
+      handlers.set("workspace_bundle_import", args => lifecycle.createMockWorkspace({ name: args.name }));
+    ` });
+  });
+  await page.goto("/");
+  const dialog = page.getByRole("dialog");
+  const directImport = page.getByRole("button", { name: "Import Workspace from File…" });
+  await directImport.focus();
+  await directImport.press("Enter");
+  await expect(directImport).toBeFocused();
+  await directImport.press("Enter");
+  await expect(dialog.getByRole("textbox")).toHaveValue("Imported project");
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(directImport).toBeFocused();
+  const create = page.getByRole("button", { name: "New workspace", exact: true });
+  await create.click();
+  const name = dialog.getByRole("textbox");
+  await expect(name).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(create).toBeFocused();
+  await create.press("Enter");
+  const fromFile = dialog.getByRole("button", { name: /Already have a workspace file/ });
+  await name.fill("Unsaved name");
+  await fromFile.click();
+  await expect(name).toHaveValue("Unsaved name");
+  await expect(fromFile).toBeFocused();
+  await fromFile.press("Enter");
+  await expect(page.getByText("This workspace file exceeds the supported size.")).toBeVisible();
+  await expect(name).toHaveValue("Unsaved name");
+  await expect(fromFile).toBeFocused();
+  await fromFile.click();
+  await expect(dialog).toHaveCount(1);
+  await expect(dialog.getByRole("textbox")).toHaveValue("Imported project");
+  await page.keyboard.press("Escape");
+  await expect(create).toBeFocused();
+  await create.press("Enter");
+  await fromFile.click();
+  await expect(dialog.getByRole("textbox")).toHaveValue("Imported project");
+  await dialog.getByRole("button", { name: "Create and Switch" }).click();
+  await expect(page.getByTitle("Imported project", { exact: true }).first()).toBeVisible();
+  const switcher = page.getByRole("button", { name: /Imported project/ }).first();
+  await switcher.click();
+  await expect(page.getByRole("menuitem", { name: /Unsaved name/ })).toHaveCount(0);
+  await page.getByRole("menuitem", { name: "New workspace", exact: true }).click();
+  await expect(name).toBeFocused();
+  await fromFile.click();
+  await expect(dialog.getByRole("textbox")).toHaveValue("Imported project");
+  await page.keyboard.press("Escape");
+  await expect(switcher).toBeFocused();
+});
+
 for (const locale of ["en", "zh-CN"]) {
   const notices = locale === "en" ? {
     create: "Create and Switch",

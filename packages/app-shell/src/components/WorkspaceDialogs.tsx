@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { Trash2 } from "lucide-react";
-import { FormEvent, useContext, useRef, useState } from "react";
+import { FormEvent, useContext, useRef, useState, type RefObject } from "react";
 import { WorkspaceLeaveContext } from "./workspace-leave-context";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -13,9 +13,19 @@ import { Button, Input, Select, useFeedbackErrorHandler, useI18n } from "@unfour
 import { useWorkspaceStore } from "@unfour/workspace-core";
 import { WorkspaceSecurityDialog } from "@unfour/workspace-local";
 
+function hasWorkspaceName(workspaces: Workspace[], name: string, exceptId?: string) {
+  const trimmed = name.trim().toLowerCase();
+  return Boolean(trimmed) && workspaces.some(
+    (workspace) => workspace.id !== exceptId && workspace.name.trim().toLowerCase() === trimmed,
+  );
+}
+
 export function WorkspaceDialogs({
+  menuTrigger,
   activeWorkspace,
   createOpen,
+  importBusy,
+  onImportFromFile,
   deleteOpen,
   environmentOpen,
   onCreateClose,
@@ -25,8 +35,11 @@ export function WorkspaceDialogs({
   renameOpen,
   workspaces,
 }: {
+  menuTrigger?: RefObject<HTMLButtonElement | null>;
   activeWorkspace?: Workspace;
   createOpen: boolean;
+  importBusy: boolean;
+  onImportFromFile: (returnFocusTo: HTMLElement | null) => void;
   deleteOpen: boolean;
   environmentOpen: boolean;
   onCreateClose: () => void;
@@ -43,6 +56,7 @@ export function WorkspaceDialogs({
   const handleError = useFeedbackErrorHandler();
   // Cover repeated events before React renders the mutation's pending state.
   const creatingWorkspace = useRef(false);
+  const createFocus = useWorkspaceCreateFocus(menuTrigger);
   const deletingWorkspace = useRef(false);
   const [workspaceName, setWorkspaceName] = useState("");
   const [workspaceEnvironment, setWorkspaceEnvironment] =
@@ -64,19 +78,14 @@ export function WorkspaceDialogs({
   const canDelete =
     Boolean(activeWorkspace) && !activeWorkspace?.isDefault && workspaces.length > 1;
 
-  const createNameConflict = isDuplicateName(workspaceName);
+  const createNameConflict = hasWorkspaceName(workspaces, workspaceName);
   const renameNameConflict = activeWorkspace
-    ? isDuplicateName(renameDraft, activeWorkspace.id)
+    ? hasWorkspaceName(workspaces, renameDraft, activeWorkspace.id)
     : false;
 
   const createWorkspaceMutation = useMutation({
-    mutationFn: ({
-      environmentType,
-      name,
-    }: {
-      environmentType: WorkspaceEnvironmentType;
-      name: string;
-    }) => createWorkspace(name, environmentType),
+    mutationFn: ({ name, environmentType }: Pick<Workspace, "name" | "environmentType">) =>
+      createWorkspace(name, environmentType),
     onSuccess: (workspace) => {
       setActiveWorkspace(workspace.id);
       queryClient.invalidateQueries({ queryKey: ["workspaces"] });
@@ -87,6 +96,7 @@ export function WorkspaceDialogs({
     onError: (error) => handleError(error, { key: "feedback.workspace.createFailed" }),
     onSettled: () => { creatingWorkspace.current = false; },
   });
+  const createBusy = createWorkspaceMutation.isPending || importBusy;
 
   const renameWorkspaceMutation = useMutation({
     mutationFn: ({ name, workspaceId, expectedName }: { name: string; workspaceId: string; expectedName: string }) =>
@@ -117,7 +127,7 @@ export function WorkspaceDialogs({
   function createWorkspaceFromDialog(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = workspaceName.trim();
-    if (creatingWorkspace.current || createWorkspaceMutation.isPending || !name || isDuplicateName(workspaceName)) return;
+    if (creatingWorkspace.current || createBusy || !name || createNameConflict) return;
     requestWorkspaceLeave(() => {
       if (creatingWorkspace.current) return;
       creatingWorkspace.current = true;
@@ -133,7 +143,7 @@ export function WorkspaceDialogs({
       renameConflict ||
       !name ||
       name === activeWorkspace.name ||
-      isDuplicateName(renameDraft, activeWorkspace.id)
+      renameNameConflict
     ) {
       return;
     }
@@ -149,18 +159,6 @@ export function WorkspaceDialogs({
     });
   }
 
-  function isDuplicateName(name: string, exceptId?: string): boolean {
-    const trimmed = name.trim().toLowerCase();
-    if (!trimmed) {
-      return false;
-    }
-    return workspaces.some(
-      (workspace) =>
-        workspace.id !== exceptId &&
-        workspace.name.trim().toLowerCase() === trimmed,
-    );
-  }
-
   const environmentOptions = [
     { label: t("app.workspace.environment.development"), value: "dev" },
     { label: t("app.workspace.environment.test"), value: "test" },
@@ -169,12 +167,14 @@ export function WorkspaceDialogs({
 
   return (
     <>
-      <Dialog.Root onOpenChange={(open) => { if (!open && !creatingWorkspace.current && !createWorkspaceMutation.isPending) onCreateClose(); }} open={createOpen}>
+      <Dialog.Root onOpenChange={(open) => { if (!open && !creatingWorkspace.current && !createBusy) onCreateClose(); }} open={createOpen}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-[var(--u-color-overlay)]" />
           <Dialog.Content
-            onEscapeKeyDown={(event) => { if (creatingWorkspace.current || createWorkspaceMutation.isPending) event.preventDefault(); }}
-            onPointerDownOutside={(event) => { if (creatingWorkspace.current || createWorkspaceMutation.isPending) event.preventDefault(); }}
+            onOpenAutoFocus={createFocus.capture}
+            onCloseAutoFocus={createFocus.restore}
+            onEscapeKeyDown={(event) => { if (creatingWorkspace.current || createBusy) event.preventDefault(); }}
+            onPointerDownOutside={(event) => { if (creatingWorkspace.current || createBusy) event.preventDefault(); }}
             className="fixed left-1/2 top-1/2 z-50 w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-md border border-[var(--u-color-border)] bg-[var(--u-color-surface)] p-4 shadow-xl">
             <Dialog.Title className="text-base font-semibold text-[var(--u-color-text)]">
               {t("app.workspace.dialog.createTitle")}
@@ -184,8 +184,7 @@ export function WorkspaceDialogs({
             </Dialog.Description>
             <form className="mt-4 space-y-4" onSubmit={createWorkspaceFromDialog}>
               <Input
-                autoFocus
-                disabled={createWorkspaceMutation.isPending}
+                disabled={createBusy}
                 onChange={(event) => setWorkspaceName(event.target.value)}
                 placeholder={t("app.workspace.dialog.namePlaceholder")}
                 value={workspaceName}
@@ -198,7 +197,7 @@ export function WorkspaceDialogs({
               <label className="block space-y-1.5 text-sm text-[var(--u-color-text)]">
                 <span className="font-medium">{t("app.workspace.environment.label")}</span>
                 <Select
-                  disabled={createWorkspaceMutation.isPending}
+                  disabled={createBusy}
                   onChange={(event) =>
                     setWorkspaceEnvironment(event.target.value as WorkspaceEnvironmentType)
                   }
@@ -209,13 +208,18 @@ export function WorkspaceDialogs({
                   {t("app.workspace.environment.hint")}
                 </span>
               </label>
+              <Button aria-busy={importBusy} aria-disabled={createBusy} className="px-0 aria-disabled:opacity-50"
+                disabled={createWorkspaceMutation.isPending} onClick={() => { if (!createBusy) onImportFromFile(createFocus.trigger.current); }}
+                size="sm" type="button" variant="ghost">
+                {t("workspaceBundle.importInstead")}
+              </Button>
               <div className="flex justify-end gap-2">
                 <Dialog.Close asChild>
-                  <Button type="button" variant="outline" disabled={createWorkspaceMutation.isPending}>
+                  <Button type="button" variant="outline" disabled={createBusy}>
                     {t("app.workspace.dialog.cancel")}
                   </Button>
                 </Dialog.Close>
-                <Button disabled={createWorkspaceMutation.isPending || !workspaceName.trim() || createNameConflict} type="submit">
+                <Button disabled={createBusy || !workspaceName.trim() || createNameConflict} type="submit">
                   {t("app.workspace.dialog.create")}
                 </Button>
               </div>
@@ -324,4 +328,20 @@ export function WorkspaceDialogs({
       </Dialog.Root>
     </>
   );
+}
+
+function useWorkspaceCreateFocus(menuTrigger?: RefObject<HTMLButtonElement | null>) {
+  const trigger = useRef<HTMLElement | null>(null);
+  function capture() {
+    const active = document.activeElement;
+    trigger.current = active instanceof HTMLButtonElement ? active : menuTrigger?.current ?? null;
+  }
+  function restore(event: Event) {
+    // A handoff to the import preview may already have focused its first field.
+    if (trigger.current?.isConnected && document.activeElement === document.body) {
+      event.preventDefault();
+      trigger.current.focus();
+    }
+  }
+  return { trigger, capture, restore };
 }

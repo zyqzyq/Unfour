@@ -1,5 +1,6 @@
 import { useCallback, useState, type ReactNode } from "react";
 import type { RedisFlowIntent, WorkspaceTab } from "@unfour/command-client";
+import { useWorkspaceBundleActions } from "@unfour/workspace-local";
 import { Button, EmptyState, ErrorState, LoadingState, MainWorkspace, useI18n } from "@unfour/ui";
 import type { DesktopAppExtensionContext, DesktopAppExtensions } from "../extensions";
 import { ApiClientModule, DatabaseModule, FlowModule, SshTerminalModule, WorkspaceEnvironmentsModule } from "./LazyFeatureModules";
@@ -8,6 +9,7 @@ import type { DesktopWorkspaceController } from "./useDesktopWorkspace";
 import type { usePersistentFeatureMounts } from "./usePersistentFeatureMounts";
 
 type DesktopWorkspaceContentProps = {
+  onCreateWorkspace: () => void;
   activeTab: WorkspaceTab;
   workspace: DesktopWorkspaceController;
   navigation: DesktopNavigationController;
@@ -24,8 +26,9 @@ type DesktopWorkspaceContentProps = {
   statusBarRightAccessory: ReactNode;
 };
 
-function WorkspaceStartupState({ query }: { query: DesktopWorkspaceController["workspaceQuery"] }) {
+function WorkspaceStartupState({ query, onCreate }: { query: DesktopWorkspaceController["workspaceQuery"]; onCreate: () => void }) {
   const { t } = useI18n();
+  const exchange = useWorkspaceBundleActions();
   if (query.isError) {
     return <ErrorState className="h-full rounded-none border-0">
       <div className="space-y-2" role="alert">
@@ -37,12 +40,23 @@ function WorkspaceStartupState({ query }: { query: DesktopWorkspaceController["w
     </ErrorState>;
   }
   if (query.isPending) return <LoadingState className="h-full rounded-none border-0" />;
-  return <EmptyState className="h-full rounded-none border-0">{t("app.workspace.createToStart")}</EmptyState>;
+  return <EmptyState className="h-full rounded-none border-0">
+    <div className="space-y-3">
+      <p>{t("app.workspace.noneAvailable")}</p>
+      <div className="flex flex-wrap justify-center gap-2">
+        <Button disabled={exchange.busy} onClick={onCreate} size="sm">{t("app.workspace.new")}</Button>
+        <Button aria-busy={exchange.busy} aria-disabled={exchange.busy} className="aria-disabled:opacity-50"
+          onClick={(event) => void exchange.pick({ returnFocusTo: event.currentTarget })} size="sm" variant="outline">
+          {t("workspaceBundle.import")}
+        </Button>
+      </div>
+    </div>
+  </EmptyState>;
 }
 
 /** Lazy feature mounts keep their existing identities while visibility changes. */
 export function DesktopWorkspaceContent({
-  activeTab, workspace, navigation, mounts, extensionContext, variableDecoration: VariableDecoration,
+  activeTab, workspace, navigation, mounts, extensionContext, onCreateWorkspace, variableDecoration: VariableDecoration,
   onApiSidebarChange, onFlowSidebarChange, onSshSidebarChange, onDatabaseSidebarChange,
   onDatabaseStatusBarChange, onActiveSavedRequestChange, restoreSavedRequestId, statusBarRightAccessory,
 }: DesktopWorkspaceContentProps) {
@@ -59,7 +73,7 @@ export function DesktopWorkspaceContent({
     navigation.handleSelectModule("flow-main");
   };
   return <MainWorkspace className="[&>section]:p-0" tabBar={null}>
-    {!activeWorkspace && <WorkspaceStartupState query={workspaceQuery} />}
+    {!activeWorkspace && <WorkspaceStartupState query={workspaceQuery} onCreate={onCreateWorkspace} />}
     {activeWorkspace && mounts.shouldMountFlow && <div className={activeTab.kind === "flow" && !variableManagerOpen ? "h-full" : "hidden"}>
       <FlowModule key={activeWorkspace.id} workspaceId={activeWorkspace.id} onSidebarContentChange={onFlowSidebarChange} onDirtyChange={navigation.setFlowDirty}
         redisIntent={activeTab.kind === "flow" && redisFlowIntent?.workspaceId === activeWorkspace.id ? redisFlowIntent : null}

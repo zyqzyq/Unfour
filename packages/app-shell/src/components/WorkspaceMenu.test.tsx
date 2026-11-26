@@ -1,14 +1,19 @@
 // @vitest-environment jsdom
-import type { ReactNode } from "react";
+import { useState, type ComponentProps, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { Workspace } from "@unfour/command-client";
 import { WorkspaceBundleExchangeProvider } from "@unfour/workspace-local";
 import type { DesktopAppExtensionContext } from "../extensions";
-import { WorkspaceMenu } from "./WorkspaceMenu";
+import { WorkspaceMenu as ControlledWorkspaceMenu } from "./WorkspaceMenu";
 
 afterEach(cleanup);
+
+function WorkspaceMenu(props: Omit<ComponentProps<typeof ControlledWorkspaceMenu>, "createOpen" | "onCreateOpenChange">) {
+  const [open, setOpen] = useState(false);
+  return <ControlledWorkspaceMenu {...props} createOpen={open} onCreateOpenChange={setOpen} />;
+}
 
 function workspace(
   name: string,

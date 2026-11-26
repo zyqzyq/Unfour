@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { exportWorkspaceBundle, importWorkspaceBundle, pickWorkspaceBundle, previewWorkspaceBundle, type Workspace, type WorkspaceBundleFile, type WorkspaceBundleOptions, type WorkspaceMcpPolicy } from "@unfour/command-client";
 import { Badge, Button, Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Input, Select, useFeedback, useFeedbackErrorHandler, useI18n } from "@unfour/ui";
@@ -14,6 +14,8 @@ export function useWorkspaceBundleExchange(onImported: (id: string) => void) {
   const [name, setName] = useState("");
   const [mcpPolicy, setMcpPolicy] = useState<WorkspaceMcpPolicy>("disabled");
   const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false);
+  const returnFocusTo = useRef<HTMLElement | null>(null);
   const [exportTarget, setExportTarget] = useState<Pick<Workspace, "id" | "name" | "environmentType"> | null>(null);
   const [mode, setMode] = useState("share");
   const [password, setPassword] = useState("");
@@ -36,19 +38,31 @@ export function useWorkspaceBundleExchange(onImported: (id: string) => void) {
     ...(overrides.length ? { pathOverrides: overrides } : {}),
   });
   async function run(action: () => Promise<void>) {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(true); setErrorKey(null);
     try { await action(); }
     catch (error) {
       const message = typeof error === "string" ? error : error instanceof Error ? error.message : JSON.stringify(error);
       const code = ["UNLOCK_FAILED", "PASSWORD_LENGTH", "CREDENTIAL_UNAVAILABLE", "CLEANUP_PENDING", "TOO_LARGE"].find((value) => message?.includes(`WORKSPACE_BUNDLE_${value}`));
-      if (code) setErrorKey(`workspaceBundle.errors.${code}`);
+      if (code && (pending || exportTarget)) setErrorKey(`workspaceBundle.errors.${code}`);
+      else if (code) feedback.error(t(`workspaceBundle.errors.${code}`));
       else handleError(error, { key: "workspaceBundle.failed" });
-    } finally { setBusy(false); }
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
   }
-  function pick() {
+  function pick(options?: { onPicked?: () => void; returnFocusTo?: HTMLElement | null }) {
     return run(async () => {
       const file = await pickWorkspaceBundle();
-      if (file) { reset(); setPending(file); setName(file.preview?.name ?? ""); }
+      if (file) {
+        returnFocusTo.current = options?.returnFocusTo ?? null;
+        options?.onPicked?.();
+        reset();
+        setPending(file);
+        setName(file.preview?.name ?? "");
+      }
     });
   }
   function review(checkPaths = false) {
@@ -79,7 +93,14 @@ export function useWorkspaceBundleExchange(onImported: (id: string) => void) {
   const exportValid = mode !== "backup" || (Array.from(password).length >= 12 && password === confirmation);
   const mappingValid = Boolean(from) === Boolean(to) && overrides.every((path) => path.path.trim().length > 0);
   const dialog = <Dialog open={pending !== null || exportTarget !== null} onOpenChange={(open) => { if (!open && !busy) close(); }}>
-    <DialogContent onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }} onPointerDownOutside={(event) => { if (busy) event.preventDefault(); }}>
+    <DialogContent onCloseAutoFocus={(event) => {
+      const target = returnFocusTo.current;
+      returnFocusTo.current = null;
+      if (target?.isConnected && document.activeElement === document.body) {
+        event.preventDefault();
+        target.focus();
+      }
+    }} onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }} onPointerDownOutside={(event) => { if (busy) event.preventDefault(); }}>
       <DialogHeader><DialogTitle>{t(pending ? "workspaceBundle.preview" : "workspaceBundle.exportTitle")}</DialogTitle></DialogHeader>
       <DialogBody>
         {exportTarget && <div className="mb-3 flex min-w-0 items-start gap-2 border-b border-[var(--u-color-border)] pb-3 text-sm">

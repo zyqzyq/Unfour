@@ -1,13 +1,18 @@
 // @vitest-environment jsdom
-import type { ReactNode } from "react";
+import { useState, type ComponentProps, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { Workspace, WorkspaceEnvironment } from "@unfour/command-client";
 import { I18nProvider, ThemeProvider } from "@unfour/ui";
 import { WorkspaceBundleExchangeProvider } from "@unfour/workspace-local";
-import { AppTitleBar } from "./AppTitleBar";
+import { AppTitleBar as ControlledTitleBar } from "./AppTitleBar";
 import type { DesktopAppExtensionContext } from "../extensions";
+
+function AppTitleBar(props: Omit<ComponentProps<typeof ControlledTitleBar>, "createWorkspaceOpen" | "onCreateWorkspaceOpenChange">) {
+  const [open, setOpen] = useState(false);
+  return <ControlledTitleBar {...props} createWorkspaceOpen={open} onCreateWorkspaceOpenChange={setOpen} />;
+}
 
 const { mockWindow } = vi.hoisted(() => ({
   mockWindow: {

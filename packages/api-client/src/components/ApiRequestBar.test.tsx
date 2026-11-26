@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import type { ApiRequestTab } from "../model/request-tabs";
+import { emptyDraft, type ApiRequestTab } from "../model/request-tabs";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { I18nProvider } from "@unfour/ui";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -51,6 +51,45 @@ afterEach(() => {
 });
 
 describe("ApiRequestBar", () => {
+  it("discards a pending cURL preview if its destination draft changes", () => {
+    const tab = { ...requestTab(), draft: emptyDraft() };
+    const onSave = vi.fn();
+    const onUpdate = vi.fn();
+    const view = (current: ApiRequestTab) => <I18nProvider initialLocale="en">
+      <ApiRequestBar tab={current} onNameCommit={vi.fn()} onSave={onSave} onSend={vi.fn()} onUpdate={onUpdate} />
+    </I18nProvider>;
+    const { rerender } = render(view(tab));
+    fireEvent.paste(screen.getByLabelText("Request URL"), { clipboardData: { getData: () => "curl https://example.test" } });
+    fireEvent.keyDown(screen.getByRole("button", { name: "Apply to this request" }), { key: "s", ctrlKey: true });
+    expect(onSave).not.toHaveBeenCalled();
+    rerender(view({ ...tab, draft: { ...tab.draft, name: "Edited elsewhere" } }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    rerender(view(tab));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(onUpdate).not.toHaveBeenCalled();
+  });
+
+  it("leaves native paste available for existing requests and unsaved edits outside the URL field", () => {
+    const blank = { ...requestTab(), draft: emptyDraft() };
+    const onUpdate = vi.fn();
+    const view = (tab: ApiRequestTab) => <I18nProvider initialLocale="en">
+      <ApiRequestBar tab={tab} onNameCommit={vi.fn()} onSave={vi.fn()} onSend={vi.fn()} onUpdate={onUpdate} />
+    </I18nProvider>;
+    const { rerender } = render(view(blank));
+    const clipboardData = { getData: () => "curl https://example.test" };
+    for (const tab of [
+      { ...blank, source: "saved" as const },
+      { ...blank, source: "history" as const },
+      { ...blank, draft: { ...blank.draft, headers: [{ key: "Version", value: "1", enabled: true }] } },
+      { ...blank, draft: { ...blank.draft, temporaryHandle: "session" } },
+    ]) {
+      rerender(view(tab));
+      expect(fireEvent.paste(screen.getByLabelText("Request URL"), { clipboardData })).toBe(true);
+      expect(screen.queryByRole("dialog")).toBeNull();
+    }
+    expect(onUpdate).not.toHaveBeenCalled();
+  });
+
   it("does not save while the name input is composing or has consumed the shortcut", () => {
     const onSave = vi.fn();
     render(<I18nProvider initialLocale="en"><ApiRequestBar tab={requestTab()} onNameCommit={vi.fn()} onSave={onSave} onSend={vi.fn()} onUpdate={vi.fn()} /></I18nProvider>);

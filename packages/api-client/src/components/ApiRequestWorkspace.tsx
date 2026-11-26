@@ -66,7 +66,7 @@ export function ApiRequestWorkspace({
   return (
     <>
       <ApiRequestBar
-        key={activeTab.id}
+        key={`${workspaceId}:${activeTab.id}`}
         routeReady={routing.ready && !(activeTab.draft.temporaryHandle && activeTab.draft.temporaryExecutionMode === "terminalCurl" && !activeTab.draft.terminalConfirmed)}
         routeControl={active && <ApiRoutePicker key={workspaceId} routing={routing} environmentName={environmentName} draft={activeTab.draft.route}
           temporaryExecutionMode={activeTab.draft.temporaryExecutionMode}

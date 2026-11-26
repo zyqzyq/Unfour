@@ -4,13 +4,13 @@ import {
   useImperativeHandle,
   useRef,
   useState,
-  type Ref,
   type ReactNode,
   type RefObject,
 } from "react";
 import { Pencil, Save, Send, Square } from "lucide-react";
 import { Button, IconButton, Input, Select, useI18n } from "@unfour/ui";
 import { httpMethods } from "../constants/http-methods";
+import { RequestUrlInput } from "./RequestUrlInput";
 import { requestTabTitle, type ApiRequestTab } from "../model/request-tabs";
 
 export function ApiRequestBar({
@@ -32,7 +32,7 @@ export function ApiRequestBar({
   onStop?: () => void;
   onUpdate: (patch: Partial<ApiRequestTab["draft"]>) => void;
   tab: ApiRequestTab;
-  urlInputRef?: Ref<HTMLInputElement>;
+  urlInputRef?: RefObject<HTMLInputElement | null>;
   routeControl?: ReactNode;
   routeReady?: boolean;
 }) {
@@ -49,7 +49,7 @@ export function ApiRequestBar({
       className="flex shrink-0 flex-col gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-canvas)] px-4 py-3"
       onKeyDown={(event) => {
         if (
-          !event.defaultPrevented && !event.nativeEvent.isComposing &&
+          event.currentTarget.contains(event.target as Node) && !event.defaultPrevented && !event.nativeEvent.isComposing &&
           event.nativeEvent.keyCode !== 229 && !event.repeat &&
           !event.altKey && !event.shiftKey &&
           (event.ctrlKey || event.metaKey) &&
@@ -87,14 +87,7 @@ export function ApiRequestBar({
             ))}
           </Select>
           <span aria-hidden="true" className="h-4 w-px shrink-0 bg-[var(--u-color-border)]" />
-          <Input
-            aria-label={t("api.request.url")}
-            className="h-full min-w-0 flex-1 rounded-none rounded-r-[var(--u-radius-md)] border-0 bg-transparent px-3 font-mono text-[12px] shadow-none focus:ring-0"
-            onChange={(event) => onUpdate({ url: event.target.value })}
-            placeholder={t("api.request.urlPlaceholder")}
-            ref={urlInputRef}
-            value={tab.draft.url}
-          />
+          <RequestUrlInput tab={tab} inputRef={urlInputRef} onUpdate={onUpdate} />
         </div>
         {tab.sending ? (
           <Button
